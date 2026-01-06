@@ -78,7 +78,7 @@ export const odooClient = {
                     'search_read',
                     [[]], // Empty domain = all records
                     {
-                        fields: ['name', 'registration_number', 'x_app_password', 'department_id', 'job_title'],
+                        fields: [], // Getting ALL fields to inspect structure
                         limit: 50
                     },
                 ],
