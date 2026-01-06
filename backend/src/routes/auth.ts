@@ -57,4 +57,26 @@ router.post('/login', async (req, res) => {
     }
 });
 
+router.get('/debug', async (req, res) => {
+    try {
+        console.log('Testing Odoo Connection...');
+        const version = await odooClient.testConnection();
+        res.json({ status: 'success', odoo_version: version });
+    } catch (error: any) {
+        console.error('Debug Error:', error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+router.get('/employees', async (req, res) => {
+    try {
+        const uid = await odooClient.authenticate();
+        const employees = await odooClient.getAllEmployees(uid);
+        res.json({ count: (employees as any[]).length, employees });
+    } catch (error: any) {
+        console.error('Fetch Employees Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export const authRouter = router;

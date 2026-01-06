@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, Platform } from 'react-native';
 
 // Use localhost for iOS simulator, 10.0.2.2 for Android Emulator, or your machine IP for physical device
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000/auth/login' : 'http://localhost:3000/auth/login';
+const API_URL = 'https://erp-external-app.vercel.app/auth/login';
 
 export default function App() {
   const [employeeId, setEmployeeId] = useState('');

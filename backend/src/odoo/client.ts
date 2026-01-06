@@ -53,4 +53,43 @@ export const odooClient = {
             );
         });
     },
+
+    testConnection: async () => {
+        return new Promise((resolve, reject) => {
+            commonClient.methodCall('version', [], (error, value) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(value);
+                }
+            });
+        });
+    },
+
+    getAllEmployees: async (uid: number) => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    'hr.employee',
+                    'search_read',
+                    [[]], // Empty domain = all records
+                    {
+                        fields: ['name', 'registration_number', 'x_app_password', 'department_id', 'job_title'],
+                        limit: 50
+                    },
+                ],
+                (error, employees) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(employees);
+                    }
+                }
+            );
+        });
+    },
 };
