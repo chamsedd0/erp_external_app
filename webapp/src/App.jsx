@@ -374,9 +374,10 @@ function ExpenseForm({ user, setPage }) {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     product_id: '',
-    price_unit: '',
+    unit_amount: '', // Renamed from price_unit
     date: '',
-    name: ''
+    name: '',
+    receipt: null // Base64 string
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -388,22 +389,41 @@ function ExpenseForm({ user, setPage }) {
       .catch(err => console.error('Failed to fetch products:', err));
   }, []);
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Get just the base64 part
+        const base64 = reader.result.split(',')[1];
+        setFormData({ ...formData, receipt: base64 });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      const payload = {
+        employee_id: user.id,
+        product_id: parseInt(formData.product_id),
+        unit_amount: parseFloat(formData.unit_amount),
+        quantity: 1,
+        date: formData.date,
+        name: formData.name
+      };
+
+      if (formData.receipt) {
+        payload.receipt = formData.receipt;
+      }
+
       const response = await fetch(`${API_URL}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employee_id: user.id,
-          product_id: parseInt(formData.product_id),
-          price_unit: parseFloat(formData.price_unit),
-          quantity: 1,
-          date: formData.date,
-          name: formData.name
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -465,8 +485,8 @@ function ExpenseForm({ user, setPage }) {
             type="number"
             step="0.01"
             placeholder="0.00"
-            value={formData.price_unit}
-            onChange={(e) => setFormData({ ...formData, price_unit: e.target.value })}
+            value={formData.unit_amount}
+            onChange={(e) => setFormData({ ...formData, unit_amount: e.target.value })}
             required
           />
         </div>
@@ -489,6 +509,18 @@ function ExpenseForm({ user, setPage }) {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
+          />
+        </div>
+
+        <div className="input-group">
+          <label style={{ color: '#a5a5a5', fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>Receipt</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{
+              padding: '12px 0'
+            }}
           />
         </div>
 
