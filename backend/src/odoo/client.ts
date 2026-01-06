@@ -29,7 +29,7 @@ export const odooClient = {
         });
     },
 
-    searchEmployee: async (uid: number, registrationNumber: string, pin: string) => {
+    searchEmployee: async (uid: number, employeeId: string, pin: string) => {
         return new Promise((resolve, reject) => {
             objectClient.methodCall(
                 'execute_kw',
@@ -39,8 +39,8 @@ export const odooClient = {
                     config.odoo.password,
                     'hr.employee',
                     'search_read',
-                    [[['registration_number', '=', registrationNumber], ['x_app_password', '=', pin]]],
-                    { fields: ['name', 'department_id', 'job_title'] },
+                    [[['barcode', '=', employeeId], ['pin', '=', pin]]],
+                    { fields: ['name', 'department_id', 'job_title', 'barcode', 'work_email'] },
                 ],
                 (error, employee) => {
                     if (error) {
@@ -78,7 +78,7 @@ export const odooClient = {
                     'search_read',
                     [[]], // Empty domain = all records
                     {
-                        fields: [], // Getting ALL fields to inspect structure
+                        fields: ['name', 'barcode', 'pin', 'department_id', 'job_title', 'work_email'],
                         limit: 50
                     },
                 ],
