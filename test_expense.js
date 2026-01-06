@@ -4,7 +4,7 @@ const http = require('http');
 const expenseData = JSON.stringify({
     employee_id: 7,
     product_id: 53,
-    price_unit: 25.50,  // This is the correct field name
+    unit_amount: 25.50,  // API uses unit_amount
     quantity: 1,
     date: '2026-02-05',
     name: 'Team Lunch - Feb 5',

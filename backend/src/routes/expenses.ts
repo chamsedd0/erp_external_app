@@ -9,7 +9,7 @@ const createExpenseSchema = z.object({
     employee_id: z.number(),
     product_id: z.number(),
     name: z.string(), // Description
-    price_unit: z.number(), // Cost per unit (this is the correct field)
+    unit_amount: z.number(), // Cost per unit (mapped to price_unit & total_amount_currency)
     quantity: z.number().default(1),
     date: z.string(), // YYYY-MM-DD
     receipt: z.string().optional(), // Base64 encoded receipt image
@@ -93,7 +93,10 @@ router.post('/', async (req, res) => {
             employee_id: body.employee_id,
             product_id: body.product_id,
             name: body.name,
-            price_unit: body.price_unit, // This is the correct field name
+            // For variable cost products (cost=0), we must set total_amount_currency or total_amount
+            // We set both price_unit and total_amount_currency to be safe
+            price_unit: body.unit_amount,
+            total_amount_currency: body.unit_amount,
             quantity: body.quantity,
             date: body.date,
             company_id: companyId, // Required field
@@ -121,7 +124,7 @@ router.post('/', async (req, res) => {
 
         // Step 4: Submit the expense (change state from draft to reported)
         try {
-            await odooClient.callMethod(uid, 'hr.expense', 'action_submit_expenses', [newExpenseId as number]);
+            await odooClient.callMethod(uid, 'hr.expense', 'action_submit', [newExpenseId as number]);
             console.log(`Expense ${newExpenseId} submitted successfully`);
         } catch (submitError: any) {
             console.error('Submit Error:', submitError);

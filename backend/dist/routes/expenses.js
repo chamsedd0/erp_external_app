@@ -10,7 +10,7 @@ const createExpenseSchema = zod_1.z.object({
     employee_id: zod_1.z.number(),
     product_id: zod_1.z.number(),
     name: zod_1.z.string(), // Description
-    unit_amount: zod_1.z.number(), // Cost per unit (FIXED: was price_unit)
+    unit_amount: zod_1.z.number(), // Cost per unit (mapped to price_unit & total_amount_currency)
     quantity: zod_1.z.number().default(1),
     date: zod_1.z.string(), // YYYY-MM-DD
     receipt: zod_1.z.string().optional(), // Base64 encoded receipt image
@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
         const uid = await client_1.odooClient.authenticate();
-        const expenses = await client_1.odooClient.searchRead(uid, 'hr.expense', [['employee_id', '=', parseInt(employeeId)]], ['id', 'name', 'product_id', 'unit_amount', 'quantity', 'total_amount', 'date', 'state', 'create_date']);
+        const expenses = await client_1.odooClient.searchRead(uid, 'hr.expense', [['employee_id', '=', parseInt(employeeId)]], ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']);
         res.json({ expenses });
     }
     catch (error) {
@@ -49,17 +49,34 @@ router.post('/', async (req, res) => {
     try {
         const body = createExpenseSchema.parse(req.body);
         const uid = await client_1.odooClient.authenticate();
-        // Step 1: Create expense record with correct field name
+        // Step 1: Get employee's company_id and currency
+        const employees = await client_1.odooClient.searchRead(uid, 'hr.employee', [['id', '=', body.employee_id]], ['company_id']);
+        if (!employees || employees.length === 0) {
+            return res.status(400).json({ error: 'Employee not found' });
+        }
+        const employee = employees[0];
+        const companyId = employee.company_id[0];
+        // Fetch the currency from the company
+        const companies = await client_1.odooClient.searchRead(uid, 'res.company', [['id', '=', companyId]], ['currency_id']);
+        const currencyId = companies && companies[0] && companies[0].currency_id
+            ? companies[0].currency_id[0]
+            : 1; // Default to currency ID 1 if not set
+        // Step 2: Create expense record with all required fields
         const newExpenseId = await client_1.odooClient.createRecord(uid, 'hr.expense', {
             employee_id: body.employee_id,
             product_id: body.product_id,
             name: body.name,
-            unit_amount: body.unit_amount, // FIXED: Changed from price_unit to unit_amount
+            // For variable cost products (cost=0), we must set total_amount_currency or total_amount
+            // We set both price_unit and total_amount_currency to be safe
+            price_unit: body.unit_amount,
+            total_amount_currency: body.unit_amount,
             quantity: body.quantity,
             date: body.date,
+            company_id: companyId, // Required field
+            currency_id: currencyId, // Required field
             payment_mode: 'own_account', // Employee paid, needs reimbursement
         });
-        // Step 2: If receipt provided, create attachment
+        // Step 3: If receipt provided, create attachment
         if (body.receipt) {
             try {
                 await client_1.odooClient.createAttachment(uid, `${body.name}_receipt.jpg`, body.receipt, 'hr.expense', newExpenseId, 'image/jpeg');
@@ -70,9 +87,9 @@ router.post('/', async (req, res) => {
                 // Continue even if attachment fails
             }
         }
-        // Step 3: Submit the expense (change state from draft to reported)
+        // Step 4: Submit the expense (change state from draft to reported)
         try {
-            await client_1.odooClient.callMethod(uid, 'hr.expense', 'action_submit_expenses', [newExpenseId]);
+            await client_1.odooClient.callMethod(uid, 'hr.expense', 'action_submit', [newExpenseId]);
             console.log(`Expense ${newExpenseId} submitted successfully`);
         }
         catch (submitError) {
