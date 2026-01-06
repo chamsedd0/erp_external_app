@@ -15,6 +15,10 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/auth', authRouter);
 
-app.listen(config.port, () => {
-    console.log(`🚀 Server running on port ${config.port}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(config.port, () => {
+        console.log(`🚀 Server running on port ${config.port}`);
+    });
+}
+
+export default app;
