@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
             uid,
             'hr.expense',
             [['employee_id', '=', parseInt(employeeId as string)]],
-            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
+            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date', 'description']
         );
         res.json({ expenses });
     } catch (error: any) {
@@ -122,21 +122,10 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // Step 4: Submit the expense (change state from draft to reported)
-        try {
-            await odooClient.callMethod(uid, 'hr.expense', 'action_submit', [newExpenseId as number]);
-            console.log(`Expense ${newExpenseId} submitted successfully`);
-        } catch (submitError: any) {
-            console.error('Submit Error:', submitError);
-            // Return success but note submission failed
-            return res.json({
-                status: 'created_not_submitted',
-                id: newExpenseId,
-                message: 'Expense created but submission failed. It remains in draft state.'
-            });
-        }
+        // Step 4: Submit - SKIPPED as per user request (Leave in Draft)
+        res.json({ status: 'success', id: newExpenseId, state: 'draft', message: 'Expense created in draft state' });
 
-        res.json({ status: 'success', id: newExpenseId, state: 'reported' });
+
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });

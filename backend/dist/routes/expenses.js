@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
         const uid = await client_1.odooClient.authenticate();
-        const expenses = await client_1.odooClient.searchRead(uid, 'hr.expense', [['employee_id', '=', parseInt(employeeId)]], ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']);
+        const expenses = await client_1.odooClient.searchRead(uid, 'hr.expense', [['employee_id', '=', parseInt(employeeId)]], ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date', 'description']);
         res.json({ expenses });
     }
     catch (error) {
@@ -87,21 +87,8 @@ router.post('/', async (req, res) => {
                 // Continue even if attachment fails
             }
         }
-        // Step 4: Submit the expense (change state from draft to reported)
-        try {
-            await client_1.odooClient.callMethod(uid, 'hr.expense', 'action_submit', [newExpenseId]);
-            console.log(`Expense ${newExpenseId} submitted successfully`);
-        }
-        catch (submitError) {
-            console.error('Submit Error:', submitError);
-            // Return success but note submission failed
-            return res.json({
-                status: 'created_not_submitted',
-                id: newExpenseId,
-                message: 'Expense created but submission failed. It remains in draft state.'
-            });
-        }
-        res.json({ status: 'success', id: newExpenseId, state: 'reported' });
+        // Step 4: Submit - SKIPPED as per user request (Leave in Draft)
+        res.json({ status: 'success', id: newExpenseId, state: 'draft', message: 'Expense created in draft state' });
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {
