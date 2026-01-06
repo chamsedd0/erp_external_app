@@ -19,7 +19,7 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  background: 
+  background:
     radial-gradient(circle at 10% 20%, rgb(69, 104, 220) 0%, transparent 20%),
     radial-gradient(circle at 90% 80%, rgb(176, 106, 179) 0%, transparent 20%),
     linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
@@ -49,8 +49,15 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 h1 {
@@ -186,4 +193,137 @@ button:disabled {
   background: rgba(255, 59, 48, 0.1);
   box-shadow: none;
   border-color: #ff3b30;
+}
+
+/* Navigation */
+.nav-bar {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+}
+
+.nav-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #646cff, #a55eea);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-links button {
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #a5a5a5;
+  font-size: 0.9rem;
+  width: auto;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.nav-links button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  transform: none;
+  box-shadow: none;
+}
+
+.nav-links button.active {
+  background: rgba(100, 108, 255, 0.1);
+  border-color: rgba(100, 108, 255, 0.3);
+  color: #646cff;
+}
+
+.nav-links button.logout-nav {
+  color: #ff3b30;
+  border-color: rgba(255, 59, 48, 0.2);
+}
+
+.nav-links button.logout-nav:hover {
+  background: rgba(255, 59, 48, 0.1);
+  border-color: #ff3b30;
+}
+
+/* Request Cards */
+.request-card {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s;
+}
+
+.request-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Select Elements */
+select {
+  width: 100%;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+  border-color: #646cff;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 4px rgba(100, 108, 255, 0.1);
+}
+
+select option {
+  background: #1a1a1a;
+  color: white;
+  padding: 12px;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }

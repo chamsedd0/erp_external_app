@@ -92,4 +92,77 @@ export const odooClient = {
             );
         });
     },
+
+    getSchema: async (uid: number, model: string) => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    model,
+                    'fields_get',
+                    [],
+                    { attributes: ['string', 'help', 'type', 'required', 'selection'] }
+                ],
+                (error, fields) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(fields);
+                    }
+                }
+            );
+        });
+    },
+
+    createRecord: async (uid: number, model: string, data: any) => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    model,
+                    'create',
+                    [data]
+                ],
+                (error, newId) => {
+                    if (error) {
+                        console.error(`Create Error (${model}):`, error);
+                        reject(error);
+                    } else {
+                        resolve(newId);
+                    }
+                }
+            );
+        });
+    },
+
+    searchRead: async (uid: number, model: string, domain: any[], fields: string[]) => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    model,
+                    'search_read',
+                    [domain],
+                    { fields: fields }
+                ],
+                (error, records) => {
+                    if (error) {
+                        console.error(`SearchRead Error (${model}):`, error);
+                        reject(error);
+                    } else {
+                        resolve(records);
+                    }
+                }
+            );
+        });
+    },
 };

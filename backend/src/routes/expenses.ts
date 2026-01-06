@@ -1,0 +1,83 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { odooClient } from '../odoo/client';
+
+const router = Router();
+
+// Validation Schema for Expense
+const createExpenseSchema = z.object({
+    employee_id: z.number(),
+    product_id: z.number(),
+    name: z.string(), // Description
+    price_unit: z.number(), // Cost per unit (renamed from unit_amount)
+    quantity: z.number().default(1),
+    date: z.string(), // YYYY-MM-DD
+});
+
+// GET / - Fetch user's expenses
+router.get('/', async (req, res) => {
+    try {
+        const employeeId = req.query.employee_id;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'employee_id query parameter required' });
+        }
+
+        const uid = await odooClient.authenticate();
+        const expenses: any = await odooClient.searchRead(
+            uid,
+            'hr.expense',
+            [['employee_id', '=', parseInt(employeeId as string)]],
+            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
+        );
+        res.json({ expenses });
+    } catch (error: any) {
+        console.error('Fetch Expenses Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /products - Fetch Expense Products
+router.get('/products', async (req, res) => {
+    try {
+        const uid = await odooClient.authenticate();
+        // Fetch products that can be expensed
+        const products: any = await odooClient.searchRead(
+            uid,
+            'product.product',
+            [['can_be_expensed', '=', true]],
+            ['id', 'name', 'standard_price']
+        );
+        res.json({ products });
+    } catch (error: any) {
+        console.error('Fetch Expense Products Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST / - Create Expense
+router.post('/', async (req, res) => {
+    try {
+        const body = createExpenseSchema.parse(req.body);
+        const uid = await odooClient.authenticate();
+
+        const newExpenseId = await odooClient.createRecord(uid, 'hr.expense', {
+            employee_id: body.employee_id,
+            product_id: body.product_id,
+            name: body.name,
+            price_unit: body.price_unit,
+            quantity: body.quantity,
+            date: body.date,
+            payment_mode: 'own_account', // Employee paid, needs reimbursement
+        });
+
+        res.json({ status: 'success', id: newExpenseId });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
+        }
+        console.error('Create Expense Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+export const expensesRouter = router;
