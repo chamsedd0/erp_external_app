@@ -57,6 +57,8 @@ router.post('/login', async (req, res) => {
     }
 });
 
+/*
+// SECURE: Debug routes disabled for production
 router.get('/debug', async (req, res) => {
     try {
         console.log('Testing Odoo Connection...');
@@ -78,5 +80,6 @@ router.get('/employees', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+*/
 
 export const authRouter = router;
