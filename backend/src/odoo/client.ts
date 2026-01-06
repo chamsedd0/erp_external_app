@@ -165,4 +165,60 @@ export const odooClient = {
             );
         });
     },
+
+    callMethod: async (uid: number, model: string, method: string, recordIds: number[], args: any = {}) => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    model,
+                    method,
+                    [recordIds],
+                    args
+                ],
+                (error, result) => {
+                    if (error) {
+                        console.error(`CallMethod Error (${model}.${method}):`, error);
+                        reject(error);
+                    } else {
+                        resolve(result);
+                    }
+                }
+            );
+        });
+    },
+
+    createAttachment: async (uid: number, name: string, datas: string, res_model: string, res_id: number, mimetype: string = 'image/jpeg') => {
+        return new Promise((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    'ir.attachment',
+                    'create',
+                    [{
+                        name: name,
+                        datas: datas,
+                        res_model: res_model,
+                        res_id: res_id,
+                        mimetype: mimetype,
+                        type: 'binary'
+                    }]
+                ],
+                (error, attachmentId) => {
+                    if (error) {
+                        console.error('Create Attachment Error:', error);
+                        reject(error);
+                    } else {
+                        resolve(attachmentId);
+                    }
+                }
+            );
+        });
+    },
 };
