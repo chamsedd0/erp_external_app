@@ -1,10 +1,25 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { View } from 'react-native';
 import { ThemeProvider } from '../theme/theme-provider';
 import { SessionProvider, useSession } from '../providers/auth-context';
 import { ToastProvider } from '../providers/toast-context';
 import '../global.css';
+import {
+    useFonts,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_700Bold,
+} from '@expo-google-fonts/dm-sans';
+import {
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_700Bold,
+} from '@expo-google-fonts/outfit';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync();
 
 function InitialLayout() {
     const { session, isLoading, isNewUser } = useSession();
@@ -62,13 +77,34 @@ function InitialLayout() {
 }
 
 export default function RootLayout() {
+    const [fontsLoaded] = useFonts({
+        DMSans_400Regular,
+        DMSans_500Medium,
+        DMSans_700Bold,
+        Outfit_400Regular,
+        Outfit_500Medium,
+        Outfit_700Bold,
+    });
+
+    const onLayoutRootView = useCallback(async () => {
+        if (fontsLoaded) {
+            await SplashScreen.hideAsync();
+        }
+    }, [fontsLoaded]);
+
+    if (!fontsLoaded) {
+        return null;
+    }
+
     return (
-        <ThemeProvider>
-            <SessionProvider>
-                <ToastProvider>
-                    <InitialLayout />
-                </ToastProvider>
-            </SessionProvider>
-        </ThemeProvider>
+        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            <ThemeProvider>
+                <SessionProvider>
+                    <ToastProvider>
+                        <InitialLayout />
+                    </ToastProvider>
+                </SessionProvider>
+            </ThemeProvider>
+        </View>
     );
 }

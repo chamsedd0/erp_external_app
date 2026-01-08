@@ -140,10 +140,10 @@ export default function Dashboard() {
                 }}
             >
                 <View>
-                    <Text style={{ fontSize: 42, fontWeight: 'bold', letterSpacing: -1, lineHeight: 48, color: text }}>
+                    <Text style={{ fontSize: 42, fontFamily: 'Outfit_700Bold', letterSpacing: -1, lineHeight: 48, color: text }}>
                         Welcome
                     </Text>
-                    <Text style={{ fontSize: 42, fontWeight: 'bold', letterSpacing: -1, lineHeight: 48, color: text }}>
+                    <Text style={{ fontSize: 42, fontFamily: 'Outfit_700Bold', letterSpacing: -1, lineHeight: 48, color: text }}>
                         back, {firstName}
                     </Text>
                 </View>
@@ -175,13 +175,13 @@ export default function Dashboard() {
                             <View style={{ backgroundColor: 'rgba(255,255,255,0.4)', padding: 8, borderRadius: 99 }}>
                                 <Clock size={20} color={text} />
                             </View>
-                            <Text style={{ fontWeight: '600', opacity: 0.6 }}>Pending Requests</Text>
+                            <Text style={{ fontFamily: 'DMSans_700Bold', opacity: 0.6 }}>Pending Requests</Text>
                         </View>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                             <View>
-                                <Text style={{ fontSize: 14, opacity: 0.6, marginBottom: 4 }}>Action Required</Text>
-                                <Text style={{ fontSize: 32, fontWeight: 'bold', letterSpacing: -0.5, color: text }}>
+                                <Text style={{ fontSize: 14, opacity: 0.6, marginBottom: 4, fontFamily: 'DMSans_500Medium' }}>Action Required</Text>
+                                <Text style={{ fontSize: 32, fontFamily: 'Outfit_700Bold', letterSpacing: -0.5, color: text }}>
                                     {loading ? '...' : `${pendingCount} Waiting`}
                                 </Text>
                             </View>
@@ -191,7 +191,7 @@ export default function Dashboard() {
                                         <View key={i} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', marginLeft: -8, borderWidth: 2, borderColor: pastelPurple }} />
                                     ))}
                                 </View>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: text, opacity: 0.7 }}>On hold</Text>
+                                <Text style={{ fontSize: 13, fontFamily: 'DMSans_700Bold', color: text, opacity: 0.7 }}>On hold</Text>
                             </View>
                         </View>
                     </TouchableOpacity>

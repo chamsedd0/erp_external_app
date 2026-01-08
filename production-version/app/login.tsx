@@ -54,7 +54,7 @@ export default function Login() {
                 <View style={{ marginBottom: 48, alignItems: 'center' }}>
                     <Text style={{
                         fontSize: 42,
-                        fontWeight: 'bold',
+                        fontFamily: 'Outfit_700Bold',
                         color: text,
                         marginBottom: 12,
                     }}>

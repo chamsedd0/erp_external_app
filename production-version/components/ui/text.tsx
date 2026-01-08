@@ -40,19 +40,22 @@ export const Text = forwardRef<RNText, TextProps>(
           return {
             ...baseStyle,
             fontSize: 28,
-            fontWeight: '800',
+            fontWeight: '700',
+            fontFamily: 'Outfit_700Bold',
           };
         case 'title':
           return {
             ...baseStyle,
             fontSize: 24,
             fontWeight: '700',
+            fontFamily: 'Outfit_700Bold',
           };
         case 'subtitle':
           return {
             ...baseStyle,
             fontSize: 19,
             fontWeight: '600',
+            fontFamily: 'Outfit_500Medium',
           };
         case 'caption':
           return {
@@ -60,6 +63,7 @@ export const Text = forwardRef<RNText, TextProps>(
             fontSize: FONT_SIZE,
             fontWeight: '400',
             color: mutedColor,
+            fontFamily: 'DMSans_400Regular',
           };
         case 'link':
           return {
@@ -67,12 +71,14 @@ export const Text = forwardRef<RNText, TextProps>(
             fontSize: FONT_SIZE,
             fontWeight: '500',
             textDecorationLine: 'underline',
+            fontFamily: 'DMSans_500Medium',
           };
         default: // 'body'
           return {
             ...baseStyle,
             fontSize: FONT_SIZE,
             fontWeight: '400',
+            fontFamily: 'DMSans_400Regular',
           };
       }
     };

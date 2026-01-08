@@ -6,12 +6,12 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter_400Regular'],
-                heading: ['PlusJakartaSans_700Bold'],
-                body: ['Inter_400Regular'],
-                bold: ['PlusJakartaSans_700Bold'],
-                medium: ['Inter_500Medium'],
-                semibold: ['Inter_600SemiBold'],
+                sans: ['DMSans_400Regular'],
+                heading: ['Outfit_700Bold'],
+                body: ['DMSans_400Regular'],
+                bold: ['Outfit_700Bold'],
+                medium: ['DMSans_500Medium'],
+                semibold: ['DMSans_700Bold'], // DM Sans bold is weight 700
             },
         },
     },
