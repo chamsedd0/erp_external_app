@@ -75,6 +75,8 @@ export default function AppLayout() {
                 tabBarInactiveTintColor: muted,
                 tabBarItemStyle: {
                     height: 55,
+                    borderBottomColor: '#2c2c2cff',
+                    borderBottomWidth: 1,
                     justifyContent: 'center',
                     alignItems: 'center',
                 }

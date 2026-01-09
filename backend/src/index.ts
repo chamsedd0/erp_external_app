@@ -4,7 +4,6 @@ import { config } from './config';
 import { authRouter } from './routes/auth';
 import { timeOffRouter } from './routes/time_off';
 import { expensesRouter } from './routes/expenses';
-import { notificationsRouter } from './routes/notifications';
 import rateLimit from 'express-rate-limit';
 
 const app = express();
@@ -29,7 +28,6 @@ app.use(limiter);
 app.use('/auth', authRouter);
 app.use('/time-off', timeOffRouter);
 app.use('/expenses', expensesRouter);
-app.use('/notifications', notificationsRouter);
 
 if (process.env.NODE_ENV !== 'production') {
     app.listen(config.port, () => {

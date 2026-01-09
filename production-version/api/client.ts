@@ -93,19 +93,4 @@ export const apiClient = {
         }
         return await response.json();
     },
-
-    // Notifications
-    getNotifications: async (userId: number) => {
-        const response = await fetch(`${API_URL}/notifications?user_id=${userId}`);
-        if (!response.ok) throw new Error('Failed to fetch notifications');
-        return await response.json();
-    },
-
-    markNotificationRead: async (id: string) => {
-        const response = await fetch(`${API_URL}/notifications/${id}/read`, {
-            method: 'PUT',
-        });
-        if (!response.ok) throw new Error('Failed to mark notification as read');
-        return await response.json();
-    },
 };
