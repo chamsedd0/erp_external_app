@@ -47,6 +47,21 @@ export const apiClient = {
         return await response.json();
     },
 
+    // Notifications
+    getNotifications: async (employeeId: number) => {
+        const response = await fetch(`${API_URL}/notifications?employee_id=${employeeId}`);
+        if (!response.ok) throw new Error('Failed to fetch notifications');
+        return await response.json();
+    },
+
+    markNotificationRead: async (id: string) => {
+        const response = await fetch(`${API_URL}/notifications/${id}/read`, {
+            method: 'PUT',
+        });
+        if (!response.ok) throw new Error('Failed to mark notification as read');
+        return await response.json();
+    },
+
     // Expenses
     getExpenseProducts: async () => {
         const response = await fetch(`${API_URL}/expenses/products`);

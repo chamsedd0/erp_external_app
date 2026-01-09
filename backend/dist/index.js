@@ -28,6 +28,8 @@ app.use(limiter);
 app.use('/auth', auth_1.authRouter);
 app.use('/time-off', time_off_1.timeOffRouter);
 app.use('/expenses', expenses_1.expensesRouter);
+const notifications_1 = require("./routes/notifications");
+app.use('/notifications', notifications_1.notificationsRouter);
 if (process.env.NODE_ENV !== 'production') {
     app.listen(config_1.config.port, () => {
         console.log(`🚀 Server running on port ${config_1.config.port}`);

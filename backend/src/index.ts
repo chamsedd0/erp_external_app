@@ -28,6 +28,8 @@ app.use(limiter);
 app.use('/auth', authRouter);
 app.use('/time-off', timeOffRouter);
 app.use('/expenses', expensesRouter);
+import { notificationsRouter } from './routes/notifications';
+app.use('/notifications', notificationsRouter);
 
 if (process.env.NODE_ENV !== 'production') {
     app.listen(config.port, () => {
