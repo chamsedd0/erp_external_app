@@ -37,6 +37,25 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /pending - Fetch pending expenses (draft or reported)
+router.get('/pending', async (req, res) => {
+    try {
+        const uid = await odooClient.authenticate();
+        // Search for expenses in 'draft' or 'reported' state
+        // Note: 'approved' is NOT considered pending for the employee as per user request
+        const expenses: any = await odooClient.searchRead(
+            uid,
+            'hr.expense',
+            [['state', 'in', ['draft', 'reported']]],
+            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date', 'description']
+        );
+        res.json({ requests: expenses });
+    } catch (error: any) {
+        console.error('Fetch Pending Expenses Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // GET /products - Fetch Expense Products
 router.get('/products', async (req, res) => {
     try {

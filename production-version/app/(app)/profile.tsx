@@ -19,6 +19,7 @@ export default function Profile() {
     const muted = useColor('textMuted');
     const pastelPurple = useColor('pastelPurple' as any);
     const pastelBlue = useColor('pastelBlue' as any);
+    const primary = useColor('primary');
 
     const handleLogout = () => {
         setShowLogoutModal(false);
@@ -27,7 +28,6 @@ export default function Profile() {
 
     const onRefresh = () => {
         setRefreshing(true);
-        // Simulate refresh
         setTimeout(() => setRefreshing(false), 1000);
     };
 
@@ -40,18 +40,20 @@ export default function Profile() {
             }
         >
             {/* Header / Avatar */}
-            <View style={{ alignItems: 'center', marginBottom: 40, marginTop: 20 }}>
+            <View style={{ alignItems: 'center', marginBottom: 32, marginTop: 20 }}>
                 <View style={{
                     width: 120,
                     height: 120,
                     borderRadius: 60,
                     overflow: 'hidden',
                     marginBottom: 20,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 16,
-                    elevation: 8,
+                    shadowColor: pastelBlue,
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 20,
+                    elevation: 10,
+                    borderWidth: 4,
+                    borderColor: cardColor,
                 }}>
                     <LinearGradient
                         colors={['#E9E4F5', '#CBF0F9']}
@@ -62,111 +64,96 @@ export default function Profile() {
                         <User size={56} color="#1a1a1a" strokeWidth={2} />
                     </LinearGradient>
                 </View>
-                <Text style={{ fontSize: 28, fontWeight: 'bold', color: text, marginBottom: 8 }}>{user?.name || 'User'}</Text>
-                <Text style={{ fontSize: 17, color: muted, marginBottom: 4 }}>{user?.job_title || 'Employee'}</Text>
-                <Text style={{ fontSize: 15, color: muted }}>{user?.work_email || 'email@example.com'}</Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text, marginBottom: 4 }}>
+                    {user?.name || 'User'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>
+                        {user?.job_title || 'Employee'}
+                    </Text>
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: muted, opacity: 0.5 }} />
+                    <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>
+                        ID: #{user?.id || '---'}
+                    </Text>
+                </View>
+                <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(0,0,0,0.04)', borderRadius: 99 }}>
+                    <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted }}>{user?.work_email || 'email@example.com'}</Text>
+                </View>
             </View>
 
             {/* Menu Items */}
-            <View style={{ gap: 12, marginBottom: 32 }}>
-                <TouchableOpacity onPress={() => router.push('/(app)/settings')} style={{
-                    backgroundColor: cardColor,
-                    padding: 20,
-                    borderRadius: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 16,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    elevation: 2,
-                }}>
-                    <View style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: pastelPurple,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}>
-                        <Settings size={22} color="#1a1a1a" strokeWidth={2.5} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '600', fontSize: 16, color: text }}>Settings</Text>
-                        <Text style={{ fontSize: 14, color: muted, marginTop: 2 }}>App preferences</Text>
-                    </View>
-                    <ChevronRight size={20} color={muted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={{
-                    backgroundColor: cardColor,
-                    padding: 20,
-                    borderRadius: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 16,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    elevation: 2,
-                }}>
-                    <View style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: pastelBlue,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}>
-                        <Shield size={22} color="#1a1a1a" strokeWidth={2.5} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '600', fontSize: 16, color: text }}>Security</Text>
-                        <Text style={{ fontSize: 14, color: muted, marginTop: 2 }}>Password & privacy</Text>
-                    </View>
-                    <ChevronRight size={20} color={muted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => router.push('/(app)/help')} style={{
-                    backgroundColor: cardColor,
-                    padding: 20,
-                    borderRadius: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 16,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    elevation: 2,
-                }}>
-                    <View style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: '#D3F3DA',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}>
-                        <HelpCircle size={22} color="#1a1a1a" strokeWidth={2.5} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '600', fontSize: 16, color: text }}>Help & Support</Text>
-                        <Text style={{ fontSize: 14, color: muted, marginTop: 2 }}>Get assistance</Text>
-                    </View>
-                    <ChevronRight size={20} color={muted} />
-                </TouchableOpacity>
+            <View style={{ gap: 16, marginBottom: 32 }}>
+                {[
+                    { icon: Settings, label: 'Settings', sub: 'App preferences', path: '/(app)/settings', color: pastelPurple },
+                    { icon: Shield, label: 'Security', sub: 'Password & privacy', path: '#', color: pastelBlue },
+                    { icon: HelpCircle, label: 'Help & Support', sub: 'Get assistance', path: '/(app)/help', color: '#D3F3DA' }
+                ].map((item, index) => (
+                    <TouchableOpacity
+                        key={index}
+                        onPress={() => item.path !== '#' && router.push(item.path as any)}
+                        style={{
+                            backgroundColor: cardColor,
+                            padding: 20,
+                            
+                            borderRadius: 24,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 16,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.03,
+                            shadowRadius: 10,
+                            elevation: 2,
+                            borderWidth: 1,
+                            borderColor: 'rgba(0,0,0,0.03)'
+                        }}
+                    >
+                        <View style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 20,
+                            backgroundColor: item.color,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}>
+                            <item.icon size={24} color="#b1b1b1ff" strokeWidth={2} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 17, color: text }}>{item.label}</Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted, marginTop: 2 }}>{item.sub}</Text>
+                        </View>
+                        <View style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: 'rgba(0,0,0,0.03)',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <ChevronRight size={18} color={muted} />
+                        </View>
+                    </TouchableOpacity>
+                ))}
             </View>
 
             {/* Logout */}
-            <Button variant="destructive" onPress={() => setShowLogoutModal(true)} style={{ borderRadius: 20 }} size="lg">
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <LogOut size={18} color="white" />
-                    <Text style={{ fontWeight: 'bold', color: 'white', fontSize: 16 }}>Sign Out</Text>
-                </View>
-            </Button>
+            <TouchableOpacity
+                onPress={() => setShowLogoutModal(true)}
+                style={{
+                    backgroundColor: '#FFF5F5',
+                    padding: 20,
+                    borderRadius: 24,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    borderWidth: 1,
+                    borderColor: '#FFE5E5'
+                }}
+            >
+                <LogOut size={20} color="#FF4D4D" strokeWidth={2.5} />
+                <Text style={{ fontFamily: 'Outfit_700Bold', color: '#FF4D4D', fontSize: 16 }}>Sign Out</Text>
+            </TouchableOpacity>
 
             {/* Logout Confirmation Modal */}
             <Modal
@@ -188,39 +175,51 @@ export default function Profile() {
                     <Pressable
                         style={{
                             backgroundColor: cardColor,
-                            borderRadius: 24,
-                            padding: 24,
+                            borderRadius: 32,
+                            padding: 32,
                             width: '100%',
-                            maxWidth: 400,
+                            maxWidth: 340,
                             shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 8 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 20,
-                            elevation: 10,
+                            shadowOffset: { width: 0, height: 20 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 32,
+                            elevation: 16,
+                            alignItems: 'center'
                         }}
                         onPress={(e) => e.stopPropagation()}
                     >
-                        <Text style={{ fontSize: 22, fontWeight: 'bold', color: text, marginBottom: 12 }}>
-                            Sign Out
+                        <View style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 36,
+                            backgroundColor: '#FFF5F5',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: 20,
+                        }}>
+                            <LogOut size={32} color="#FF4D4D" strokeWidth={2} />
+                        </View>
+
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text, marginBottom: 8, textAlign: 'center' }}>
+                            Sign Out?
                         </Text>
-                        <Text style={{ fontSize: 16, color: muted, marginBottom: 24 }}>
-                            Are you sure you want to sign out?
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted, marginBottom: 32, textAlign: 'center', lineHeight: 24 }}>
+                            Are you sure you want to sign out of your account?
                         </Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <Button
-                                variant="outline"
+
+                        <View style={{ flexDirection: 'row', gap: 16, width: '100%' }}>
+                            <TouchableOpacity
                                 onPress={() => setShowLogoutModal(false)}
-                                style={{ flex: 1, borderRadius: 16 }}
+                                style={{ flex: 1, paddingVertical: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center' }}
                             >
-                                <Text style={{ fontWeight: '600' }}>Cancel</Text>
-                            </Button>
-                            <Button
-                                variant="destructive"
+                                <Text style={{ fontFamily: 'DMSans_700Bold', color: text }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
                                 onPress={handleLogout}
-                                style={{ flex: 1, borderRadius: 16 }}
+                                style={{ flex: 1, paddingVertical: 16, borderRadius: 16, backgroundColor: '#FF4D4D', alignItems: 'center' }}
                             >
-                                <Text style={{ fontWeight: '600', color: 'white' }}>Sign Out</Text>
-                            </Button>
+                                <Text style={{ fontFamily: 'DMSans_700Bold', color: 'white' }}>Sign Out</Text>
+                            </TouchableOpacity>
                         </View>
                     </Pressable>
                 </Pressable>

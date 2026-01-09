@@ -1,8 +1,11 @@
-import { View, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { Bell, Check } from 'lucide-react-native';
-import { useState } from 'react';
+import { Bell, Check, AlertCircle, Info, ChevronLeft } from 'lucide-react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../../api/client';
+import { useSession } from '../../providers/auth-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 interface Notification {
     id: string;
@@ -10,197 +13,218 @@ interface Notification {
     message: string;
     type: 'request_approved' | 'request_rejected' | 'system';
     read: boolean;
-    timestamp: Date;
+    timestamp: string;
+    relatedRequestId?: number;
+    relatedRequestType?: 'time_off' | 'expense';
 }
 
-// Mock data for now
-const mockNotifications: Notification[] = [
-    {
-        id: '1',
-        title: 'Time Off Approved',
-        message: 'Your vacation request for Dec 20-25 has been approved',
-        type: 'request_approved',
-        read: false,
-        timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
-    },
-    {
-        id: '2',
-        title: 'Expense Submitted',
-        message: 'Your expense claim of $250 has been received',
-        type: 'system',
-        read: false,
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    },
-    {
-        id: '3',
-        title: 'Welcome!',
-        message: 'Welcome to the Employee Portal. Get started by submitting your first request.',
-        type: 'system',
-        read: true,
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    },
-];
-
 export default function Notifications() {
-    const [notifications, setNotifications] = useState(mockNotifications);
+    const { user } = useSession();
+    const router = useRouter();
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
     const background = useColor('background');
     const text = useColor('text');
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
     const pastelPurple = useColor('pastelPurple' as any);
+    const pastelGreen = useColor('pastelGreen' as any);
+    const pastelRed = useColor('pastelRed' as any) || '#ef4444'; // Fallback if not defined
 
-    const markAsRead = (id: string) => {
-        setNotifications(prev =>
-            prev.map(n => n.id === id ? { ...n, read: true } : n)
-        );
-    };
+    useFocusEffect(
+        useCallback(() => {
+            fetchNotifications();
+        }, [])
+    );
 
-    const getNotificationColor = (type: Notification['type']) => {
-        switch (type) {
-            case 'request_approved':
-                return '#10b981';
-            case 'request_rejected':
-                return '#ef4444';
-            default:
-                return '#3b82f6';
+    const fetchNotifications = async () => {
+        if (!user?.id) return;
+        try {
+            const data = await apiClient.getNotifications(user.id);
+            setNotifications(data.notifications || []);
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
     };
 
-    const formatTime = (date: Date) => {
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchNotifications();
+    };
+
+    const handlePress = async (notification: Notification) => {
+        // 1. Mark as read
+        if (!notification.read) {
+            // Optimistically update UI
+            setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n));
+            // Call API
+            apiClient.markNotificationRead(notification.id).catch(console.error);
+        }
+
+        // 2. Navigate if related request exists
+        if (notification.relatedRequestId && notification.relatedRequestType) {
+            router.push({
+                pathname: '/(app)/request-details',
+                params: {
+                    id: notification.relatedRequestId.toString(),
+                    type: notification.relatedRequestType
+                }
+            });
+        }
+    };
+
+    const getIcon = (type: Notification['type']) => {
+        switch (type) {
+            case 'request_approved': return <Check size={20} color="#fff" strokeWidth={3} />;
+            case 'request_rejected': return <AlertCircle size={20} color="#fff" strokeWidth={2.5} />;
+            default: return <WaitIcon />;
+        }
+    };
+
+    const WaitIcon = () => <Bell size={20} color="#fff" strokeWidth={2.5} />;
+
+    const getBgColor = (type: Notification['type']) => {
+        switch (type) {
+            case 'request_approved': return '#10b981';
+            case 'request_rejected': return '#ef4444';
+            default: return '#3b82f6';
+        }
+    };
+
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
         const now = new Date();
         const diff = now.getTime() - date.getTime();
+
         const minutes = Math.floor(diff / 60000);
         const hours = Math.floor(minutes / 60);
         const days = Math.floor(hours / 24);
 
-        if (days > 0) return `${days}d ago`;
-        if (hours > 0) return `${hours}h ago`;
-        if (minutes > 0) return `${minutes}m ago`;
-        return 'Just now';
+        if (days === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (days === 1) {
+            return 'Yesterday';
+        } else if (days < 7) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
     };
 
-    const renderNotification = ({ item }: { item: Notification }) => (
-        <TouchableOpacity
-            onPress={() => !item.read && markAsRead(item.id)}
-            style={{
-                backgroundColor: cardColor,
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 12,
-                borderLeftWidth: 4,
-                borderLeftColor: item.read ? 'transparent' : getNotificationColor(item.type),
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: item.read ? 0.03 : 0.08,
-                shadowRadius: 8,
-                elevation: item.read ? 1 : 3,
-            }}
-        >
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                <View style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: item.read ? 'rgba(0,0,0,0.05)' : `${getNotificationColor(item.type)}20`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}>
-                    <Bell size={20} color={item.read ? muted : getNotificationColor(item.type)} />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{
-                            fontSize: 16,
-                            fontWeight: item.read ? '600' : '700',
-                            color: text,
-                            flex: 1,
-                        }}>
-                            {item.title}
-                        </Text>
-                        {!item.read && (
+    // Grouping
+    const groupedNotifications = notifications.reduce((acc: any, curr) => {
+        const date = new Date(curr.timestamp);
+        const today = new Date();
+        let key = 'Earlier';
+
+        if (date.toDateString() === today.toDateString()) {
+            key = 'Today';
+        } else {
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (date.toDateString() === yesterday.toDateString()) {
+                key = 'Yesterday';
+            }
+        }
+
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(curr);
+        return acc;
+    }, {});
+
+
+    const renderGroup = (label: string, items: Notification[]) => {
+        return (
+            <View key={label} style={{ marginBottom: 24 }}>
+                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 13, color: muted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {label}
+                </Text>
+                <View style={{ gap: 16 }}>
+                    {items.map(item => (
+                        <TouchableOpacity
+                            key={item.id}
+                            onPress={() => handlePress(item)}
+                            style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}
+                        >
                             <View style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 4,
-                                backgroundColor: getNotificationColor(item.type),
-                                marginLeft: 8,
-                                marginTop: 6,
-                            }} />
-                        )}
-                    </View>
-                    <Text style={{
-                        fontSize: 14,
-                        color: muted,
-                        marginBottom: 8,
-                        opacity: item.read ? 0.7 : 1,
-                    }}>
-                        {item.message}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: muted, opacity: 0.6 }}>
-                        {formatTime(item.timestamp)}
-                    </Text>
+                                width: 44, height: 44, borderRadius: 22,
+                                backgroundColor: getBgColor(item.type),
+                                alignItems: 'center', justifyContent: 'center',
+                                marginTop: 2
+                            }}>
+                                {getIcon(item.type)}
+                            </View>
+
+                            <View style={{ flex: 1, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <Text style={{
+                                        fontFamily: item.read ? 'Outfit_500Medium' : 'Outfit_700Bold',
+                                        fontSize: 16,
+                                        color: text,
+                                        width: '80%'
+                                    }} numberOfLines={1}>
+                                        {item.title}
+                                    </Text>
+                                    <Text style={{
+                                        fontFamily: 'DMSans_500Medium',
+                                        fontSize: 12,
+                                        color: item.read ? muted : text,
+                                        fontWeight: item.read ? 'normal' : 'bold'
+                                    }}>
+                                        {formatTime(item.timestamp)}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted, lineHeight: 20 }} numberOfLines={2}>
+                                    {item.message}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
                 </View>
             </View>
-        </TouchableOpacity>
-    );
-
-    const unreadCount = notifications.filter(n => !n.read).length;
+        );
+    };
 
     return (
         <View style={{ flex: 1, backgroundColor: background }}>
-            <ScrollView
-                contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            >
-                {/* Header */}
-                <View style={{ marginBottom: 24 }}>
-                    <Text style={{ fontSize: 32, fontWeight: 'bold', color: text, marginBottom: 8 }}>
+            <View style={{ paddingTop: 30, paddingHorizontal: 24, paddingBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
+                        <ChevronLeft size={24} color={text} />
+                    </TouchableOpacity>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text }}>
                         Notifications
                     </Text>
-                    {unreadCount > 0 && (
-                        <Text style={{ fontSize: 15, color: muted }}>
-                            You have {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
-                        </Text>
-                    )}
                 </View>
+            </View>
 
-                {/* Notifications List */}
-                {notifications.length === 0 ? (
-                    <View style={{
-                        flex: 1,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 80,
-                    }}>
-                        <View style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 40,
-                            backgroundColor: cardColor,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 16,
-                        }}>
-                            <Bell size={36} color={muted} />
+            <ScrollView
+                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+                {loading && !refreshing ? (
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" />
+                    </View>
+                ) : notifications.length === 0 ? (
+                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 100 }}>
+                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: cardColor, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+                            <Bell size={32} color={muted} opacity={0.5} />
                         </View>
-                        <Text style={{ fontSize: 18, fontWeight: '600', color: text, marginBottom: 8 }}>
-                            No notifications
-                        </Text>
-                        <Text style={{ fontSize: 14, color: muted, textAlign: 'center' }}>
-                            You're all caught up!
-                        </Text>
+                        <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 20, color: text, marginBottom: 8 }}>No notifications</Text>
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted, textAlign: 'center' }}>Updates on your requests will appear here.</Text>
                     </View>
                 ) : (
-                    <View>
-                        {notifications.map(item => (
-                            <View key={item.id}>
-                                {renderNotification({ item })}
-                            </View>
-                        ))}
-                    </View>
+                    <>
+                        {groupedNotifications['Today'] && renderGroup('Today', groupedNotifications['Today'])}
+                        {groupedNotifications['Yesterday'] && renderGroup('Yesterday', groupedNotifications['Yesterday'])}
+                        {groupedNotifications['Earlier'] && renderGroup('Earlier', groupedNotifications['Earlier'])}
+                    </>
                 )}
             </ScrollView>
         </View>

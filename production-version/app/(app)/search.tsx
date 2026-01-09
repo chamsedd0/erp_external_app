@@ -1,20 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { useRouter } from 'expo-router';
-import { Search as SearchIcon, X, Clock, DollarSign, ChevronRight } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Search as SearchIcon, X, Clock, DollarSign, ChevronRight, ChevronLeft, Filter } from 'lucide-react-native';
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 
 type RequestType = 'all' | 'timeoff' | 'expense';
+type DateFilter = 'all' | 'this_month' | 'last_month';
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'draft';
 
 export default function Search() {
     const [query, setQuery] = useState('');
-    const [filter, setFilter] = useState<RequestType>('all');
+    const [typeFilter, setTypeFilter] = useState<RequestType>('all');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any[]>([]);
     const router = useRouter();
+    const params = useLocalSearchParams();
     const { user } = useSession();
 
     const background = useColor('background');
@@ -23,42 +28,87 @@ export default function Search() {
     const cardColor = useColor('card');
     const pastelPurple = useColor('pastelPurple' as any);
     const pastelBlue = useColor('pastelBlue' as any);
+    const primary = useColor('primary');
+
+    useEffect(() => {
+        if (params.status === 'pending') {
+            setStatusFilter('pending');
+        }
+    }, [params.status]);
+
+    useEffect(() => {
+        handleSearch();
+    }, [typeFilter, statusFilter, dateFilter]);
 
     const handleSearch = async () => {
-        if (!query.trim()) return;
-
         setLoading(true);
         try {
-            // For now, fetch all and filter client-side
+            if (!user?.id) return;
+
+            // Fetch ALL requests
             const [timeOffData, expenseData] = await Promise.all([
-                apiClient.getPendingTimeOff(),
-                apiClient.getPendingExpenses()
+                apiClient.getTimeOffRequests(user.id),
+                apiClient.getExpenses(user.id)
             ]);
 
             let allResults: any[] = [];
 
-            if (filter === 'all' || filter === 'timeoff') {
-                const timeOffResults = (timeOffData.requests || []).map((r: any) => ({
+            if (typeFilter === 'all' || typeFilter === 'timeoff') {
+                const timeOffResults = (timeOffData.leaves || []).map((r: any) => ({
                     ...r,
                     type: 'timeoff' as const,
                 }));
                 allResults = [...allResults, ...timeOffResults];
             }
 
-            if (filter === 'all' || filter === 'expense') {
-                const expenseResults = (expenseData.requests || []).map((r: any) => ({
+            if (typeFilter === 'all' || typeFilter === 'expense') {
+                const expenseResults = (expenseData.expenses || []).map((r: any) => ({
                     ...r,
                     type: 'expense' as const,
                 }));
                 allResults = [...allResults, ...expenseResults];
             }
 
-            // Filter by query
+            // Filter by query, status, and date
             const filtered = allResults.filter(r => {
                 const searchText = query.toLowerCase();
                 const name = (r.name || '').toLowerCase();
                 const status = (r.state || '').toLowerCase();
-                return name.includes(searchText) || status.includes(searchText);
+                const date = new Date(r.date || r.date_from || r.create_date);
+
+                // Query Filter
+                const matchesQuery = !query || name.includes(searchText) || status.includes(searchText);
+
+                // Status Filter
+                let matchesStatus = true;
+                if (statusFilter === 'pending') {
+                    matchesStatus = ['draft', 'reported', 'confirm', 'validate1'].includes(status);
+                } else if (statusFilter === 'approved') {
+                    matchesStatus = ['approved', 'done', 'posted', 'validate'].includes(status);
+                } else if (statusFilter === 'rejected') {
+                    matchesStatus = ['refuse', 'reject', 'cancel'].includes(status);
+                } else if (statusFilter === 'draft') {
+                    matchesStatus = ['draft'].includes(status);
+                }
+
+                // Date Filter
+                let matchesDate = true;
+                const now = new Date();
+                if (dateFilter === 'this_month') {
+                    matchesDate = date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                } else if (dateFilter === 'last_month') {
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    matchesDate = date.getMonth() === lastMonth.getMonth() && date.getFullYear() === lastMonth.getFullYear();
+                }
+
+                return matchesQuery && matchesStatus && matchesDate;
+            });
+
+            // Sort by date (newest first)
+            filtered.sort((a, b) => {
+                const dateA = a.date || a.date_from || '';
+                const dateB = b.date || b.date_from || '';
+                return new Date(dateB).getTime() - new Date(dateA).getTime();
             });
 
             setResults(filtered);
@@ -76,72 +126,138 @@ export default function Search() {
         });
     };
 
+    const getStatusColor = (status: string) => {
+        if (status === 'pending') return '#f59e0b';
+        if (status === 'approved') return '#10b981';
+        if (status === 'rejected') return '#ef4444';
+        return text;
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: background }}>
-            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
-                {/* Search Header */}
-                <View style={{ marginBottom: 24 }}>
-                    <Text style={{ fontSize: 32, fontWeight: 'bold', color: text, marginBottom: 16 }}>
+            <View style={{ padding: 24, paddingBottom: 12, paddingTop: 60 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+                    <TouchableOpacity onPress={() => router.push('/(app)/dashboard')} style={{ marginRight: 16 }}>
+                        <ChevronLeft size={24} color={text} />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 32, fontWeight: 'bold', color: text }}>
                         Search
                     </Text>
-
-                    {/* Search Input */}
-                    <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: cardColor,
-                        borderRadius: 16,
-                        paddingHorizontal: 16,
-                        height: 56,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.05,
-                        shadowRadius: 8,
-                        elevation: 2,
-                    }}>
-                        <SearchIcon size={20} color={muted} />
-                        <TextInput
-                            value={query}
-                            onChangeText={setQuery}
-                            placeholder="Search requests..."
-                            placeholderTextColor={muted}
-                            style={{
-                                flex: 1,
-                                fontSize: 16,
-                                color: text,
-                                marginLeft: 12,
-                                marginRight: 12,
-                            }}
-                            onSubmitEditing={handleSearch}
-                            returnKeyType="search"
-                        />
-                        {query && (
-                            <TouchableOpacity onPress={() => setQuery('')}>
-                                <X size={20} color={muted} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
                 </View>
 
-                {/* Filter Tabs */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+                {/* Search Input */}
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: cardColor,
+                    borderRadius: 100,
+                    paddingHorizontal: 16,
+                    height: 56,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 8,
+                    elevation: 2,
+                }}>
+                    <SearchIcon size={20} color={muted} />
+                    <TextInput
+                        value={query}
+                        onChangeText={setQuery}
+                        placeholder="Search requests..."
+                        placeholderTextColor={muted}
+                        style={{
+                            flex: 1,
+                            fontSize: 16,
+                            color: text,
+                            marginLeft: 12,
+                            marginRight: 12,
+                        }}
+                        onSubmitEditing={handleSearch}
+                        returnKeyType="search"
+                    />
+                    {query && (
+                        <TouchableOpacity onPress={() => setQuery('')}>
+                            <X size={20} color={muted} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
+            <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginBottom: 16 }} />
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 180 }}>
+                {/* Type Filters */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                     {(['all', 'timeoff', 'expense'] as RequestType[]).map((f) => (
                         <TouchableOpacity
                             key={f}
-                            onPress={() => setFilter(f)}
+                            onPress={() => setTypeFilter(f)}
                             style={{
                                 paddingHorizontal: 20,
                                 paddingVertical: 10,
                                 borderRadius: 20,
-                                backgroundColor: filter === f ? pastelPurple : cardColor,
+                                backgroundColor: typeFilter === f ? pastelPurple : cardColor,
+                                marginRight: 12,
                             }}
                         >
                             <Text style={{
                                 fontSize: 14,
                                 fontWeight: '600',
-                                color: filter === f ? '#1a1a1a' : text,
+                                color: typeFilter === f ? '#ffffffff' : text,
                             }}>
-                                {f === 'all' ? 'All' : f === 'timeoff' ? 'Time Off' : 'Expenses'}
+                                {f === 'all' ? 'All Types' : f === 'timeoff' ? 'Time Off' : 'Expenses'}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Status Filters */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    {(['all', 'pending', 'approved', 'rejected'] as StatusFilter[]).map((f) => (
+                        <TouchableOpacity
+                            key={f}
+                            onPress={() => setStatusFilter(f)}
+                            style={{
+                                paddingHorizontal: 20,
+                                paddingVertical: 10,
+                                borderRadius: 20,
+                                backgroundColor: statusFilter === f ? getStatusColor(f) + '20' : cardColor,
+                                borderWidth: 1,
+                                borderColor: statusFilter === f ? getStatusColor(f) : 'transparent',
+                                marginRight: 12,
+                            }}
+                        >
+                            <Text style={{
+                                fontSize: 14,
+                                fontWeight: '600',
+                                color: statusFilter === f ? getStatusColor(f) : text,
+                                textTransform: 'capitalize'
+                            }}>
+                                {f}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Date Filters */}
+                <View style={{ marginBottom: 24, flexDirection: 'row', gap: 12 }}>
+                    {(['all', 'this_month', 'last_month'] as DateFilter[]).map((f) => (
+                        <TouchableOpacity
+                            key={f}
+                            onPress={() => setDateFilter(f)}
+                            style={{
+                                paddingHorizontal: 16,
+                                paddingVertical: 8,
+                                borderRadius: 12,
+                                backgroundColor: dateFilter === f ? 'rgba(0,0,0,0.05)' : 'transparent',
+                            }}
+                        >
+                            <Text style={{
+                                fontSize: 13,
+                                fontWeight: dateFilter === f ? '600' : '400',
+                                color: text,
+                            }}>
+                                {f === 'all' ? 'Any Date' : f === 'this_month' ? 'This Month' : 'Last Month'}
                             </Text>
                         </TouchableOpacity>
                     ))}
@@ -194,32 +310,22 @@ export default function Search() {
                                     </Text>
                                     <Text style={{ fontSize: 13, color: muted }}>
                                         {result.type === 'timeoff'
-                                            ? `${result.request_date_from} - ${result.request_date_to}`
-                                            : `$${result.total_amount || result.unit_amount || '0'}`}
+                                            ? `${result.request_date_from || result.date_from} • ${result.state}`
+                                            : `$${result.total_amount || result.unit_amount || '0'} • ${result.state}`}
                                     </Text>
                                 </View>
                                 <ChevronRight size={20} color={muted} />
                             </TouchableOpacity>
                         ))}
                     </View>
-                ) : query ? (
-                    <View style={{ paddingVertical: 60, alignItems: 'center' }}>
-                        <SearchIcon size={48} color={muted} opacity={0.3} />
-                        <Text style={{ fontSize: 18, fontWeight: '600', color: text, marginTop: 16, marginBottom: 8 }}>
-                            No results found
-                        </Text>
-                        <Text style={{ fontSize: 14, color: muted, textAlign: 'center' }}>
-                            Try a different search term
-                        </Text>
-                    </View>
                 ) : (
                     <View style={{ paddingVertical: 60, alignItems: 'center' }}>
-                        <SearchIcon size={48} color={muted} opacity={0.3} />
+                        <Filter size={48} color={muted} opacity={0.3} />
                         <Text style={{ fontSize: 18, fontWeight: '600', color: text, marginTop: 16, marginBottom: 8 }}>
-                            Search your requests
+                            No requests found
                         </Text>
-                        <Text style={{ fontSize: 14, color: muted, textAlign: 'center' }}>
-                            Enter a search term above to get started
+                        <Text style={{ fontSize: 14, color: muted, textAlign: 'center', marginHorizontal: 32 }}>
+                            We couldn't find any requests matching your current filters.
                         </Text>
                     </View>
                 )}

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { DatePicker } from '../../components/ui/date-picker';
 import { useColor } from '../../hooks/useColor';
-import { Clock, DollarSign, ChevronLeft, Upload } from 'lucide-react-native';
+import { Clock, DollarSign, ChevronLeft, Upload, Calendar, ArrowRight, FileText } from 'lucide-react-native';
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 import { useToast } from '../../providers/toast-context';
 
 type ViewState = 'hub' | 'time-off' | 'expense';
+
+const { width } = Dimensions.get('window');
 
 export default function NewRequest() {
     const { session, user } = useSession();
@@ -30,6 +32,7 @@ export default function NewRequest() {
     const pastelPurple = useColor('pastelPurple' as any);
     const pastelBlue = useColor('pastelBlue' as any);
     const cardColor = useColor('card');
+    const primary = useColor('primary');
 
     // Time Off Form State
     const [holidayStatusId, setHolidayStatusId] = useState<number | null>(null);
@@ -133,32 +136,109 @@ export default function NewRequest() {
     };
 
     const renderHub = () => (
-        <View style={{ gap: 20 }}>
-            <Text style={{ fontSize: 24, fontWeight: 'bold', color: text, marginBottom: 10 }}>
-                What would you like to request?
-            </Text>
+        <View style={{ gap: 24, paddingVertical: 10}}>
+            <View>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text }}>
+                    New Request
+                </Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted, marginTop: 8 }}>
+                    What would you like to submit today?
+                </Text>
+            </View>
 
-            <TouchableOpacity onPress={() => setCurrentView('time-off')}>
-                <View style={{ backgroundColor: pastelPurple, borderRadius: 24, padding: 24, paddingVertical: 32, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' }}>
-                        <Clock size={32} color="#d3d3d3ff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#d3d3d3ff' }}>Time Off</Text>
-                        <Text style={{ fontSize: 16, color: '#d3d3d3ff', opacity: 0.7 }}>Vacation, Sick Leave, etc.</Text>
-                    </View>
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setCurrentView('time-off')}
+                style={{
+                    backgroundColor: pastelPurple,
+                    borderRadius: 32,
+                    padding: 32,
+                    shadowColor: pastelPurple,
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 20,
+                    elevation: 10,
+                    overflow: 'hidden',
+                    minHeight: 200,
+                    justifyContent: 'space-between'
+                }}
+            >
+                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
+                    <Clock size={180} color="#fff" />
+                </View>
+
+                <View style={{
+                    width: 56, height: 56, borderRadius: 20,
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                }}>
+                    <Clock size={28} color="#fff" strokeWidth={2} />
+                </View>
+
+                <View>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: '#fff', marginBottom: 8 }}>
+                        Time Off
+                    </Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: 'rgba(255,255,255,0.8)' }}>
+                        Vacation, Sick Leave & More
+                    </Text>
+                </View>
+
+                <View style={{
+                    position: 'absolute', right: 24, bottom: 24,
+                    width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <ArrowRight size={24} color={pastelPurple} />
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setCurrentView('expense')}>
-                <View style={{ backgroundColor: pastelBlue, borderRadius: 24, padding: 24, paddingVertical: 32, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' }}>
-                        <DollarSign size={32} color="#d3d3d3ff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#d3d3d3ff' }}>Expense Claim</Text>
-                        <Text style={{ fontSize: 16, color: '#d3d3d3ff', opacity: 0.7 }}>Reimbursements, Travel, etc.</Text>
-                    </View>
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setCurrentView('expense')}
+                style={{
+                    backgroundColor: pastelBlue,
+                    borderRadius: 32,
+                    padding: 32,
+                    shadowColor: pastelBlue,
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 20,
+                    elevation: 10,
+                    overflow: 'hidden',
+                    minHeight: 200,
+                    justifyContent: 'space-between'
+                }}
+            >
+                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
+                    <DollarSign size={180} color="#fff" />
+                </View>
+
+                <View style={{
+                    width: 56, height: 56, borderRadius: 20,
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                }}>
+                    <DollarSign size={28} color="#fff" strokeWidth={2} />
+                </View>
+
+                <View>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: '#fff', marginBottom: 8 }}>
+                        Expense Claim
+                    </Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: 'rgba(255,255,255,0.8)' }}>
+                        Reimbursements & Purchases
+                    </Text>
+                </View>
+
+                <View style={{
+                    position: 'absolute', right: 24, bottom: 24,
+                    width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <ArrowRight size={24} color={pastelBlue} />
                 </View>
             </TouchableOpacity>
         </View>
@@ -166,41 +246,49 @@ export default function NewRequest() {
 
     const renderTimeOffForm = () => (
         <View style={{ gap: 32 }}>
+            <View style={{ gap: 4 }}>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>New Time Off</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Please fill in the details below</Text>
+            </View>
+
             {/* Leave Type Section */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Leave Type</Text>
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
                 {dataLoading ? (
-                    <View style={{ height: 120, alignItems: 'center', justifyContent: 'center' }}>
-                        <ActivityIndicator size="large" />
+                    <View style={{ height: 100, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="small" color={muted} />
                     </View>
                 ) : (
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+                        contentContainerStyle={{ gap: 12 }}
                     >
                         {leaveTypes.map((type: any) => (
                             <TouchableOpacity
                                 key={type.id}
                                 onPress={() => setHolidayStatusId(type.id)}
+                                activeOpacity={0.7}
                                 style={{
                                     backgroundColor: holidayStatusId === type.id ? pastelPurple : cardColor,
-                                    paddingHorizontal: 24,
-                                    paddingVertical: 16,
-                                    borderRadius: 20,
-                                    borderWidth: 2,
+                                    paddingHorizontal: 20,
+                                    paddingVertical: 14,
+                                    borderRadius: 16,
+                                    borderWidth: 1,
                                     borderColor: holidayStatusId === type.id ? pastelPurple : 'transparent',
-                                    shadowColor: holidayStatusId === type.id ? '#000' : 'transparent',
+                                    shadowColor: holidayStatusId === type.id ? pastelPurple : '#000',
                                     shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: 0.1,
+                                    shadowOpacity: holidayStatusId === type.id ? 0.3 : 0.03,
                                     shadowRadius: 8,
-                                    elevation: holidayStatusId === type.id ? 4 : 0,
+                                    elevation: holidayStatusId === type.id ? 4 : 2,
+                                    minWidth: 100,
+                                    alignItems: 'center'
                                 }}
                             >
                                 <Text style={{
-                                    fontWeight: '700',
-                                    fontSize: 16,
-                                    color: holidayStatusId === type.id ? '#1a1a1a' : text
+                                    fontFamily: 'DMSans_700Bold',
+                                    fontSize: 15,
+                                    color: holidayStatusId === type.id ? '#fff' : text
                                 }}>
                                     {type.name}
                                 </Text>
@@ -210,30 +298,31 @@ export default function NewRequest() {
                 )}
             </View>
 
-            {/* Date Range Section */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Duration</Text>
+            {/* Duration Section */}
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Duration</Text>
                 <View style={{
                     backgroundColor: cardColor,
                     borderRadius: 24,
-                    padding: 20,
+                    padding: 24,
                     gap: 20,
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 12,
                     elevation: 2,
                 }}>
-                    <View style={{ gap: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: muted }}>Start Date</Text>
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>From</Text>
                         <DatePicker
                             value={dateFrom}
                             onChange={setDateFrom}
                             placeholder="Select start date"
                         />
                     </View>
-                    <View style={{ gap: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: muted }}>End Date</Text>
+                    <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>To</Text>
                         <DatePicker
                             value={dateTo}
                             onChange={setDateTo}
@@ -244,34 +333,28 @@ export default function NewRequest() {
             </View>
 
             {/* Reason Section */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Reason (Optional)</Text>
-                <View style={{
-                    backgroundColor: cardColor,
-                    borderRadius: 24,
-                    padding: 20,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    elevation: 2,
-                }}>
-                    <Input
-                        placeholder="Add a note about your request..."
-                        value={reason}
-                        onChangeText={setReason}
-                        containerStyle={{
-                            borderWidth: 2,
-                            borderColor: reason ? pastelPurple : 'rgba(0,0,0,0.05)',
-                            backgroundColor: background,
-                            height: 120,
-                            borderRadius: 16,
-                        }}
-                        inputStyle={{ fontSize: 16, fontWeight: '500' }}
-                        multiline
-                        textAlignVertical="top"
-                    />
-                </View>
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Reason (Optional)</Text>
+                <Input
+                    placeholder="Add a note for your manager..."
+                    value={reason}
+                    onChangeText={setReason}
+                    containerStyle={{
+                        backgroundColor: cardColor,
+                        borderWidth: 0,
+                        height: 120,
+                        borderRadius: 24,
+                        padding: 20,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.03,
+                        shadowRadius: 12,
+                        elevation: 2,
+                    }}
+                    inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
+                    multiline
+                    textAlignVertical="top"
+                />
             </View>
 
             {/* Submit Button */}
@@ -279,76 +362,94 @@ export default function NewRequest() {
                 size="lg"
                 onPress={handleCreateTimeOff}
                 disabled={loading}
-                style={{ borderRadius: 20, marginTop: 8 }}
+                style={{
+                    borderRadius: 20,
+                    marginTop: 8,
+                    backgroundColor: pastelPurple,
+                    height: 56,
+                    shadowColor: pastelPurple,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 16,
+                    elevation: 6,
+                }}
             >
-                {loading ? <ActivityIndicator color="#1a1a1a" /> : <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#1a1a1a' }}>Submit Request</Text>}
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>Submit Request</Text>}
             </Button>
         </View>
     );
 
     const renderExpenseForm = () => (
         <View style={{ gap: 32 }}>
+            <View style={{ gap: 4 }}>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>New Expense</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Enter the amount and details</Text>
+            </View>
+
             {/* Amount Input - Hero Section */}
             <View style={{
                 alignItems: 'center',
-                paddingVertical: 24,
+                paddingVertical: 32,
                 backgroundColor: cardColor,
                 borderRadius: 32,
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.08,
-                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.05,
+                shadowRadius: 24,
                 elevation: 4,
             }}>
-                <Text style={{ fontSize: 16, color: muted, marginBottom: 16, fontWeight: '600' }}>Total Amount</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 56, fontWeight: 'bold', color: text, letterSpacing: -2 }}>$</Text>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>Total Amount</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: text, marginRight: 4 }}>$</Text>
                     <Input
                         placeholder="0.00"
                         value={amount}
                         onChangeText={setAmount}
-                        containerStyle={{ borderWidth: 0, backgroundColor: 'transparent', width: 180 }}
-                        inputStyle={{ fontSize: 56, fontWeight: 'bold', color: text, textAlign: 'center', letterSpacing: -2 }}
+                        containerStyle={{ borderWidth: 0, backgroundColor: 'transparent', width: 200, paddingHorizontal: 0 }}
+                        inputStyle={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: text, textAlign: 'left', height: 60, padding: 0 }}
                         keyboardType="numeric"
                     />
                 </View>
             </View>
 
             {/* Category Section */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Category</Text>
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Category</Text>
                 {dataLoading ? (
-                    <View style={{ height: 120, alignItems: 'center', justifyContent: 'center' }}>
-                        <ActivityIndicator size="large" />
+                    <View style={{ height: 100, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="small" color={muted} />
                     </View>
                 ) : (
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+                        contentContainerStyle={{ gap: 12 }}
                     >
                         {expenseProducts.map((prod: any) => (
                             <TouchableOpacity
                                 key={prod.id}
                                 onPress={() => setProductId(prod.id)}
+                                activeOpacity={0.7}
                                 style={{
                                     backgroundColor: productId === prod.id ? pastelBlue : cardColor,
-                                    paddingHorizontal: 24,
-                                    paddingVertical: 16,
-                                    borderRadius: 20,
-                                    borderWidth: 2,
+                                    paddingHorizontal: 20,
+                                    paddingVertical: 14,
+                                    borderRadius: 16,
+                                    borderWidth: 1,
                                     borderColor: productId === prod.id ? pastelBlue : 'transparent',
-                                    shadowColor: productId === prod.id ? '#000' : 'transparent',
+                                    shadowColor: productId === prod.id ? pastelBlue : '#000',
                                     shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: 0.1,
+                                    shadowOpacity: productId === prod.id ? 0.3 : 0.03,
                                     shadowRadius: 8,
-                                    elevation: productId === prod.id ? 4 : 0,
+                                    elevation: productId === prod.id ? 4 : 2,
+                                    minWidth: 100,
+                                    alignItems: 'center'
                                 }}
                             >
                                 <Text style={{
-                                    fontWeight: '700',
-                                    fontSize: 16,
-                                    color: productId === prod.id ? '#1a1a1a' : text
+                                    fontFamily: 'DMSans_700Bold',
+                                    fontSize: 15,
+                                    color: productId === prod.id ? '#fff' : text
                                 }}>
                                     {prod.name}
                                 </Text>
@@ -359,21 +460,21 @@ export default function NewRequest() {
             </View>
 
             {/* Details Section */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Details</Text>
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Details</Text>
                 <View style={{
                     backgroundColor: cardColor,
                     borderRadius: 24,
-                    padding: 20,
+                    padding: 24,
                     gap: 20,
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 12,
                     elevation: 2,
                 }}>
-                    <View style={{ gap: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: muted }}>Description</Text>
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Description</Text>
                         <Input
                             placeholder="What is this expense for?"
                             value={description}
@@ -385,11 +486,12 @@ export default function NewRequest() {
                                 paddingHorizontal: 16,
                                 paddingVertical: 14,
                             }}
-                            inputStyle={{ fontSize: 16, fontWeight: '500', color: text }}
+                            inputStyle={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: text }}
                         />
                     </View>
-                    <View style={{ gap: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: muted }}>Date</Text>
+                    <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Date</Text>
                         <DatePicker
                             value={date}
                             onChange={setDate}
@@ -400,31 +502,36 @@ export default function NewRequest() {
             </View>
 
             {/* Receipt Upload */}
-            <View style={{ gap: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: text, marginBottom: 4 }}>Receipt</Text>
-                <TouchableOpacity style={{
-                    borderStyle: 'dashed',
-                    borderWidth: 3,
-                    borderColor: muted,
-                    borderRadius: 24,
-                    height: 140,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: cardColor,
-                }}>
-                    <View style={{ alignItems: 'center', gap: 12 }}>
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Receipt</Text>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={{
+                        borderStyle: 'dashed',
+                        borderWidth: 2,
+                        borderColor: 'rgba(0,0,0,0.1)',
+                        borderRadius: 24,
+                        height: 120,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: cardColor,
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                         <View style={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: 28,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 16,
                             backgroundColor: background,
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}>
-                            <Upload size={28} color={muted} />
+                            <Upload size={24} color={muted} />
                         </View>
-                        <Text style={{ color: text, fontWeight: '600', fontSize: 16 }}>Upload Receipt</Text>
-                        <Text style={{ color: muted, fontSize: 13 }}>Tap to attach a file</Text>
+                        <View>
+                            <Text style={{ fontFamily: 'DMSans_700Bold', color: text, fontSize: 16, marginBottom: 4 }}>Upload Receipt</Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', color: muted, fontSize: 13 }}>Tap to select file</Text>
+                        </View>
                     </View>
                 </TouchableOpacity>
             </View>
@@ -434,27 +541,39 @@ export default function NewRequest() {
                 size="lg"
                 onPress={handleCreateExpense}
                 disabled={loading}
-                style={{ borderRadius: 20, marginTop: 8 }}
+                style={{
+                    borderRadius: 20,
+                    marginTop: 8,
+                    backgroundColor: pastelBlue,
+                    height: 56,
+                    shadowColor: pastelBlue,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 16,
+                    elevation: 6,
+                }}
             >
-                {loading ? <ActivityIndicator color="#1a1a1a" /> : <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#1a1a1a' }}>Submit Claim</Text>}
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>Submit Claim</Text>}
             </Button>
         </View>
     );
 
     return (
-        <ScrollView style={{ flex: 1, backgroundColor: background }} contentContainerStyle={{ padding: 24, paddingBottom: 180 }}>
-
-
-            <View style={{ marginBottom: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 12 }}>
-                {currentView !== 'hub' && (
-                    <TouchableOpacity onPress={() => setCurrentView('hub')} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 0 }}>
-                        <ChevronLeft size={24} color={text} />
-                    </TouchableOpacity>
-                )}
-                <Text style={{ fontSize: 32, fontWeight: 'bold', color: text }}>
-                    {currentView === 'hub' ? 'New Request' : currentView === 'time-off' ? 'Time Off Request' : 'Expense Claim'}
-                </Text>
-            </View>
+        <ScrollView style={{ flex: 1, backgroundColor: background }} contentContainerStyle={{ padding: 24, paddingBottom: 180, paddingTop: 24 }}>
+            {currentView !== 'hub' && (
+                <TouchableOpacity
+                    onPress={() => setCurrentView('hub')}
+                    style={{
+                        flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+                        backgroundColor: cardColor, paddingHorizontal: 16, paddingVertical: 10,
+                        borderRadius: 100, marginBottom: 24,
+                        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2
+                    }}
+                >
+                    <ChevronLeft size={20} color={text} style={{ marginRight: 4 }} />
+                    <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: text }}>Back</Text>
+                </TouchableOpacity>
+            )}
 
             {currentView === 'hub' && renderHub()}
             {currentView === 'time-off' && renderTimeOffForm()}

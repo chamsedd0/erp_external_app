@@ -15,14 +15,15 @@ export default function AppLayout() {
 
     return (
         <Tabs
+
             screenOptions={{
                 headerShown: true,
                 header: () => (
                     <View
                         style={{
-                            paddingTop: insets.top + 10,
+                            paddingTop: insets.top + 30,
                             paddingHorizontal: 20,
-                            paddingBottom: 10,
+                            paddingBottom: 0,
                             backgroundColor: backgroundColor, // Match app background "no bg look"
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -49,13 +50,14 @@ export default function AppLayout() {
                         </TouchableOpacity>
                     </View>
                 ),
+
                 tabBarStyle: {
                     position: 'absolute',
-                    bottom: 20 + insets.bottom, // Respect safe area
-                    left: 24,
-                    right: 24,
-                    height: 72,
-                    borderRadius: 32,
+                    bottom: 0, // Respect safe area
+
+                    height: 115,
+                    borderTopLeftRadius: 32,
+                    borderTopRightRadius: 32,
                     backgroundColor: cardColor,
                     borderTopWidth: 0,
                     shadowColor: "#000",
@@ -64,7 +66,7 @@ export default function AppLayout() {
                     shadowRadius: 20,
                     elevation: 10,
                     paddingBottom: 0,
-                    paddingTop: 16,
+                    paddingTop: 15,
                     alignItems: 'center',
                     justifyContent: 'center',
                 },
@@ -72,7 +74,7 @@ export default function AppLayout() {
                 tabBarActiveTintColor: primary,
                 tabBarInactiveTintColor: muted,
                 tabBarItemStyle: {
-                    height: 72,
+                    height: 55,
                     justifyContent: 'center',
                     alignItems: 'center',
                 }
@@ -101,12 +103,14 @@ export default function AppLayout() {
                 name="search"
                 options={{
                     href: null, // Hide from tab bar
+                    headerShown: false,
                 }}
             />
             <Tabs.Screen
                 name="request-details"
                 options={{
                     href: null, // Hide from tab bar
+                    headerShown: false,
                 }}
             />
 

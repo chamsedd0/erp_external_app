@@ -13,6 +13,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
+    const [recentActivities, setRecentActivities] = useState<any[]>([]);
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -101,9 +102,35 @@ export default function Dashboard() {
 
             // Count pending
             const pendingLeaves = leaves.filter((l: any) => ['confirm', 'validate1', 'draft'].includes(l.state)).length;
-            const pendingExpenses = expenses.filter((e: any) => ['draft', 'reported', 'approved'].includes(e.state)).length;
+            const pendingExpenses = expenses.filter((e: any) => ['draft', 'reported'].includes(e.state)).length;
 
             setPendingCount(pendingLeaves + pendingExpenses);
+
+            // Process Recent Activities
+            const formattedLeaves = leaves.map((l: any) => ({
+                id: l.id,
+                type: 'time_off',
+                title: l.name || 'Time Off Request',
+                date: l.date_from, // Using start date
+                status: l.state, // You might want to map this to a prettier label
+                amount: null
+            }));
+
+            const formattedExpenses = expenses.map((e: any) => ({
+                id: e.id,
+                type: 'expense',
+                title: e.name || 'Expense',
+                date: e.date,
+                status: e.state,
+                amount: e.total_amount || (e.unit_amount || 0) * (e.quantity || 1)
+            }));
+
+            const combinedActivities = [...formattedLeaves, ...formattedExpenses]
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 5);
+
+            setRecentActivities(combinedActivities);
+
         } catch (error) {
             console.error('Dashboard fetch error:', error);
         } finally {
@@ -170,7 +197,9 @@ export default function Dashboard() {
                         }],
                     }}
                 >
-                    <TouchableOpacity style={{ backgroundColor: pastelPurple, borderRadius: 32, padding: 24, height: 160, justifyContent: 'space-between' }}>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(app)/search?status=pending')}
+                        style={{ backgroundColor: pastelPurple, borderRadius: 32, padding: 24, height: 160, justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <View style={{ backgroundColor: 'rgba(255,255,255,0.4)', padding: 8, borderRadius: 99 }}>
                                 <Clock size={20} color={text} />
@@ -302,6 +331,96 @@ export default function Dashboard() {
                         </TouchableOpacity>
                     </Animated.View>
                 </View>
+
+                {/* Recent Activities Section - Animated */}
+                <Animated.View
+                    style={{
+                        marginTop: 24,
+                        opacity: card4Anim, // Reusing card4Anim for now as it's the last one
+                        transform: [{
+                            translateY: card4Anim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [50, 0],
+                            }),
+                        }],
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: text }}>Recent Activities</Text>
+                        <TouchableOpacity onPress={() => router.push('/(app)/notifications')}>
+                            <Text style={{ fontFamily: 'DMSans_500Medium', color: primary, fontSize: 14 }}>View All</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ gap: 12 }}>
+                        {recentActivities.length === 0 ? (
+                            <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 24 }}>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', color: text, opacity: 0.5 }}>No recent activities</Text>
+                            </View>
+                        ) : (
+                            recentActivities.map((activity, index) => (
+                                <TouchableOpacity
+                                    key={`${activity.type}-${activity.id}-${index}`}
+                                    onPress={() => router.push({
+                                        pathname: '/(app)/request-details',
+                                        params: { id: activity.id.toString(), type: activity.type }
+                                    })}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        padding: 16,
+                                        backgroundColor: background,
+                                        borderRadius: 20,
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(0,0,0,0.05)',
+                                        // Shadow
+                                        shadowColor: "#000",
+                                        shadowOffset: {
+                                            width: 0,
+                                            height: 2,
+                                        },
+                                        shadowOpacity: 0.03,
+                                        shadowRadius: 8,
+                                        elevation: 2,
+                                    }}
+                                >
+                                    <View
+                                        style={{
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 16,
+                                            backgroundColor: activity.type === 'time_off' ? `${pastelBlue}20` : `${pastelGreen}20`, // 20% opacity hex
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginRight: 16
+                                        }}
+                                    >
+                                        {activity.type === 'time_off' ? (
+                                            <Calendar size={22} color={pastelBlue} strokeWidth={2.5} />
+                                        ) : (
+                                            <DollarSign size={22} color={pastelGreen} strokeWidth={2.5} />
+                                        )}
+                                    </View>
+
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: 'Outfit_500Medium', fontSize: 16, color: text, marginBottom: 2 }}>
+                                            {activity.title}
+                                        </Text>
+                                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: text, opacity: 0.5 }}>
+                                            {new Date(activity.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {activity.status}
+                                        </Text>
+                                    </View>
+
+                                    {activity.amount !== null && (
+                                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: text }}>
+                                            ${activity.amount}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </View>
+                </Animated.View>
             </View>
         </ScrollView>
     );
