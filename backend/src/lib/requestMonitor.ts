@@ -1,12 +1,21 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { odooClient } from '../odoo/client';
 import { notificationStore, Notification } from './notificationStore';
-import { v4 as uuidv4 } from 'uuid'; // We might need uuid, or just use random string
 
-// Cache last known state of requests to detect changes
-const DATA_DIR = path.join(__dirname, '../../data');
+// In serverless environments, use /tmp
+const DATA_DIR = path.join(os.tmpdir(), 'shadow_portal_data');
 const CACHE_FILE = path.join(DATA_DIR, 'request_cache.json');
+
+// Ensure dir exists (duplicated check for safety)
+try {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+} catch (e) {
+    console.error("Monitor failed to create data dir:", e);
+}
 
 interface RequestState {
     id: number;
@@ -39,15 +48,19 @@ export const requestMonitor = {
         let expenses: any[] = [];
 
         try {
-            timeOffRequests = (await odooClient.searchRead(uid, 'hr.leave',
+            // Explicitly cast the result to any[] because generic Promise return might be unknown
+            const leavesResult = await odooClient.searchRead(uid, 'hr.leave',
                 [['employee_id', '=', employeeId]],
                 ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']
-            )) as any[];
+            );
+            timeOffRequests = Array.isArray(leavesResult) ? leavesResult : [];
 
-            expenses = (await odooClient.searchRead(uid, 'hr.expense',
+            const expensesResult = await odooClient.searchRead(uid, 'hr.expense',
                 [['employee_id', '=', employeeId]],
                 ['id', 'name', 'state', 'total_amount', 'date', 'product_id']
-            )) as any[];
+            );
+            expenses = Array.isArray(expensesResult) ? expensesResult : [];
+
         } catch (error) {
             console.error("Monitor failed to fetch from Odoo:", error);
             return;
@@ -103,7 +116,11 @@ export const requestMonitor = {
 
         // 7. Save Cache
         cache[employeeId] = newCache;
-        fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+        try {
+            fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+        } catch (e) {
+            console.error("Monitor failed to write cache:", e);
+        }
     }
 };
 

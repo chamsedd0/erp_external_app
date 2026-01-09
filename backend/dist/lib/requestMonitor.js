@@ -6,28 +6,48 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requestMonitor = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const os_1 = __importDefault(require("os"));
 const client_1 = require("../odoo/client");
 const notificationStore_1 = require("./notificationStore");
-// Cache last known state of requests to detect changes
-const DATA_DIR = path_1.default.join(__dirname, '../../data');
+// In serverless environments, use /tmp
+const DATA_DIR = path_1.default.join(os_1.default.tmpdir(), 'shadow_portal_data');
 const CACHE_FILE = path_1.default.join(DATA_DIR, 'request_cache.json');
+// Ensure dir exists (duplicated check for safety)
+try {
+    if (!fs_1.default.existsSync(DATA_DIR)) {
+        fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
+    }
+}
+catch (e) {
+    console.error("Monitor failed to create data dir:", e);
+}
 exports.requestMonitor = {
     checkUpdates: async (employeeId) => {
         console.log(`Checking updates for employee ${employeeId}...`);
-        // 1. Fetch current data from Odoo
+        // 1. Authenticate to get UID
+        let uid = 0;
+        try {
+            uid = await client_1.odooClient.authenticate();
+        }
+        catch (e) {
+            console.error("Monitor failed to authenticate with Odoo:", e);
+            return;
+        }
+        // 2. Fetch current data from Odoo
         let timeOffRequests = [];
         let expenses = [];
         try {
-            // Using searchRead manually since we are in lib, or use existing services if possible.
-            // But we can directly use odooClient for flexibility.
-            timeOffRequests = await client_1.odooClient.searchRead('hr.leave', [['employee_id', '=', employeeId]], ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']);
-            expenses = await client_1.odooClient.searchRead('hr.expense', [['employee_id', '=', employeeId]], ['id', 'name', 'state', 'total_amount', 'date', 'product_id']);
+            // Explicitly cast the result to any[] because generic Promise return might be unknown
+            const leavesResult = await client_1.odooClient.searchRead(uid, 'hr.leave', [['employee_id', '=', employeeId]], ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']);
+            timeOffRequests = Array.isArray(leavesResult) ? leavesResult : [];
+            const expensesResult = await client_1.odooClient.searchRead(uid, 'hr.expense', [['employee_id', '=', employeeId]], ['id', 'name', 'state', 'total_amount', 'date', 'product_id']);
+            expenses = Array.isArray(expensesResult) ? expensesResult : [];
         }
         catch (error) {
             console.error("Monitor failed to fetch from Odoo:", error);
             return;
         }
-        // 2. Load Cache
+        // 3. Load Cache
         let cache = {};
         if (fs_1.default.existsSync(CACHE_FILE)) {
             try {
@@ -42,7 +62,7 @@ exports.requestMonitor = {
         const employeeCache = cache[employeeId];
         const newCache = {};
         const notificationsToAdd = [];
-        // 3. Compare Time Off
+        // 4. Compare Time Off
         for (const req of timeOffRequests) {
             const uniqueId = `time_off_${req.id}`;
             const currentState = req.state;
@@ -55,13 +75,8 @@ exports.requestMonitor = {
                 if (notif)
                     notificationsToAdd.push(notif);
             }
-            else if (!previous && currentState !== 'draft' && currentState !== 'confirm') {
-                // New request found that isn't just a draft (maybe created externally or first time sync)
-                // Optional: Notify about "Request Received" if created elsewhere? 
-                // For now, let's only notify on CHANGES to existing monitored items or significant status.
-            }
         }
-        // 4. Compare Expenses
+        // 5. Compare Expenses
         for (const req of expenses) {
             const uniqueId = `expense_${req.id}`;
             const currentState = req.state;
@@ -73,19 +88,22 @@ exports.requestMonitor = {
                     notificationsToAdd.push(notif);
             }
         }
-        // 5. Save Notifications
+        // 6. Save Notifications
         for (const n of notificationsToAdd) {
             notificationStore_1.notificationStore.add(n);
         }
-        // 6. Save Cache
+        // 7. Save Cache
         cache[employeeId] = newCache;
-        fs_1.default.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+        try {
+            fs_1.default.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+        }
+        catch (e) {
+            console.error("Monitor failed to write cache:", e);
+        }
     }
 };
 function createNotification(employeeId, req, type, oldState, newState) {
     // Map states to user friendly messages
-    // Expenses: draft -> reported -> approved -> done (refused)
-    // Time Off: draft -> confirm -> validate1 -> validate (refuse)
     let title = '';
     let message = '';
     let notifType = 'system';

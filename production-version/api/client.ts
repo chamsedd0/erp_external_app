@@ -75,6 +75,8 @@ export const apiClient = {
         return await response.json();
     },
 
+
+
     // Pending requests for dashboard
     getPendingTimeOff: async () => {
         const response = await fetch(`${API_URL}/time-off/pending`);

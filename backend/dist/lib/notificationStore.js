@@ -6,12 +6,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationStore = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
-// Store notifications in a local JSON file for simplicity
-const DATA_DIR = path_1.default.join(__dirname, '../../data');
+const os_1 = __importDefault(require("os"));
+// In serverless environments (Vercel), only /tmp is writable.
+// We use os.tmpdir() to ensure cross-platform compatibility.
+const DATA_DIR = path_1.default.join(os_1.default.tmpdir(), 'shadow_portal_data');
 const NOTIFICATIONS_FILE = path_1.default.join(DATA_DIR, 'notifications.json');
 // Ensure data directory exists
-if (!fs_1.default.existsSync(DATA_DIR)) {
-    fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
+try {
+    if (!fs_1.default.existsSync(DATA_DIR)) {
+        fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
+    }
+}
+catch (e) {
+    console.error("Failed to create data directory:", e);
 }
 exports.notificationStore = {
     getAll: (employeeId) => {
@@ -29,20 +36,25 @@ exports.notificationStore = {
     },
     add: (notification) => {
         let all = [];
-        if (fs_1.default.existsSync(NOTIFICATIONS_FILE)) {
-            try {
+        try {
+            if (fs_1.default.existsSync(NOTIFICATIONS_FILE)) {
                 all = JSON.parse(fs_1.default.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
             }
-            catch (e) {
-                all = [];
-            }
+        }
+        catch (e) {
+            all = [];
         }
         all.push(notification);
-        // Keep last 1000 notifications to prevent infinite growth
+        // Keep last 1000 notifications
         if (all.length > 1000) {
             all = all.slice(all.length - 1000);
         }
-        fs_1.default.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(all, null, 2));
+        try {
+            fs_1.default.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(all, null, 2));
+        }
+        catch (e) {
+            console.error("Error writing notifications:", e);
+        }
     },
     markRead: (id) => {
         if (!fs_1.default.existsSync(NOTIFICATIONS_FILE))
@@ -56,20 +68,7 @@ exports.notificationStore = {
             console.error("Error marking notification read:", e);
         }
     },
-    // Check if a specific notification already exists to avoid duplicates
     exists: (targetId, type, status) => {
-        if (!fs_1.default.existsSync(NOTIFICATIONS_FILE))
-            return false;
-        try {
-            const all = JSON.parse(fs_1.default.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-            // We consider it a duplicate if we already notified about this specific state for this request
-            // But actually, we construct the ID or checking logic in the monitor. 
-            // Ideally we just check if we have a notification for this request ID with this message type recently?
-            // For simplicity, let the monitor handle duplicate logic by diffing state.
-            return false;
-        }
-        catch {
-            return false;
-        }
+        return false;
     }
 };
