@@ -26,8 +26,10 @@ export default function Search() {
     const text = useColor('text');
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
-    const pastelPurple = useColor('pastelPurple' as any);
-    const pastelBlue = useColor('pastelBlue' as any);
+    const semanticSuccess = useColor('semanticSuccess' as any);
+    const semanticWarning = useColor('semanticWarning' as any);
+    const semanticError = useColor('semanticError' as any);
+    const semanticInfo = useColor('semanticInfo' as any);
     const primary = useColor('primary');
 
     useEffect(() => {
@@ -127,9 +129,9 @@ export default function Search() {
     };
 
     const getStatusColor = (status: string) => {
-        if (status === 'pending') return '#f59e0b';
-        if (status === 'approved') return '#10b981';
-        if (status === 'rejected') return '#ef4444';
+        if (status === 'pending') return semanticWarning;
+        if (status === 'approved') return semanticSuccess;
+        if (status === 'rejected') return semanticError;
         return text;
     };
 
@@ -196,14 +198,16 @@ export default function Search() {
                                 paddingHorizontal: 20,
                                 paddingVertical: 10,
                                 borderRadius: 20,
-                                backgroundColor: typeFilter === f ? pastelPurple : cardColor,
+                                backgroundColor: typeFilter === f ? 'transparent' : cardColor,
+                                borderWidth: 1,
+                                borderColor: typeFilter === f ? semanticInfo : 'transparent',
                                 marginRight: 12,
                             }}
                         >
                             <Text style={{
                                 fontSize: 14,
                                 fontWeight: '600',
-                                color: typeFilter === f ? '#ffffffff' : text,
+                                color: typeFilter === f ? semanticInfo : text,
                             }}>
                                 {f === 'all' ? 'All Types' : f === 'timeoff' ? 'Time Off' : 'Expenses'}
                             </Text>
@@ -292,14 +296,16 @@ export default function Search() {
                                     width: 40,
                                     height: 40,
                                     borderRadius: 20,
-                                    backgroundColor: result.type === 'timeoff' ? `${pastelPurple}30` : `${pastelBlue}30`,
+                                    backgroundColor: 'transparent',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: result.type === 'timeoff' ? semanticInfo : semanticSuccess,
                                 }}>
                                     {result.type === 'timeoff' ? (
-                                        <Clock size={20} color={pastelPurple} />
+                                        <Clock size={20} color={semanticInfo} />
                                     ) : (
-                                        <DollarSign size={20} color={pastelBlue} />
+                                        <DollarSign size={20} color={semanticSuccess} />
                                     )}
                                 </View>
                                 <View style={{ flex: 1 }}>
@@ -328,8 +334,9 @@ export default function Search() {
                             We couldn't find any requests matching your current filters.
                         </Text>
                     </View>
-                )}
-            </ScrollView>
-        </View>
+                )
+                }
+            </ScrollView >
+        </View >
     );
 }

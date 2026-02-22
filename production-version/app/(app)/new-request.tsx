@@ -29,8 +29,10 @@ export default function NewRequest() {
     const background = useColor('background');
     const text = useColor('text');
     const muted = useColor('textMuted');
-    const pastelPurple = useColor('pastelPurple' as any);
-    const pastelBlue = useColor('pastelBlue' as any);
+    const semanticSuccess = useColor('semanticSuccess' as any);
+    const semanticWarning = useColor('semanticWarning' as any);
+    const semanticError = useColor('semanticError' as any);
+    const semanticInfo = useColor('semanticInfo' as any);
     const cardColor = useColor('card');
     const primary = useColor('primary');
 
@@ -136,7 +138,7 @@ export default function NewRequest() {
     };
 
     const renderHub = () => (
-        <View style={{ gap: 24, paddingVertical: 10}}>
+        <View style={{ gap: 24, paddingVertical: 10 }}>
             <View>
                 <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text }}>
                     New Request
@@ -150,37 +152,35 @@ export default function NewRequest() {
                 activeOpacity={0.9}
                 onPress={() => setCurrentView('time-off')}
                 style={{
-                    backgroundColor: pastelPurple,
+                    backgroundColor: 'transparent',
                     borderRadius: 32,
                     padding: 32,
-                    shadowColor: pastelPurple,
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 20,
-                    elevation: 10,
+                    borderWidth: 1,
+                    borderColor: semanticInfo,
+
                     overflow: 'hidden',
                     minHeight: 200,
                     justifyContent: 'space-between'
                 }}
             >
-                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
-                    <Clock size={180} color="#fff" />
-                </View>
-
                 <View style={{
                     width: 56, height: 56, borderRadius: 20,
-                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    backgroundColor: 'transparent',
                     alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                    borderWidth: 1, borderColor: semanticInfo
                 }}>
-                    <Clock size={28} color="#fff" strokeWidth={2} />
+                    <Clock size={28} color={semanticInfo} strokeWidth={2} />
+                </View>
+
+                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
+                    <Clock size={160} color={semanticInfo} strokeWidth={2} />
                 </View>
 
                 <View>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: '#fff', marginBottom: 8 }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticInfo, marginBottom: 8 }}>
                         Time Off
                     </Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: 'rgba(255,255,255,0.8)' }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>
                         Vacation, Sick Leave & More
                     </Text>
                 </View>
@@ -188,9 +188,10 @@ export default function NewRequest() {
                 <View style={{
                     position: 'absolute', right: 24, bottom: 24,
                     width: 48, height: 48, borderRadius: 24,
-                    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center'
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1, borderColor: semanticInfo,
                 }}>
-                    <ArrowRight size={24} color={pastelPurple} />
+                    <ArrowRight size={24} color={semanticInfo} />
                 </View>
             </TouchableOpacity>
 
@@ -198,37 +199,35 @@ export default function NewRequest() {
                 activeOpacity={0.9}
                 onPress={() => setCurrentView('expense')}
                 style={{
-                    backgroundColor: pastelBlue,
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
                     borderRadius: 32,
                     padding: 32,
-                    shadowColor: pastelBlue,
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 20,
-                    elevation: 10,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.28)',
+
                     overflow: 'hidden',
                     minHeight: 200,
                     justifyContent: 'space-between'
                 }}
             >
                 <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
-                    <DollarSign size={180} color="#fff" />
+                    <DollarSign size={160} color={semanticSuccess} />
                 </View>
 
                 <View style={{
                     width: 56, height: 56, borderRadius: 20,
-                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    backgroundColor: 'transparent',
                     alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                    borderWidth: 1, borderColor: semanticSuccess
                 }}>
-                    <DollarSign size={28} color="#fff" strokeWidth={2} />
+                    <DollarSign size={28} color={semanticSuccess} strokeWidth={2} />
                 </View>
 
                 <View>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: '#fff', marginBottom: 8 }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticSuccess, marginBottom: 8 }}>
                         Expense Claim
                     </Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: 'rgba(255,255,255,0.8)' }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>
                         Reimbursements & Purchases
                     </Text>
                 </View>
@@ -236,9 +235,10 @@ export default function NewRequest() {
                 <View style={{
                     position: 'absolute', right: 24, bottom: 24,
                     width: 48, height: 48, borderRadius: 24,
-                    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center'
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1, borderColor: semanticSuccess
                 }}>
-                    <ArrowRight size={24} color={pastelBlue} />
+                    <ArrowRight size={24} color={semanticSuccess} />
                 </View>
             </TouchableOpacity>
         </View>
@@ -270,13 +270,13 @@ export default function NewRequest() {
                                 onPress={() => setHolidayStatusId(type.id)}
                                 activeOpacity={0.7}
                                 style={{
-                                    backgroundColor: holidayStatusId === type.id ? pastelPurple : cardColor,
+                                    backgroundColor: holidayStatusId === type.id ? 'transparent' : cardColor,
                                     paddingHorizontal: 20,
                                     paddingVertical: 14,
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: holidayStatusId === type.id ? pastelPurple : 'transparent',
-                                    shadowColor: holidayStatusId === type.id ? pastelPurple : '#000',
+                                    borderColor: holidayStatusId === type.id ? semanticInfo : 'transparent',
+                                    shadowColor: holidayStatusId === type.id ? semanticInfo : '#000',
                                     shadowOffset: { width: 0, height: 4 },
                                     shadowOpacity: holidayStatusId === type.id ? 0.3 : 0.03,
                                     shadowRadius: 8,
@@ -288,7 +288,7 @@ export default function NewRequest() {
                                 <Text style={{
                                     fontFamily: 'DMSans_700Bold',
                                     fontSize: 15,
-                                    color: holidayStatusId === type.id ? '#fff' : text
+                                    color: holidayStatusId === type.id ? semanticInfo : text
                                 }}>
                                     {type.name}
                                 </Text>
@@ -365,9 +365,9 @@ export default function NewRequest() {
                 style={{
                     borderRadius: 20,
                     marginTop: 8,
-                    backgroundColor: pastelPurple,
+                    backgroundColor: semanticInfo,
                     height: 56,
-                    shadowColor: pastelPurple,
+                    shadowColor: semanticInfo,
                     shadowOffset: { width: 0, height: 8 },
                     shadowOpacity: 0.25,
                     shadowRadius: 16,
@@ -431,13 +431,13 @@ export default function NewRequest() {
                                 onPress={() => setProductId(prod.id)}
                                 activeOpacity={0.7}
                                 style={{
-                                    backgroundColor: productId === prod.id ? pastelBlue : cardColor,
+                                    backgroundColor: productId === prod.id ? 'transparent' : cardColor,
                                     paddingHorizontal: 20,
                                     paddingVertical: 14,
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: productId === prod.id ? pastelBlue : 'transparent',
-                                    shadowColor: productId === prod.id ? pastelBlue : '#000',
+                                    borderColor: productId === prod.id ? semanticSuccess : 'transparent',
+                                    shadowColor: productId === prod.id ? semanticSuccess : '#000',
                                     shadowOffset: { width: 0, height: 4 },
                                     shadowOpacity: productId === prod.id ? 0.3 : 0.03,
                                     shadowRadius: 8,
@@ -449,7 +449,7 @@ export default function NewRequest() {
                                 <Text style={{
                                     fontFamily: 'DMSans_700Bold',
                                     fontSize: 15,
-                                    color: productId === prod.id ? '#fff' : text
+                                    color: productId === prod.id ? semanticSuccess : text
                                 }}>
                                     {prod.name}
                                 </Text>
@@ -544,9 +544,9 @@ export default function NewRequest() {
                 style={{
                     borderRadius: 20,
                     marginTop: 8,
-                    backgroundColor: pastelBlue,
+                    backgroundColor: semanticSuccess,
                     height: 56,
-                    shadowColor: pastelBlue,
+                    shadowColor: semanticSuccess,
                     shadowOffset: { width: 0, height: 8 },
                     shadowOpacity: 0.25,
                     shadowRadius: 16,

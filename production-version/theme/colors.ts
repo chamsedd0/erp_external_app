@@ -36,36 +36,34 @@ const zinc = {
   950: '#09090b',
 };
 
-const pastels = {
-  purple: '#E9E4F5',
-  blue: '#CBF0F9',
-  pink: '#FADCE0',
-  green: '#D3F3DA',
-  offWhite: '#FDFBF9',
-  black: '#0E0E10',
+const semantic = {
+  success: '#10b981', // Emerald 500
+  warning: '#f59e0b', // Amber 500
+  error: '#ef4444',   // Red 500
+  info: '#3b82f6',    // Blue 500
 };
 
 export const lightColors = {
-  background: pastels.offWhite,
-  foreground: pastels.black,
+  background: '#FAFAFA',
+  foreground: '#0E0E10',
 
   card: '#ffffff',
-  cardForeground: pastels.black,
+  cardForeground: '#0E0E10',
 
   popover: '#ffffff',
-  popoverForeground: pastels.black,
+  popoverForeground: '#0E0E10',
 
-  primary: pastels.black,
+  primary: '#0E0E10',
   primaryForeground: '#ffffff',
 
   secondary: zinc[100],
-  secondaryForeground: pastels.black,
+  secondaryForeground: '#0E0E10',
 
   muted: zinc[100],
   mutedForeground: zinc[500],
 
   accent: zinc[100],
-  accentForeground: pastels.black,
+  accentForeground: '#0E0E10',
 
   destructive: '#ef4444',
   destructiveForeground: '#ffffff',
@@ -74,29 +72,19 @@ export const lightColors = {
   input: zinc[200],
   ring: zinc[400],
 
-  text: pastels.black,
+  text: '#0E0E10',
   textMuted: zinc[500],
 
-  tint: pastels.black,
+  tint: '#0E0E10',
   icon: zinc[500],
   tabIconDefault: zinc[400],
-  tabIconSelected: pastels.black,
+  tabIconSelected: '#0E0E10',
 
-  // Semantic mappings for the new design
-  pastelPurple: pastels.purple,
-  pastelBlue: pastels.blue,
-  pastelPink: pastels.pink,
-  pastelGreen: pastels.green,
-
-  blue: '#007AFF',
-  green: '#34C759',
-  red: '#FF3B30',
-  orange: '#FF9500',
-  yellow: '#FFCC00',
-  pink: '#FF2D92',
-  purple: '#AF52DE',
-  teal: '#5AC8FA',
-  indigo: '#5856D6',
+  // Semantic mappings
+  semanticSuccess: semantic.success,
+  semanticWarning: semantic.warning,
+  semanticError: semantic.error,
+  semanticInfo: semantic.info,
 };
 
 export const darkColors = {
@@ -136,21 +124,11 @@ export const darkColors = {
   tabIconDefault: zinc[600],
   tabIconSelected: '#ffffff',
 
-  // Semantic mappings (Dark mode versions of pastels - muted)
-  pastelPurple: '#2D2B35',
-  pastelBlue: '#1E2F36',
-  pastelPink: '#362225',
-  pastelGreen: '#1E3324',
-
-  blue: '#0A84FF',
-  green: '#30D158',
-  red: '#FF453A',
-  orange: '#FF9F0A',
-  yellow: '#FFD60A',
-  pink: '#FF375F',
-  purple: '#BF5AF2',
-  teal: '#64D2FF',
-  indigo: '#5E5CE6',
+  // Semantic mappings
+  semanticSuccess: semantic.success,
+  semanticWarning: semantic.warning,
+  semanticError: semantic.error,
+  semanticInfo: semantic.info,
 };
 
 export const Colors = {

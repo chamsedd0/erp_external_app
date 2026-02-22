@@ -54,12 +54,12 @@ export default function AppLayout() {
                 tabBarStyle: {
                     position: 'absolute',
                     bottom: 0, // Respect safe area
-
+                    borderWidth: 0.1,
+                    borderColor: 'rgba(255, 255, 255, 0.28)',
                     height: 115,
                     borderTopLeftRadius: 32,
                     borderTopRightRadius: 32,
                     backgroundColor: cardColor,
-                    borderTopWidth: 0,
                     shadowColor: "#000",
                     shadowOffset: { width: 0, height: 10 },
                     shadowOpacity: 0.1,

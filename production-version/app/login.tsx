@@ -88,11 +88,13 @@ export default function Login() {
                             autoCapitalize="none"
                             style={{
                                 backgroundColor: cardColor,
-                                borderRadius: 16,
+                                borderRadius: 100,
                                 paddingHorizontal: 20,
                                 paddingVertical: 16,
                                 fontSize: 16,
                                 color: text,
+                                borderColor: '#ffffff24',
+                                borderWidth: 1,
                             }}
                         />
                     </View>
@@ -115,11 +117,13 @@ export default function Login() {
                             keyboardType="numeric"
                             style={{
                                 backgroundColor: cardColor,
-                                borderRadius: 16,
+                                borderRadius: 100,
                                 paddingHorizontal: 20,
                                 paddingVertical: 16,
                                 fontSize: 16,
                                 color: text,
+                                borderColor: '#ffffff24',
+                                borderWidth: 1,
                             }}
                         />
                     </View>
@@ -130,11 +134,11 @@ export default function Login() {
                         disabled={loading}
                         style={{
                             marginTop: 12,
-                            borderRadius: 16,
+                            borderRadius: 100,
                         }}
                     >
                         <Text style={{
-                            fontWeight: 'bold',
+                            fontFamily: 'Outfit_700Bold',
                             fontSize: 16,
                             color: '#1a1a1a',
                         }}>

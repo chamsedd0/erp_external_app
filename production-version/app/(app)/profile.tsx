@@ -92,8 +92,7 @@ export default function Profile() {
                         key={index}
                         onPress={() => item.path !== '#' && router.push(item.path as any)}
                         style={{
-                            backgroundColor: cardColor,
-                            padding: 20,
+                            paddingHorizontal: 20,
                             
                             borderRadius: 24,
                             flexDirection: 'row',
@@ -112,11 +111,13 @@ export default function Profile() {
                             width: 52,
                             height: 52,
                             borderRadius: 20,
-                            backgroundColor: item.color,
+                            borderWidth: 1,
+                            borderColor: '#ffffff10',
+                            backgroundColor: '#ffffff22',
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}>
-                            <item.icon size={24} color="#b1b1b1ff" strokeWidth={2} />
+                            <item.icon size={24} color="#ffffffff" strokeWidth={2} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 17, color: text }}>{item.label}</Text>

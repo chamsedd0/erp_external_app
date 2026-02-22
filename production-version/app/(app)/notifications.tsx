@@ -31,9 +31,11 @@ export default function Notifications() {
     const text = useColor('text');
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
-    const pastelPurple = useColor('pastelPurple' as any);
-    const pastelBlue = useColor('pastelBlue' as any);
-    const pastelGreen = useColor('pastelGreen' as any);
+    const semanticSuccess = useColor('semanticSuccess' as any);
+    const semanticWarning = useColor('semanticWarning' as any);
+    const semanticError = useColor('semanticError' as any);
+    const semanticInfo = useColor('semanticInfo' as any);
+    // const pastelOrange = useColor('pastelOrangeText' as any); // If needed
 
     useFocusEffect(
         useCallback(() => {
@@ -86,20 +88,24 @@ export default function Notifications() {
         }
     };
 
-    const getNotificationIcon = (type: Notification['type'], targetType?: string) => {
-        if (type === 'request_approved') return <Check size={20} color="#fff" strokeWidth={3} />;
-        if (type === 'request_rejected') return <X size={20} color="#fff" strokeWidth={3} />;
-        if (targetType === 'time_off') return <Clock size={20} color="#fff" strokeWidth={2.5} />;
-        if (targetType === 'expense') return <DollarSign size={20} color="#fff" strokeWidth={2.5} />;
-        return <Bell size={20} color="#fff" strokeWidth={2.5} />;
+    const getNotificationColor = (type: Notification['type'], targetType?: string) => {
+        switch (type) {
+            case 'request_approved': return semanticSuccess; // Green
+            case 'request_rejected': return semanticError; // Red
+            default:
+                if (targetType === 'time_off') return semanticInfo; // Blue
+                if (targetType === 'expense') return semanticSuccess; // Green
+                return semanticInfo; // Fallback
+        }
     };
 
-    const getNotificationColor = (type: Notification['type']) => {
-        switch (type) {
-            case 'request_approved': return '#10b981'; // Green
-            case 'request_rejected': return '#ef4444'; // Red
-            default: return pastelPurple; // Blue/Purple for system info
-        }
+    const getNotificationIcon = (type: Notification['type'], targetType?: string) => {
+        const color = getNotificationColor(type, targetType);
+        if (type === 'request_approved') return <Check size={20} color={color} strokeWidth={3} />;
+        if (type === 'request_rejected') return <X size={20} color={color} strokeWidth={3} />;
+        if (targetType === 'time_off') return <Clock size={20} color={color} strokeWidth={2.5} />;
+        if (targetType === 'expense') return <DollarSign size={20} color={color} strokeWidth={2.5} />;
+        return <Bell size={20} color={color} strokeWidth={2.5} />;
     };
 
     const formatTime = (dateString: string) => {
@@ -216,7 +222,9 @@ export default function Notifications() {
                                                     width: 48,
                                                     height: 48,
                                                     borderRadius: 24,
-                                                    backgroundColor: getNotificationColor(item.type),
+                                                    backgroundColor: 'transparent',
+                                                    borderWidth: 1,
+                                                    borderColor: getNotificationColor(item.type, item.targetType),
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     marginTop: 2

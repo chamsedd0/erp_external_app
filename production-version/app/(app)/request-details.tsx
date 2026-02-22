@@ -21,8 +21,10 @@ export default function RequestDetails() {
     const text = useColor('text');
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
-    const pastelPurple = useColor('pastelPurple' as any);
-    const pastelBlue = useColor('pastelBlue' as any);
+    const semanticSuccess = useColor('semanticSuccess' as any);
+    const semanticWarning = useColor('semanticWarning' as any);
+    const semanticError = useColor('semanticError' as any);
+    const semanticInfo = useColor('semanticInfo' as any);
     const primary = useColor('primary');
 
     useEffect(() => {
@@ -59,11 +61,11 @@ export default function RequestDetails() {
     const getStatusConfig = (status: string) => {
         const statusLower = status?.toLowerCase() || '';
         if (['validate', 'approve', 'approved', 'done', 'posted'].some(s => statusLower.includes(s))) {
-            return { color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.15)', icon: CheckCircle, label: 'Approved' };
+            return { color: semanticSuccess, bgColor: 'transparent', icon: CheckCircle, label: 'Approved' };
         } else if (['refuse', 'reject', 'cancel'].some(s => statusLower.includes(s))) {
-            return { color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)', icon: XCircle, label: 'Rejected' };
+            return { color: semanticError, bgColor: 'transparent', icon: XCircle, label: 'Rejected' };
         } else {
-            return { color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.15)', icon: AlertCircle, label: 'Pending' };
+            return { color: semanticWarning, bgColor: 'transparent', icon: AlertCircle, label: 'Pending' };
         }
     };
 
@@ -127,47 +129,44 @@ export default function RequestDetails() {
 
             {/* Main Info Card */}
             <View style={{
-                backgroundColor: type === 'timeoff' ? pastelPurple : pastelBlue,
+                backgroundColor: 'transparent',
                 borderRadius: 32,
                 padding: 32,
                 marginBottom: 24,
-                shadowColor: type === 'timeoff' ? pastelPurple : pastelBlue,
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.2,
-                shadowRadius: 24,
-                elevation: 8,
+                borderWidth: 1,
+                borderColor: type === 'timeoff' ? semanticInfo : semanticSuccess,
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16, marginBottom: 24 }}>
                     <View style={{
                         width: 64,
                         height: 64,
                         borderRadius: 24,
-                        backgroundColor: 'rgba(255,255,255,0.25)',
+                        backgroundColor: 'transparent',
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.1)'
+                        borderColor: type === 'timeoff' ? semanticInfo : semanticSuccess,
                     }}>
                         {type === 'timeoff' ? (
-                            <Calendar size={32} color="#ffffffff" strokeWidth={1.5} />
+                            <Calendar size={32} color={semanticInfo} strokeWidth={1.5} />
                         ) : (
-                            <DollarSign size={32} color="#ffffffff" strokeWidth={1.5} />
+                            <DollarSign size={32} color={semanticSuccess} strokeWidth={1.5} />
                         )}
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: '#ffffffff', opacity: 0.6, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, opacity: 0.8, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                             {type === 'timeoff' ? 'Time Off Request' : 'Expense Claim'}
                         </Text>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: '#ffffffff', lineHeight: 34 }}>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: text, lineHeight: 34 }}>
                             {type === 'timeoff' ? request.holiday_status_id?.[1] || 'Leave' : request.name}
                         </Text>
                     </View>
                 </View>
 
                 {type === 'expense' && (
-                    <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.2)', padding: 16, borderRadius: 20 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: '#ffffffff', opacity: 0.7, marginBottom: 2 }}>Total Amount</Text>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 42, color: '#ffffffff' }}>
+                    <View style={{ marginTop: 8, backgroundColor: 'transparent', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: semanticSuccess }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, opacity: 0.7, marginBottom: 2 }}>Total Amount</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 42, color: text }}>
                             ${request.total_amount || request.unit_amount || '0.00'}
                         </Text>
                     </View>

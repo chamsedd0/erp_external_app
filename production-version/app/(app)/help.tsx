@@ -52,7 +52,7 @@ export default function Help() {
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: background }}
-            contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+            contentContainerStyle={{ padding: 24, paddingBottom: 180 }}
             refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
@@ -72,75 +72,73 @@ export default function Help() {
                 <TouchableOpacity
                     onPress={handleContactSupport}
                     style={{
-                        backgroundColor: pastelPurple,
+                        backgroundColor: '#ffffff12',
                         borderRadius: 24,
                         padding: 20,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 16,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 12,
-                        elevation: 3,
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
                     }}
                 >
                     <View style={{
                         width: 48,
                         height: 48,
                         borderRadius: 24,
-                        backgroundColor: 'rgba(255,255,255,0.3)',
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
+                        backgroundColor: '#ffffff12',
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}>
-                        <Mail size={24} color="#1a1a1a" />
+                        <Mail size={24} color="#ffffffff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 17, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffffff', marginBottom: 2 }}>
                             Email Support
                         </Text>
-                        <Text style={{ fontSize: 14, color: '#1a1a1a', opacity: 0.7 }}>
+                        <Text style={{ fontSize: 14, color: '#ffffffff', opacity: 0.7 }}>
                             Get help via email
                         </Text>
                     </View>
-                    <ExternalLink size={20} color="#1a1a1a" opacity={0.5} />
+                    <ExternalLink size={20} color="#ffffffff" opacity={0.5} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={handleContactSupport}
                     style={{
-                        backgroundColor: pastelBlue,
+                        backgroundColor: '#ffffff12',
                         borderRadius: 24,
                         padding: 20,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 16,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 12,
-                        elevation: 3,
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
                     }}
                 >
                     <View style={{
                         width: 48,
                         height: 48,
                         borderRadius: 24,
-                        backgroundColor: 'rgba(255,255,255,0.3)',
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
+                        backgroundColor: '#ffffff12',
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}>
-                        <MessageCircle size={24} color="#1a1a1a" />
+                        <MessageCircle size={24} color="#ffffffff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 17, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffffff', marginBottom: 2 }}>
                             Live Chat
                         </Text>
-                        <Text style={{ fontSize: 14, color: '#1a1a1a', opacity: 0.7 }}>
+                        <Text style={{ fontSize: 14, color: '#ffffffff', opacity: 0.7 }}>
                             Chat with our team
                         </Text>
                     </View>
-                    <ExternalLink size={20} color="#1a1a1a" opacity={0.5} />
+                    <ExternalLink size={20} color="#ffffffff" opacity={0.5} />
                 </TouchableOpacity>
             </View>
 
