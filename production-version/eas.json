@@ -1,0 +1,22 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false,
+        "enterpriseProvisioning": "adhoc"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {}
+    }
+  }
+}

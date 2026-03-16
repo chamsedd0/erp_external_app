@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { apiClient } from '../api/client';
 
 interface AuthContextType {
     signIn: (token: string, user: any) => Promise<void>;
@@ -65,18 +68,57 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         loadStorageData();
     }, []);
 
+    // ── Push Notification Helpers ──────────────────────────────────────────────
+
+    const registerPushToken = async (employeeId: number) => {
+        try {
+            if (!Device.isDevice) return; // Skip emulator / simulator
+            const { status: existingStatus } = await Notifications.getPermissionsAsync();
+            let finalStatus = existingStatus;
+            if (existingStatus !== 'granted') {
+                const { status } = await Notifications.requestPermissionsAsync();
+                finalStatus = status;
+            }
+            if (finalStatus !== 'granted') return;
+            const tokenData = await Notifications.getExpoPushTokenAsync();
+            await apiClient.savePushToken(employeeId, tokenData.data);
+        } catch (error) {
+            // Push registration is non-critical — log but don't block sign-in
+            console.warn('Push token registration failed:', error);
+        }
+    };
+
+    const removePushToken = async (employeeId: number) => {
+        try {
+            await apiClient.deletePushToken(employeeId);
+        } catch (error) {
+            console.warn('Push token removal failed:', error);
+        }
+    };
+
+    // ── Auth Actions ───────────────────────────────────────────────────────────
+
     const signIn = async (token: string, user: any) => {
         setSession(token);
         setUser(user);
         await AsyncStorage.setItem('user_token', token);
         await AsyncStorage.setItem('user_data', JSON.stringify(user));
+        // Register for push notifications after successful login
+        if (user?.id) {
+            registerPushToken(user.id); // fire-and-forget
+        }
     };
 
     const signOut = async () => {
+        // Remove push token before clearing session
+        const storedUser = user;
         setSession(null);
         setUser(null);
         await AsyncStorage.removeItem('user_token');
         await AsyncStorage.removeItem('user_data');
+        if (storedUser?.id) {
+            removePushToken(storedUser.id); // fire-and-forget
+        }
     };
 
     const completeOnboarding = async () => {

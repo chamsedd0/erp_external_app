@@ -1,113 +1,166 @@
 import { API_URL } from '../constants';
 
+// ── Shared Types ──────────────────────────────────────────────────────────────
+
+export interface Attachment {
+    name: string;
+    data: string;     // base64 encoded file content
+    mimetype: string; // e.g. 'image/jpeg', 'application/pdf'
+}
+
+// ── Generic fetch helper ──────────────────────────────────────────────────────
+
+async function apiFetch<T = any>(
+    path: string,
+    options?: RequestInit
+): Promise<T> {
+    const response = await fetch(`${API_URL}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+    });
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || `Request failed (${response.status})`);
+    }
+    return await response.json();
+}
+
+// ── API Client ────────────────────────────────────────────────────────────────
+
 export const apiClient = {
-    // Auth
-    login: async (employee_id: string, pin: string) => {
-        const response = await fetch(`${API_URL}/auth/login`, {
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    login: (employee_id: string, pin: string) =>
+        apiFetch('/auth/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ employee_id, pin }),
-        });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Login failed' }));
-            throw new Error(error.error || 'Login failed');
-        }
-        return await response.json();
-    },
+        }),
 
-    // Time Off
-    getTimeOffTypes: async () => {
-        const response = await fetch(`${API_URL}/time-off/types`);
-        if (!response.ok) throw new Error('Failed to fetch leave types');
-        return await response.json();
-    },
+    savePushToken: (employee_id: number, token: string) =>
+        apiFetch('/auth/push-token', {
+            method: 'POST',
+            body: JSON.stringify({ employee_id, token }),
+        }),
 
-    getTimeOffRequests: async (employeeId: number) => {
-        const response = await fetch(`${API_URL}/time-off?employee_id=${employeeId}`);
-        if (!response.ok) throw new Error('Failed to fetch time-off requests');
-        return await response.json();
-    },
+    deletePushToken: (employee_id: number) =>
+        apiFetch('/auth/push-token', {
+            method: 'DELETE',
+            body: JSON.stringify({ employee_id }),
+        }),
 
-    createTimeOffRequest: async (data: {
+    // ── Time Off ──────────────────────────────────────────────────────────────
+
+    getTimeOffTypes: () => apiFetch('/time-off/types'),
+
+    getTimeOffRequests: (employeeId: number) =>
+        apiFetch(`/time-off?employee_id=${employeeId}`),
+
+    getPendingTimeOff: () => apiFetch('/time-off/pending'),
+
+    createTimeOffRequest: (data: {
         employee_id: number;
         holiday_status_id: number;
         date_from: string;
         date_to: string;
         name?: string;
-    }) => {
-        const response = await fetch(`${API_URL}/time-off`, {
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/time-off', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to create request' }));
-            throw new Error(error.error || 'Failed to create time-off request');
-        }
-        return await response.json();
-    },
+        }),
 
-    // Notifications
-    getNotifications: async (employeeId: number) => {
-        const response = await fetch(`${API_URL}/notifications?employee_id=${employeeId}`);
-        if (!response.ok) throw new Error('Failed to fetch notifications');
-        return await response.json();
-    },
+    // ── Expenses ──────────────────────────────────────────────────────────────
 
-    markNotificationRead: async (id: string) => {
-        const response = await fetch(`${API_URL}/notifications/${id}/read`, {
-            method: 'PUT',
-        });
-        if (!response.ok) throw new Error('Failed to mark notification as read');
-        return await response.json();
-    },
+    getExpenseProducts: () => apiFetch('/expenses/products'),
 
-    // Expenses
-    getExpenseProducts: async () => {
-        const response = await fetch(`${API_URL}/expenses/products`);
-        if (!response.ok) throw new Error('Failed to fetch expense products');
-        return await response.json();
-    },
+    getExpenses: (employeeId: number) =>
+        apiFetch(`/expenses?employee_id=${employeeId}`),
 
-    getExpenses: async (employeeId: number) => {
-        const response = await fetch(`${API_URL}/expenses?employee_id=${employeeId}`);
-        if (!response.ok) throw new Error('Failed to fetch expenses');
-        return await response.json();
-    },
+    getPendingExpenses: () => apiFetch('/expenses/pending'),
 
-
-
-    // Pending requests for dashboard
-    getPendingTimeOff: async () => {
-        const response = await fetch(`${API_URL}/time-off/pending`);
-        if (!response.ok) throw new Error('Failed to fetch pending time-off');
-        return await response.json();
-    },
-
-    getPendingExpenses: async () => {
-        const response = await fetch(`${API_URL}/expenses/pending`);
-        if (!response.ok) throw new Error('Failed to fetch pending expenses');
-        return await response.json();
-    },
-
-    createExpense: async (data: {
+    createExpense: (data: {
         employee_id: number;
         product_id: number;
         name: string;
         unit_amount: number;
         quantity: number;
         date: string;
-        receipt?: string;
-    }) => {
-        const response = await fetch(`${API_URL}/expenses`, {
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/expenses', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to create expense' }));
-            throw new Error(error.error || 'Failed to create expense');
-        }
-        return await response.json();
-    },
+        }),
+
+    // ── Timesheet ─────────────────────────────────────────────────────────────
+
+    getTimesheetEntries: (employeeId: number) =>
+        apiFetch(`/timesheet?employee_id=${employeeId}`),
+
+    getProjects: () => apiFetch('/timesheet/projects'),
+
+    getTasks: (projectId: number) =>
+        apiFetch(`/timesheet/tasks?project_id=${projectId}`),
+
+    createTimesheetEntry: (data: {
+        employee_id: number;
+        project_id: number;
+        task_id?: number;
+        date: string;
+        unit_amount: number;
+        name: string;
+    }) =>
+        apiFetch('/timesheet', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    // ── IT Support / Helpdesk ─────────────────────────────────────────────────
+
+    getHelpdeskTickets: (employeeId: number) =>
+        apiFetch(`/helpdesk?employee_id=${employeeId}`),
+
+    getHelpdeskTeams: () => apiFetch('/helpdesk/teams'),
+
+    createHelpdeskTicket: (data: {
+        employee_id: number;
+        name: string;
+        description?: string;
+        team_id?: number;
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/helpdesk', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    // ── Maintenance ───────────────────────────────────────────────────────────
+
+    getMaintenanceRequests: (employeeId: number) =>
+        apiFetch(`/maintenance?employee_id=${employeeId}`),
+
+    getMaintenanceCategories: () => apiFetch('/maintenance/categories'),
+
+    createMaintenanceRequest: (data: {
+        employee_id: number;
+        name: string;
+        description?: string;
+        category_id?: number;
+        maintenance_type?: 'corrective' | 'preventive';
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/maintenance', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    getNotifications: (employeeId: number) =>
+        apiFetch(`/notifications?employee_id=${employeeId}`),
+
+    markNotificationRead: (id: string) =>
+        apiFetch(`/notifications/${id}/read`, { method: 'PUT' }),
 };

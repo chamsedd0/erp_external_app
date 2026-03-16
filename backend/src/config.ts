@@ -10,6 +10,8 @@ const envSchema = z.object({
     ODOO_USERNAME: z.string(),
     ODOO_PASSWORD: z.string(),
     JWT_SECRET: z.string(),
+    UPSTASH_REDIS_REST_URL: z.string(),
+    UPSTASH_REDIS_REST_TOKEN: z.string(),
 });
 
 const envVars = envSchema.safeParse(process.env);
@@ -28,4 +30,8 @@ export const config = {
         password: envVars.data.ODOO_PASSWORD,
     },
     jwtSecret: envVars.data.JWT_SECRET,
+    upstash: {
+        url: envVars.data.UPSTASH_REDIS_REST_URL,
+        token: envVars.data.UPSTASH_REDIS_REST_TOKEN,
+    },
 };

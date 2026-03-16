@@ -5,13 +5,21 @@ import { config } from '../config';
 
 const router = Router();
 
+// Shared attachment schema
+const attachmentSchema = z.object({
+    name: z.string(),
+    data: z.string(),     // base64
+    mimetype: z.string(),
+});
+
 // Validation Schema for Time Off Request
 const createLeaveSchema = z.object({
-    employee_id: z.number(), // We'll look this up or pass it from frontend based on logged in user
+    employee_id: z.number(),
     holiday_status_id: z.number(), // Leave Type ID
     date_from: z.string(), // ISO String
     date_to: z.string(),   // ISO String
-    name: z.string().optional(), // Description
+    name: z.string().optional(), // Description / reason
+    attachments: z.array(attachmentSchema).max(3).optional(), // Supporting documents
 });
 
 // GET / - Fetch employee's time-off requests
@@ -75,6 +83,16 @@ router.post('/', async (req, res) => {
             request_date_from: body.date_from.split('T')[0], // Odoo often needs these for day-based counts
             request_date_to: body.date_to.split('T')[0],
         });
+
+        // Upload supporting documents if provided (e.g. medical certificate)
+        if (body.attachments && body.attachments.length > 0) {
+            try {
+                await odooClient.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId as number);
+            } catch (attachError: any) {
+                console.error('Leave attachment upload error:', attachError);
+                // Don't fail the whole request for attachment errors
+            }
+        }
 
         res.json({ status: 'success', id: newLeaveId });
     } catch (error: any) {

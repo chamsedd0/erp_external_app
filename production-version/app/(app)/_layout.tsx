@@ -1,12 +1,28 @@
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { View, TouchableOpacity, Platform, TextInput, Pressable } from 'react-native';
 import { Home, Plus, User, Bell, Search } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColor } from '../../hooks/useColor';
+import * as Notifications from 'expo-notifications';
 
 export default function AppLayout() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+
+    // Handle notification taps → navigate to the relevant request detail screen
+    useEffect(() => {
+        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data as any;
+            if (data?.targetId && data?.targetType) {
+                router.push({
+                    pathname: '/(app)/request-details',
+                    params: { id: String(data.targetId), type: data.targetType },
+                });
+            }
+        });
+        return () => subscription.remove();
+    }, []);
     const backgroundColor = useColor('background');
     const cardColor = useColor('card');
     const text = useColor('text');
@@ -112,6 +128,13 @@ export default function AppLayout() {
                 name="request-details"
                 options={{
                     href: null, // Hide from tab bar
+                    headerShown: false,
+                }}
+            />
+            <Tabs.Screen
+                name="timesheet"
+                options={{
+                    href: null, // Hide from tab bar — accessed via new-request hub
                     headerShown: false,
                 }}
             />

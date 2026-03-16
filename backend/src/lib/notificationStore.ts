@@ -1,20 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { redisGet, redisSet } from './redis';
 
-// In serverless environments (Vercel), only /tmp is writable.
-// We use os.tmpdir() to ensure cross-platform compatibility.
-const DATA_DIR = path.join(os.tmpdir(), 'shadow_portal_data');
-const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
-
-// Ensure data directory exists
-try {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-} catch (e) {
-    console.error("Failed to create data directory:", e);
-}
+// All notifications are stored under a single Redis key as a JSON array.
+// This mirrors the previous /tmp file approach and requires no signature changes.
+const REDIS_KEY = 'shadow:notifications';
 
 export interface Notification {
     id: string;
@@ -24,56 +12,50 @@ export interface Notification {
     type: 'request_approved' | 'request_rejected' | 'system';
     read: boolean;
     timestamp: string; // ISO string
-    targetId?: string; // ID of the request (time_off or expense)
-    targetType?: 'time_off' | 'expense';
+    targetId?: string;
+    targetType?: 'time_off' | 'expense' | 'helpdesk' | 'maintenance' | 'timesheet';
+}
+
+async function readAll(): Promise<Notification[]> {
+    try {
+        const raw = await redisGet(REDIS_KEY);
+        if (!raw) return [];
+        return JSON.parse(raw) as Notification[];
+    } catch (e) {
+        console.error('notificationStore: failed to read from Redis', e);
+        return [];
+    }
+}
+
+async function writeAll(notifications: Notification[]): Promise<void> {
+    try {
+        await redisSet(REDIS_KEY, JSON.stringify(notifications));
+    } catch (e) {
+        console.error('notificationStore: failed to write to Redis', e);
+    }
 }
 
 export const notificationStore = {
-    getAll: (employeeId: number): Notification[] => {
-        if (!fs.existsSync(NOTIFICATIONS_FILE)) return [];
-        try {
-            const data = fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8');
-            const all: Notification[] = JSON.parse(data);
-            return all.filter(n => n.employeeId == employeeId);
-        } catch (e) {
-            console.error("Error reading notifications:", e);
-            return [];
-        }
+    /** Return all notifications for a specific employee, newest-first. */
+    getAll: async (employeeId: number): Promise<Notification[]> => {
+        const all = await readAll();
+        return all.filter(n => n.employeeId === employeeId);
     },
 
-    add: (notification: Notification) => {
-        let all: Notification[] = [];
-        try {
-            if (fs.existsSync(NOTIFICATIONS_FILE)) {
-                all = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-            }
-        } catch (e) {
-            all = [];
-        }
+    /** Append a new notification. Trims the total list to the last 1 000 entries. */
+    add: async (notification: Notification): Promise<void> => {
+        let all = await readAll();
         all.push(notification);
-        // Keep last 1000 notifications
         if (all.length > 1000) {
             all = all.slice(all.length - 1000);
         }
-        try {
-            fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(all, null, 2));
-        } catch (e) {
-            console.error("Error writing notifications:", e);
-        }
+        await writeAll(all);
     },
 
-    markRead: (id: string) => {
-        if (!fs.existsSync(NOTIFICATIONS_FILE)) return;
-        try {
-            const all: Notification[] = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-            const updated = all.map(n => n.id === id ? { ...n, read: true } : n);
-            fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(updated, null, 2));
-        } catch (e) {
-            console.error("Error marking notification read:", e);
-        }
+    /** Mark a single notification as read by its ID. */
+    markRead: async (id: string): Promise<void> => {
+        const all = await readAll();
+        const updated = all.map(n => (n.id === id ? { ...n, read: true } : n));
+        await writeAll(updated);
     },
-
-    exists: (targetId: string, type: string, status: string): boolean => {
-        return false;
-    }
 };

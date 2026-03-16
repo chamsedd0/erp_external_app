@@ -16,11 +16,10 @@ notificationsRouter.get('/', async (req, res) => {
         const id = parseInt(employeeId as string);
 
         // 1. Trigger the monitor to check for new updates from Odoo
-        // We await this so the user gets the latest notifications immediately on pull-to-refresh
         await requestMonitor.checkUpdates(id);
 
         // 2. Fetch from store
-        const notifications = notificationStore.getAll(id);
+        const notifications = await notificationStore.getAll(id);
 
         // Sort by newest first
         notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -33,10 +32,10 @@ notificationsRouter.get('/', async (req, res) => {
 });
 
 // Mark as read
-notificationsRouter.put('/:id/read', (req, res) => {
+notificationsRouter.put('/:id/read', async (req, res) => {
     try {
         const { id } = req.params;
-        notificationStore.markRead(id);
+        await notificationStore.markRead(id);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to mark as read' });

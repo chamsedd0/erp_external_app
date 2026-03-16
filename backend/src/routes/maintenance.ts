@@ -1,0 +1,126 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { odooClient } from '../odoo/client';
+import { attachmentSchema } from './helpdesk';
+
+const router = Router();
+
+// ── Schema ────────────────────────────────────────────────────────────────────
+
+const createMaintenanceSchema = z.object({
+    employee_id: z.number(),
+    name: z.string().min(1, 'Request title is required'),
+    description: z.string().optional(),
+    category_id: z.number().optional(),
+    maintenance_type: z.enum(['corrective', 'preventive']).default('corrective'),
+    attachments: z.array(attachmentSchema).max(3).optional(),
+});
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /maintenance/categories
+ * Returns all maintenance equipment categories.
+ */
+router.get('/categories', async (req, res) => {
+    try {
+        const uid = await odooClient.authenticate();
+        const categories: any = await odooClient.searchRead(
+            uid,
+            'maintenance.equipment.category',
+            [],
+            ['id', 'name']
+        );
+        res.json({ categories: Array.isArray(categories) ? categories : [] });
+    } catch (error: any) {
+        console.error('Fetch Maintenance Categories Error:', error);
+        // Maintenance module should always be on Community — but handle gracefully
+        res.json({ categories: [], message: error.message });
+    }
+});
+
+/**
+ * GET /maintenance?employee_id=X
+ * Returns all maintenance requests submitted by the employee.
+ * NOTE: maintenance.request uses stage_id (not a string 'state').
+ */
+router.get('/', async (req, res) => {
+    try {
+        const employeeId = req.query.employee_id;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'employee_id query parameter required' });
+        }
+
+        const uid = await odooClient.authenticate();
+        const requests: any = await odooClient.searchRead(
+            uid,
+            'maintenance.request',
+            [['employee_id', '=', parseInt(employeeId as string)]],
+            [
+                'id',
+                'name',
+                'description',
+                'stage_id',
+                'category_id',
+                'maintenance_type',
+                'create_date',
+                'request_date',
+            ]
+        );
+
+        const sorted = Array.isArray(requests)
+            ? requests
+                .sort(
+                    (a: any, b: any) =>
+                        new Date(b.create_date).getTime() - new Date(a.create_date).getTime()
+                )
+                .slice(0, 30)
+            : [];
+
+        res.json({ requests: sorted });
+    } catch (error: any) {
+        console.error('Fetch Maintenance Requests Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /maintenance
+ * Body: { employee_id, name, description?, category_id?, maintenance_type, attachments? }
+ * Creates a new maintenance.request record.
+ */
+router.post('/', async (req, res) => {
+    try {
+        const body = createMaintenanceSchema.parse(req.body);
+        const uid = await odooClient.authenticate();
+
+        const recordData: Record<string, any> = {
+            name: body.name,
+            employee_id: body.employee_id,
+            maintenance_type: body.maintenance_type,
+            description: body.description || '',
+            request_date: new Date().toISOString().split('T')[0], // today YYYY-MM-DD
+        };
+
+        if (body.category_id) {
+            recordData.category_id = body.category_id;
+        }
+
+        const newId = await odooClient.createRecord(uid, 'maintenance.request', recordData) as number;
+
+        // Upload attachments if provided
+        if (body.attachments && body.attachments.length > 0) {
+            await odooClient.uploadAttachments(uid, body.attachments, 'maintenance.request', newId);
+        }
+
+        res.json({ status: 'success', id: newId });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: error.errors });
+        }
+        console.error('Create Maintenance Request Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+export const maintenanceRouter = router;

@@ -9,6 +9,29 @@ const objectClient = xmlrpc.createSecureClient({
     url: `${config.odoo.url}/xmlrpc/2/object`,
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Odoo Version Cache — detected once at runtime, reused everywhere
+// ──────────────────────────────────────────────────────────────────────────────
+let _odooMajorVersion: number = 0;
+
+/** Returns the Odoo major version integer (e.g. 14, 16, 17). Cached after first call. */
+export const getOdooVersion = async (): Promise<number> => {
+    if (_odooMajorVersion > 0) return _odooMajorVersion;
+    try {
+        const info: any = await new Promise((resolve, reject) =>
+            commonClient.methodCall('version', [], (err, val) => (err ? reject(err) : resolve(val)))
+        );
+        // server_version_info = [major, minor, patch, release_type, serial]
+        _odooMajorVersion = Array.isArray(info?.server_version_info)
+            ? (info.server_version_info[0] as number)
+            : 14; // safe fallback
+        console.log(`Odoo version detected: ${_odooMajorVersion}`);
+    } catch {
+        _odooMajorVersion = 14; // fallback — assume v14 compatible
+    }
+    return _odooMajorVersion;
+};
+
 export const odooClient = {
     authenticate: async (): Promise<number> => {
         return new Promise((resolve, reject) => {
@@ -189,6 +212,47 @@ export const odooClient = {
                 }
             );
         });
+    },
+
+    /** Write (update) fields on existing record(s). Mirrors the Odoo 'write' ORM method. */
+    writeRecord: async (uid: number, model: string, recordIds: number[], data: Record<string, any>) => {
+        return new Promise<boolean>((resolve, reject) => {
+            objectClient.methodCall(
+                'execute_kw',
+                [
+                    config.odoo.db,
+                    uid,
+                    config.odoo.password,
+                    model,
+                    'write',
+                    [recordIds, data],
+                ],
+                (error, result) => {
+                    if (error) {
+                        console.error(`Write Error (${model}):`, error);
+                        reject(error);
+                    } else {
+                        resolve(result as boolean);
+                    }
+                }
+            );
+        });
+    },
+
+    /** Bulk-upload attachments to an Odoo record. Skips silently on individual errors. */
+    uploadAttachments: async (
+        uid: number,
+        attachments: Array<{ name: string; data: string; mimetype: string }>,
+        res_model: string,
+        res_id: number
+    ) => {
+        for (const att of attachments) {
+            try {
+                await odooClient.createAttachment(uid, att.name, att.data, res_model, res_id, att.mimetype);
+            } catch (e) {
+                console.error(`Attachment upload failed (${att.name}):`, e);
+            }
+        }
     },
 
     createAttachment: async (uid: number, name: string, datas: string, res_model: string, res_id: number, mimetype: string = 'image/jpeg') => {

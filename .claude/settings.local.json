@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(pip install pdfplumber pypdf -q)",
+      "Bash(pip install pypdf pdfplumber -q)",
+      "WebSearch",
+      "Bash(del \"C:\\\\Users\\\\User1\\\\Documents\\\\GitHub\\\\erp_external_app\\\\backend\\\\src\\\\routes\\\\attendance.ts\")",
+      "Bash(del \"C:\\\\Users\\\\User1\\\\Documents\\\\GitHub\\\\erp_external_app\\\\production-version\\\\app\\\\\\(app\\)\\\\attendance.tsx\")",
+      "Bash(rm \"C:\\\\Users\\\\User1\\\\Documents\\\\GitHub\\\\erp_external_app\\\\backend\\\\src\\\\routes\\\\attendance.ts\")",
+      "Bash(rm \"C:\\\\Users\\\\User1\\\\Documents\\\\GitHub\\\\erp_external_app\\\\production-version\\\\app\\\\\\(app\\)\\\\attendance.tsx\")"
+    ]
+  }
+}

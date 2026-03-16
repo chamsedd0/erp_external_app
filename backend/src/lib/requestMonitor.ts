@@ -1,167 +1,243 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import { odooClient } from '../odoo/client';
 import { notificationStore, Notification } from './notificationStore';
+import { sendPushNotification } from './pushStore';
+import { redisGet, redisSet } from './redis';
 
-// In serverless environments, use /tmp
-const DATA_DIR = path.join(os.tmpdir(), 'shadow_portal_data');
-const CACHE_FILE = path.join(DATA_DIR, 'request_cache.json');
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// Ensure dir exists (duplicated check for safety)
-try {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-} catch (e) {
-    console.error("Monitor failed to create data dir:", e);
-}
+type RequestType = 'time_off' | 'expense' | 'helpdesk' | 'maintenance';
 
 interface RequestState {
     id: number;
-    type: 'time_off' | 'expense';
+    type: RequestType;
+    /** For leave/expense: string state (e.g. 'draft', 'validate'). For helpdesk/maintenance: stage id as string. */
     state: string;
     updated_at: string;
 }
 
-interface CacheData {
-    [employeeId: number]: {
-        [uniqueId: string]: RequestState
+interface EmployeeCache {
+    [uniqueId: string]: RequestState;
+}
+
+const cacheKey = (employeeId: number) => `shadow:req_cache:${employeeId}`;
+
+async function loadCache(employeeId: number): Promise<EmployeeCache> {
+    try {
+        const raw = await redisGet(cacheKey(employeeId));
+        if (!raw) return {};
+        return JSON.parse(raw) as EmployeeCache;
+    } catch {
+        return {};
     }
 }
+
+async function saveCache(employeeId: number, cache: EmployeeCache): Promise<void> {
+    try {
+        await redisSet(cacheKey(employeeId), JSON.stringify(cache));
+    } catch (e) {
+        console.error('Monitor failed to write cache to Redis:', e);
+    }
+}
+
+// ── Monitor ───────────────────────────────────────────────────────────────────
 
 export const requestMonitor = {
     checkUpdates: async (employeeId: number) => {
         console.log(`Checking updates for employee ${employeeId}...`);
 
-        // 1. Authenticate to get UID
+        // 1. Authenticate
         let uid = 0;
         try {
             uid = await odooClient.authenticate();
         } catch (e) {
-            console.error("Monitor failed to authenticate with Odoo:", e);
+            console.error('Monitor failed to authenticate with Odoo:', e);
             return;
         }
 
-        // 2. Fetch current data from Odoo
+        // 2. Fetch current data from Odoo (all 4 request types)
         let timeOffRequests: any[] = [];
         let expenses: any[] = [];
+        let helpdeskTickets: any[] = [];
+        let maintenanceRequests: any[] = [];
 
         try {
-            // Explicitly cast the result to any[] because generic Promise return might be unknown
-            const leavesResult = await odooClient.searchRead(uid, 'hr.leave',
-                [['employee_id', '=', employeeId]],
-                ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']
-            );
+            const [leavesResult, expensesResult] = await Promise.all([
+                odooClient.searchRead(uid, 'hr.leave',
+                    [['employee_id', '=', employeeId]],
+                    ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']
+                ),
+                odooClient.searchRead(uid, 'hr.expense',
+                    [['employee_id', '=', employeeId]],
+                    ['id', 'name', 'state', 'total_amount', 'date', 'product_id']
+                ),
+            ]);
+
             timeOffRequests = Array.isArray(leavesResult) ? leavesResult : [];
-
-            const expensesResult = await odooClient.searchRead(uid, 'hr.expense',
-                [['employee_id', '=', employeeId]],
-                ['id', 'name', 'state', 'total_amount', 'date', 'product_id']
-            );
             expenses = Array.isArray(expensesResult) ? expensesResult : [];
-
         } catch (error) {
-            console.error("Monitor failed to fetch from Odoo:", error);
-            return;
+            console.error('Monitor failed to fetch leave/expense from Odoo:', error);
         }
 
-        // 3. Load Cache
-        let cache: CacheData = {};
-        if (fs.existsSync(CACHE_FILE)) {
-            try {
-                cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
-            } catch (e) { cache = {}; }
+        // Helpdesk — Enterprise only, ignore errors gracefully
+        try {
+            const helpdeskResult = await odooClient.searchRead(
+                uid,
+                'helpdesk.ticket',
+                [['id', '>', 0]],
+                ['id', 'name', 'stage_id', 'create_date', 'partner_id']
+            );
+            helpdeskTickets = Array.isArray(helpdeskResult) ? helpdeskResult : [];
+        } catch {
+            // Helpdesk module not installed — skip silently
         }
-        if (!cache[employeeId]) cache[employeeId] = {};
 
-        const employeeCache = cache[employeeId];
-        const newCache: typeof employeeCache = {};
+        // Maintenance — should always be available on Community
+        try {
+            const maintenanceResult = await odooClient.searchRead(
+                uid,
+                'maintenance.request',
+                [['employee_id', '=', employeeId]],
+                ['id', 'name', 'stage_id', 'create_date', 'maintenance_type']
+            );
+            maintenanceRequests = Array.isArray(maintenanceResult) ? maintenanceResult : [];
+        } catch (error) {
+            console.error('Monitor failed to fetch maintenance requests:', error);
+        }
+
+        // 3. Load Cache from Redis
+        const employeeCache = await loadCache(employeeId);
+        const newCache: EmployeeCache = {};
         const notificationsToAdd: Notification[] = [];
 
-        // 4. Compare Time Off
+        // ── 4. Compare Time Off (string state) ────────────────────────────────
         for (const req of timeOffRequests) {
             const uniqueId = `time_off_${req.id}`;
-            const currentState = req.state;
+            const currentState = req.state as string;
             const previous = employeeCache[uniqueId];
 
-            // Update new cache
             newCache[uniqueId] = { id: req.id, type: 'time_off', state: currentState, updated_at: new Date().toISOString() };
 
             if (previous && previous.state !== currentState) {
-                // Status Changed!
-                const notif = createNotification(employeeId, req, 'time_off', previous.state, currentState);
+                const notif = createLeaveExpenseNotification(employeeId, req, 'time_off', previous.state, currentState);
                 if (notif) notificationsToAdd.push(notif);
             }
         }
 
-        // 5. Compare Expenses
+        // ── 5. Compare Expenses (string state) ────────────────────────────────
         for (const req of expenses) {
             const uniqueId = `expense_${req.id}`;
-            const currentState = req.state;
+            const currentState = req.state as string;
             const previous = employeeCache[uniqueId];
 
             newCache[uniqueId] = { id: req.id, type: 'expense', state: currentState, updated_at: new Date().toISOString() };
 
             if (previous && previous.state !== currentState) {
-                const notif = createNotification(employeeId, req, 'expense', previous.state, currentState);
+                const notif = createLeaveExpenseNotification(employeeId, req, 'expense', previous.state, currentState);
                 if (notif) notificationsToAdd.push(notif);
             }
         }
 
-        // 6. Save Notifications
-        for (const n of notificationsToAdd) {
-            notificationStore.add(n);
+        // ── 6. Compare Helpdesk Tickets (stage_id based) ──────────────────────
+        for (const req of helpdeskTickets) {
+            const uniqueId = `helpdesk_${req.id}`;
+            const stageId = Array.isArray(req.stage_id) ? String(req.stage_id[0]) : String(req.stage_id);
+            const stageName = Array.isArray(req.stage_id) ? (req.stage_id[1] as string) : '';
+            const previous = employeeCache[uniqueId];
+
+            newCache[uniqueId] = { id: req.id, type: 'helpdesk', state: stageId, updated_at: new Date().toISOString() };
+
+            if (previous && previous.state !== stageId) {
+                const isDoneStage = /\b(done|closed|resolved|cancel)/i.test(stageName);
+                const notif: Notification = {
+                    id: Math.random().toString(36).substring(7),
+                    employeeId,
+                    title: isDoneStage ? 'IT Support Ticket Closed' : 'IT Support Ticket Updated',
+                    message: `Your ticket "${req.name}" moved to stage: ${stageName || 'Updated'}.`,
+                    type: isDoneStage ? 'request_approved' : 'system',
+                    read: false,
+                    timestamp: new Date().toISOString(),
+                    targetId: req.id.toString(),
+                    targetType: 'helpdesk',
+                };
+                notificationsToAdd.push(notif);
+            }
         }
 
-        // 7. Save Cache
-        cache[employeeId] = newCache;
-        try {
-            fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
-        } catch (e) {
-            console.error("Monitor failed to write cache:", e);
+        // ── 7. Compare Maintenance Requests (stage_id based) ──────────────────
+        for (const req of maintenanceRequests) {
+            const uniqueId = `maintenance_${req.id}`;
+            const stageId = Array.isArray(req.stage_id) ? String(req.stage_id[0]) : String(req.stage_id);
+            const stageName = Array.isArray(req.stage_id) ? (req.stage_id[1] as string) : '';
+            const previous = employeeCache[uniqueId];
+
+            newCache[uniqueId] = { id: req.id, type: 'maintenance', state: stageId, updated_at: new Date().toISOString() };
+
+            if (previous && previous.state !== stageId) {
+                const isDoneStage = /\b(done|repaired|closed|cancel)/i.test(stageName);
+                const notif: Notification = {
+                    id: Math.random().toString(36).substring(7),
+                    employeeId,
+                    title: isDoneStage ? 'Maintenance Request Completed' : 'Maintenance Request Updated',
+                    message: `Your maintenance request "${req.name}" moved to: ${stageName || 'Updated'}.`,
+                    type: isDoneStage ? 'request_approved' : 'system',
+                    read: false,
+                    timestamp: new Date().toISOString(),
+                    targetId: req.id.toString(),
+                    targetType: 'maintenance',
+                };
+                notificationsToAdd.push(notif);
+            }
         }
-    }
+
+        // ── 8. Save notifications + send push ─────────────────────────────────
+        for (const n of notificationsToAdd) {
+            await notificationStore.add(n);
+            sendPushNotification(employeeId, {
+                title: n.title,
+                body: n.message,
+                data: { targetId: n.targetId, targetType: n.targetType },
+            }).catch(() => {});
+        }
+
+        // ── 9. Save updated cache to Redis ────────────────────────────────────
+        await saveCache(employeeId, newCache);
+    },
 };
 
-function createNotification(
+// ── Notification factory for leave / expense (string-state models) ────────────
+
+function createLeaveExpenseNotification(
     employeeId: number,
     req: any,
     type: 'time_off' | 'expense',
     oldState: string,
     newState: string
 ): Notification | null {
-
-    // Map states to user friendly messages
     let title = '';
     let message = '';
-    let notifType: 'request_approved' | 'request_rejected' | 'system' = 'system';
+    let notifType: Notification['type'] = 'system';
 
+    const label = type === 'time_off' ? 'time off request' : 'expense';
     const cleanName = req.name || (type === 'time_off' ? 'Time Off Request' : 'Expense');
 
-    // Approval
-    if (['approved', 'validate', 'done', 'posted'].includes(newState) && !['approved', 'validate', 'done', 'posted'].includes(oldState)) {
-        title = type === 'time_off' ? 'Request Approved' : 'Expense Approved';
-        message = `Your ${type === 'time_off' ? 'time off' : 'expense'} "${cleanName}" has been approved.`;
+    const approvedStates = ['approved', 'validate', 'validate1', 'done', 'posted'];
+    const refusedStates = ['refuse', 'refused', 'cancel'];
+
+    if (approvedStates.includes(newState) && !approvedStates.includes(oldState)) {
+        title = type === 'time_off' ? 'Request Approved ✅' : 'Expense Approved ✅';
+        message = `Your ${label} "${cleanName}" has been approved.`;
         notifType = 'request_approved';
-    }
-    // Rejection
-    else if (['refuse', 'refused'].includes(newState)) {
-        title = type === 'time_off' ? 'Request Rejected' : 'Expense Rejected';
-        message = `Your ${type === 'time_off' ? 'time off' : 'expense'} "${cleanName}" was rejected.`;
+    } else if (refusedStates.includes(newState)) {
+        title = type === 'time_off' ? 'Request Rejected ❌' : 'Expense Rejected ❌';
+        message = `Your ${label} "${cleanName}" was rejected.`;
         notifType = 'request_rejected';
     }
-    // Submission (Draft -> Confirmed/Reported)
-    else if (['confirm', 'reported'].includes(newState) && oldState === 'draft') {
-        title = 'Submission Received';
-        message = `Your ${type === 'time_off' ? 'request' : 'expense'} "${cleanName}" has been submitted for approval.`;
-        notifType = 'system';
-    }
+    // Per owner's requirement: do NOT notify on submission (draft → confirm).
 
-    if (!title) return null; // Ignore other state transitions for now
+    if (!title) return null;
 
     return {
-        id: Math.random().toString(36).substring(7), // Simple ID
+        id: Math.random().toString(36).substring(7),
         employeeId,
         title,
         message,
@@ -169,6 +245,6 @@ function createNotification(
         read: false,
         timestamp: new Date().toISOString(),
         targetId: req.id.toString(),
-        targetType: type
+        targetType: type,
     };
 }

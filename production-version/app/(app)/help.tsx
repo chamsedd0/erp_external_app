@@ -1,10 +1,9 @@
-import { View, ScrollView, TouchableOpacity, Linking, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Linking, RefreshControl, Alert } from 'react-native';
 import { Text } from '../../components/ui/text';
-import { Button } from '../../components/ui/button';
 import { useColor } from '../../hooks/useColor';
-import { HelpCircle, Mail, MessageCircle, Book, ExternalLink } from 'lucide-react-native';
+import { HelpCircle, Mail, MessageCircle, ExternalLink, KeyRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { useToast } from '../../providers/toast-context';
+import { HR_EMAIL } from '../../constants';
 
 const faqs = [
     {
@@ -32,7 +31,6 @@ const faqs = [
 export default function Help() {
     const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    const toast = useToast();
     const background = useColor('background');
     const text = useColor('text');
     const muted = useColor('textMuted');
@@ -41,7 +39,22 @@ export default function Help() {
     const pastelBlue = useColor('pastelBlue' as any);
 
     const handleContactSupport = () => {
-        toast.info('Support contact feature coming soon');
+        Linking.openURL(`mailto:${HR_EMAIL}?subject=Support%20Request`);
+    };
+
+    const handlePinReset = () => {
+        Alert.alert(
+            'Reset Your PIN',
+            'To reset your PIN, your HR department will need to update it in the system. Tap below to send them a request.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Email HR',
+                    onPress: () =>
+                        Linking.openURL(`mailto:${HR_EMAIL}?subject=PIN%20Reset%20Request&body=Hi%2C%20I%20need%20my%20Portal%20PIN%20reset.%20My%20name%20is%3A%20`),
+                },
+            ]
+        );
     };
 
     const onRefresh = () => {
@@ -136,6 +149,43 @@ export default function Help() {
                         </Text>
                         <Text style={{ fontSize: 14, color: '#ffffffff', opacity: 0.7 }}>
                             Chat with our team
+                        </Text>
+                    </View>
+                    <ExternalLink size={20} color="#ffffffff" opacity={0.5} />
+                </TouchableOpacity>
+
+                {/* PIN Reset */}
+                <TouchableOpacity
+                    onPress={handlePinReset}
+                    style={{
+                        backgroundColor: '#ffffff12',
+                        borderRadius: 24,
+                        padding: 20,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 16,
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
+                    }}
+                >
+                    <View style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        borderWidth: 1,
+                        borderColor: '#ffffff27',
+                        backgroundColor: '#ffffff12',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}>
+                        <KeyRound size={24} color="#ffffffff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffffff', marginBottom: 2 }}>
+                            Reset PIN
+                        </Text>
+                        <Text style={{ fontSize: 14, color: '#ffffffff', opacity: 0.7 }}>
+                            Locked out? Contact HR to reset
                         </Text>
                     </View>
                     <ExternalLink size={20} color="#ffffffff" opacity={0.5} />

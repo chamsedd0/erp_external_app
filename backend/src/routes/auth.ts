@@ -3,6 +3,7 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { odooClient } from '../odoo/client';
+import { pushStore } from '../lib/pushStore';
 
 const router = Router();
 
@@ -88,6 +89,51 @@ router.get('/schema/:model', async (req, res) => {
         res.json({ model, schema });
     } catch (error: any) {
         console.error(`Schema Error (${req.params.model}):`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── Push Notification Token Management ───────────────────────────────────────
+
+const pushTokenSchema = z.object({
+    employee_id: z.number(),
+    token: z.string().min(1),
+});
+
+/**
+ * POST /auth/push-token
+ * Saves an Expo push token for the given employee.
+ * Called from the frontend after the user grants notification permission.
+ */
+router.post('/push-token', async (req, res) => {
+    try {
+        const { employee_id, token } = pushTokenSchema.parse(req.body);
+        await pushStore.saveToken(employee_id, token);
+        res.json({ success: true });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: error.errors });
+        }
+        console.error('Save Push Token Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * DELETE /auth/push-token
+ * Removes the Expo push token for the given employee.
+ * Called on logout so the device no longer receives notifications.
+ */
+router.delete('/push-token', async (req, res) => {
+    try {
+        const employeeId = req.body?.employee_id ?? req.query?.employee_id;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'employee_id is required' });
+        }
+        await pushStore.removeToken(parseInt(String(employeeId)));
+        res.json({ success: true });
+    } catch (error: any) {
+        console.error('Delete Push Token Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

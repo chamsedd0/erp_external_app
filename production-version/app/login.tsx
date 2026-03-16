@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Linking } from 'react-native';
 import { Text } from '../components/ui/text';
 import { Button } from '../components/ui/button';
 import { useColor } from '../hooks/useColor';
@@ -7,6 +7,7 @@ import { useSession } from '../providers/auth-context';
 import { useToast } from '../providers/toast-context';
 import { apiClient } from '../api/client';
 import { useRouter } from 'expo-router';
+import { HR_EMAIL } from '../constants';
 
 export default function Login() {
     const [employeeId, setEmployeeId] = useState('');
@@ -145,6 +146,34 @@ export default function Login() {
                             {loading ? 'Signing in...' : 'Sign In'}
                         </Text>
                     </Button>
+
+                    {/* PIN recovery */}
+                    <TouchableOpacity
+                        onPress={() =>
+                            Alert.alert(
+                                'Locked Out?',
+                                'To reset your PIN, please contact your HR department.',
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                        text: 'Email HR',
+                                        onPress: () =>
+                                            Linking.openURL(
+                                                `mailto:${HR_EMAIL}?subject=PIN%20Reset%20Request`
+                                            ),
+                                    },
+                                ]
+                            )
+                        }
+                        style={{ alignItems: 'center', marginTop: 20, paddingVertical: 8 }}
+                    >
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>
+                            Locked out?{' '}
+                            <Text style={{ color: primary, fontFamily: 'DMSans_700Bold' }}>
+                                Contact HR
+                            </Text>
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </KeyboardAvoidingView>

@@ -4,6 +4,13 @@ import { odooClient } from '../odoo/client';
 
 const router = Router();
 
+// Shared attachment schema
+const attachmentSchema = z.object({
+    name: z.string(),
+    data: z.string(),     // base64
+    mimetype: z.string(), // e.g. 'image/jpeg'
+});
+
 // Validation Schema for Expense
 const createExpenseSchema = z.object({
     employee_id: z.number(),
@@ -12,7 +19,7 @@ const createExpenseSchema = z.object({
     unit_amount: z.number(), // Cost per unit (mapped to price_unit & total_amount_currency)
     quantity: z.number().default(1),
     date: z.string(), // YYYY-MM-DD
-    receipt: z.string().optional(), // Base64 encoded receipt image
+    attachments: z.array(attachmentSchema).max(3).optional(), // Up to 3 receipt images
 });
 
 // GET / - Fetch user's expenses
@@ -123,21 +130,14 @@ router.post('/', async (req, res) => {
             payment_mode: 'own_account', // Employee paid, needs reimbursement
         });
 
-        // Step 3: If receipt provided, create attachment
-        if (body.receipt) {
+        // Step 3: Upload attachments (receipts) if provided
+        if (body.attachments && body.attachments.length > 0) {
             try {
-                await odooClient.createAttachment(
-                    uid,
-                    `${body.name}_receipt.jpg`,
-                    body.receipt,
-                    'hr.expense',
-                    newExpenseId as number,
-                    'image/jpeg'
-                );
-                console.log(`Receipt attached to expense ${newExpenseId}`);
+                await odooClient.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId as number);
+                console.log(`${body.attachments.length} attachment(s) uploaded for expense ${newExpenseId}`);
             } catch (attachError: any) {
-                console.error('Attachment Error:', attachError);
-                // Continue even if attachment fails
+                console.error('Attachment upload error:', attachError);
+                // Continue even if attachments fail — expense record is already saved
             }
         }
 

@@ -4,7 +4,17 @@ import { View } from 'react-native';
 import { ThemeProvider } from '../theme/theme-provider';
 import { SessionProvider, useSession } from '../providers/auth-context';
 import { ToastProvider } from '../providers/toast-context';
+import * as Notifications from 'expo-notifications';
 import '../global.css';
+
+// Show notifications as banners even when the app is in the foreground
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+    }),
+});
 import {
     useFonts,
     DMSans_400Regular,
