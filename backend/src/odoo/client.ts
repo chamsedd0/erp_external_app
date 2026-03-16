@@ -127,7 +127,7 @@ export const odooClient = {
                     model,
                     'fields_get',
                     [],
-                    { attributes: ['string', 'help', 'type', 'required', 'selection'] }
+                    { attributes: ['string', 'help', 'type', 'required', 'selection', 'relation'] }
                 ],
                 (error, fields) => {
                     if (error) {

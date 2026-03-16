@@ -78,30 +78,33 @@ export const requestMonitor = {
             console.error('Monitor failed to fetch leave/expense from Odoo:', error);
         }
 
-        // Helpdesk — Enterprise only, ignore errors gracefully
+        // Helpdesk — Enterprise only. Use silent=true so HTML-response errors
+        // (returned by Odoo SaaS when the module isn't installed) don't spam the console.
         try {
             const helpdeskResult = await odooClient.searchRead(
                 uid,
                 'helpdesk.ticket',
                 [['id', '>', 0]],
-                ['id', 'name', 'stage_id', 'create_date', 'partner_id']
+                ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
+                true  // silent — expected to fail when Helpdesk module not installed
             );
             helpdeskTickets = Array.isArray(helpdeskResult) ? helpdeskResult : [];
         } catch {
             // Helpdesk module not installed — skip silently
         }
 
-        // Maintenance — should always be available on Community
+        // Maintenance — use silent=true as well since it may not be installed on all instances
         try {
             const maintenanceResult = await odooClient.searchRead(
                 uid,
                 'maintenance.request',
                 [['employee_id', '=', employeeId]],
-                ['id', 'name', 'stage_id', 'create_date', 'maintenance_type']
+                ['id', 'name', 'stage_id', 'create_date', 'maintenance_type'],
+                true  // silent
             );
             maintenanceRequests = Array.isArray(maintenanceResult) ? maintenanceResult : [];
-        } catch (error) {
-            console.error('Monitor failed to fetch maintenance requests:', error);
+        } catch {
+            // Maintenance module not available — skip silently
         }
 
         // 3. Load Cache from Redis

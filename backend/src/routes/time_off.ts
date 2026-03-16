@@ -37,35 +37,55 @@ async function getLeaveTypeField(uid: number): Promise<string> {
     try {
         const schema: any = await odooClient.getSchema(uid, 'hr.leave');
 
-        // Priority list of known field names across Odoo versions
+        // ── Step 1: Check known candidate names (fast path) ───────────────────
         const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id'];
         for (const name of candidates) {
             if (schema[name]) {
                 _leaveTypeField = name;
-                console.log(`[time_off] Detected leave type field: "${name}"`);
+                console.log(`[time_off] Detected leave type field (name match): "${name}"`);
                 return name;
             }
         }
 
-        // Fallback: find any Many2one field whose name contains 'leave'/'holiday' + 'type'/'status'
+        // ── Step 2: Find by relation → 'hr.leave.type' ────────────────────────
+        // This is the most reliable method and works regardless of field name.
+        // Requires 'relation' attribute in getSchema (now included).
+        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
+            if (def.type === 'many2one' && def.relation === 'hr.leave.type') {
+                _leaveTypeField = fieldName;
+                console.log(`[time_off] Detected leave type field (relation match): "${fieldName}"`);
+                return fieldName;
+            }
+        }
+
+        // ── Step 3: Broad name-pattern scan ───────────────────────────────────
+        // Catches names like time_off_type_id, leave_policy_id, etc.
         for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
             if (
                 def.type === 'many2one' &&
-                (fieldName.includes('leave') || fieldName.includes('holiday')) &&
-                (fieldName.includes('type') || fieldName.includes('status'))
+                (fieldName.includes('leave') || fieldName.includes('holiday') || fieldName.includes('time_off')) &&
+                (fieldName.includes('type') || fieldName.includes('status') || fieldName.includes('policy'))
             ) {
                 _leaveTypeField = fieldName;
-                console.log(`[time_off] Detected leave type field via schema scan: "${fieldName}"`);
+                console.log(`[time_off] Detected leave type field (pattern scan): "${fieldName}"`);
                 return fieldName;
+            }
+        }
+
+        // ── Debug: log all Many2one fields so admins can identify the correct name
+        console.warn('[time_off] Could not auto-detect leave type field. All Many2one fields on hr.leave:');
+        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
+            if ((def as any).type === 'many2one') {
+                console.warn(`  [time_off]   field="${fieldName}"  relation="${(def as any).relation || '?'}"`);
             }
         }
     } catch (e) {
         console.warn('[time_off] Could not detect leave type field from schema:', e);
     }
 
-    // Hard fallback — safe for most versions
+    // Final fallback — still try holiday_status_id but log clearly that detection failed
     _leaveTypeField = 'holiday_status_id';
-    console.warn(`[time_off] Leave type field detection failed, defaulting to "holiday_status_id"`);
+    console.warn('[time_off] Leave type field detection failed. Add the correct field name to the candidates list above.');
     return _leaveTypeField;
 }
 
