@@ -109,7 +109,7 @@ export default function NewRequest() {
         try {
             await apiClient.createTimeOffRequest({
                 employee_id: user.id,
-                holiday_status_id: holidayStatusId,
+                leave_type_id: holidayStatusId,
                 date_from: dateFrom.toISOString().split('T')[0],
                 date_to: dateTo.toISOString().split('T')[0],
                 name: reason,

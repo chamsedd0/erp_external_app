@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { apiClient } from '../api/client';
 
 interface AuthContextType {
@@ -73,6 +74,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const registerPushToken = async (employeeId: number) => {
         try {
             if (!Device.isDevice) return; // Skip emulator / simulator
+
+            // Resolve EAS projectId — required by getExpoPushTokenAsync.
+            // This is set automatically once you run `eas init` and it adds
+            // extra.eas.projectId to app.json.
+            const projectId =
+                Constants.expoConfig?.extra?.eas?.projectId ??
+                (Constants as any).easConfig?.projectId;
+
+            if (!projectId) {
+                console.log('Push notifications: no EAS projectId in app.json yet — skipping token registration. Run `eas init` to enable.');
+                return;
+            }
+
             const { status: existingStatus } = await Notifications.getPermissionsAsync();
             let finalStatus = existingStatus;
             if (existingStatus !== 'granted') {
@@ -80,7 +94,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 finalStatus = status;
             }
             if (finalStatus !== 'granted') return;
-            const tokenData = await Notifications.getExpoPushTokenAsync();
+
+            const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
             await apiClient.savePushToken(employeeId, tokenData.data);
         } catch (error) {
             // Push registration is non-critical — log but don't block sign-in

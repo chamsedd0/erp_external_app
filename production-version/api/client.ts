@@ -60,7 +60,7 @@ export const apiClient = {
 
     createTimeOffRequest: (data: {
         employee_id: number;
-        holiday_status_id: number;
+        leave_type_id: number;  // renamed from holiday_status_id in Odoo 17+
         date_from: string;
         date_to: string;
         name?: string;

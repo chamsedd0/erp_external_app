@@ -15,7 +15,7 @@ const attachmentSchema = z.object({
 // Validation Schema for Time Off Request
 const createLeaveSchema = z.object({
     employee_id: z.number(),
-    holiday_status_id: z.number(), // Leave Type ID
+    leave_type_id: z.number(), // Leave Type ID (renamed from holiday_status_id in Odoo 17+)
     date_from: z.string(), // ISO String
     date_to: z.string(),   // ISO String
     name: z.string().optional(), // Description / reason
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
             uid,
             'hr.leave',
             [['employee_id', '=', parseInt(employeeId as string)]],
-            ['id', 'name', 'holiday_status_id', 'date_from', 'date_to', 'number_of_days', 'state', 'create_date']
+            ['id', 'name', 'leave_type_id', 'date_from', 'date_to', 'number_of_days', 'state', 'create_date']
         );
         res.json({ leaves });
     } catch (error: any) {
@@ -76,11 +76,11 @@ router.post('/', async (req, res) => {
 
         const newLeaveId = await odooClient.createRecord(uid, 'hr.leave', {
             employee_id: body.employee_id,
-            holiday_status_id: body.holiday_status_id,
+            leave_type_id: body.leave_type_id,
             date_from: formatDatetime(body.date_from),
             date_to: formatDatetime(body.date_to),
             name: body.name || 'Time Off Request from Portal',
-            request_date_from: body.date_from.split('T')[0], // Odoo often needs these for day-based counts
+            request_date_from: body.date_from.split('T')[0],
             request_date_to: body.date_to.split('T')[0],
         });
 

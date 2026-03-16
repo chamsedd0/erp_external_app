@@ -164,7 +164,7 @@ export const odooClient = {
         });
     },
 
-    searchRead: async (uid: number, model: string, domain: any[], fields: string[]) => {
+    searchRead: async (uid: number, model: string, domain: any[], fields: string[], silent = false) => {
         return new Promise((resolve, reject) => {
             objectClient.methodCall(
                 'execute_kw',
@@ -179,7 +179,8 @@ export const odooClient = {
                 ],
                 (error, records) => {
                     if (error) {
-                        console.error(`SearchRead Error (${model}):`, error);
+                        // silent=true suppresses noise for expected failures (e.g. module not installed)
+                        if (!silent) console.error(`SearchRead Error (${model}):`, error);
                         reject(error);
                     } else {
                         resolve(records);

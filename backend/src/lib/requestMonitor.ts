@@ -64,7 +64,7 @@ export const requestMonitor = {
             const [leavesResult, expensesResult] = await Promise.all([
                 odooClient.searchRead(uid, 'hr.leave',
                     [['employee_id', '=', employeeId]],
-                    ['id', 'name', 'state', 'date_from', 'date_to', 'holiday_status_id']
+                    ['id', 'name', 'state', 'date_from', 'date_to']
                 ),
                 odooClient.searchRead(uid, 'hr.expense',
                     [['employee_id', '=', employeeId]],

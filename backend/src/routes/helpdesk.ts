@@ -19,7 +19,9 @@ export const attachmentSchema = z.object({
  */
 const isHelpdeskAvailable = async (uid: number): Promise<boolean> => {
     try {
-        await odooClient.searchRead(uid, 'helpdesk.ticket', [['id', '=', 0]], ['id']);
+        // silent=true: Odoo SaaS returns HTML (not an XML-RPC fault) when the module is missing,
+        // which would otherwise flood the console with "Unknown XML-RPC tag 'TITLE'" errors.
+        await odooClient.searchRead(uid, 'helpdesk.ticket', [['id', '=', 0]], ['id'], true);
         return true;
     } catch {
         return false;
