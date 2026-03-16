@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { odooClient } from '../odoo/client';
-import { config } from '../config';
 
 const router = Router();
 
@@ -13,14 +12,64 @@ const attachmentSchema = z.object({
 });
 
 // Validation Schema for Time Off Request
+// We accept the field as `leave_type_id` from the frontend regardless of what
+// Odoo calls it internally — the actual Odoo field name is resolved at runtime below.
 const createLeaveSchema = z.object({
     employee_id: z.number(),
-    leave_type_id: z.number(), // Leave Type ID (renamed from holiday_status_id in Odoo 17+)
-    date_from: z.string(), // ISO String
-    date_to: z.string(),   // ISO String
-    name: z.string().optional(), // Description / reason
-    attachments: z.array(attachmentSchema).max(3).optional(), // Supporting documents
+    leave_type_id: z.number(), // Leave Type ID — frontend always sends this key
+    date_from: z.string(),     // ISO String
+    date_to: z.string(),       // ISO String
+    name: z.string().optional(),
+    attachments: z.array(attachmentSchema).max(3).optional(),
 });
+
+// ── Leave-type field detection ────────────────────────────────────────────────
+// Odoo has renamed the leave type Many2one field across versions:
+//   v14–v16  → holiday_status_id
+//   v17+     → may be holiday_status_id, leave_type_id, or something else
+// We detect the correct name once from the model schema and cache it.
+
+let _leaveTypeField: string | null = null;
+
+async function getLeaveTypeField(uid: number): Promise<string> {
+    if (_leaveTypeField) return _leaveTypeField;
+
+    try {
+        const schema: any = await odooClient.getSchema(uid, 'hr.leave');
+
+        // Priority list of known field names across Odoo versions
+        const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id'];
+        for (const name of candidates) {
+            if (schema[name]) {
+                _leaveTypeField = name;
+                console.log(`[time_off] Detected leave type field: "${name}"`);
+                return name;
+            }
+        }
+
+        // Fallback: find any Many2one field whose name contains 'leave'/'holiday' + 'type'/'status'
+        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
+            if (
+                def.type === 'many2one' &&
+                (fieldName.includes('leave') || fieldName.includes('holiday')) &&
+                (fieldName.includes('type') || fieldName.includes('status'))
+            ) {
+                _leaveTypeField = fieldName;
+                console.log(`[time_off] Detected leave type field via schema scan: "${fieldName}"`);
+                return fieldName;
+            }
+        }
+    } catch (e) {
+        console.warn('[time_off] Could not detect leave type field from schema:', e);
+    }
+
+    // Hard fallback — safe for most versions
+    _leaveTypeField = 'holiday_status_id';
+    console.warn(`[time_off] Leave type field detection failed, defaulting to "holiday_status_id"`);
+    return _leaveTypeField;
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET / - Fetch employee's time-off requests
 router.get('/', async (req, res) => {
@@ -31,13 +80,21 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await odooClient.authenticate();
+        const leaveTypeField = await getLeaveTypeField(uid);
+
         const leaves: any = await odooClient.searchRead(
             uid,
             'hr.leave',
             [['employee_id', '=', parseInt(employeeId as string)]],
-            ['id', 'name', 'leave_type_id', 'date_from', 'date_to', 'number_of_days', 'state', 'create_date']
+            ['id', 'name', leaveTypeField, 'date_from', 'date_to', 'number_of_days', 'state', 'create_date']
         );
-        res.json({ leaves });
+
+        // Normalise: always expose the leave type under a stable key for the frontend
+        const normalised = Array.isArray(leaves)
+            ? leaves.map((l: any) => ({ ...l, leave_type_id: l[leaveTypeField] ?? null }))
+            : leaves;
+
+        res.json({ leaves: normalised });
     } catch (error: any) {
         console.error('Fetch Leaves Error:', error);
         res.status(500).json({ error: error.message });
@@ -48,11 +105,10 @@ router.get('/', async (req, res) => {
 router.get('/types', async (req, res) => {
     try {
         const uid = await odooClient.authenticate();
-        // Fetch all leave types
         const types: any = await odooClient.searchRead(
             uid,
             'hr.leave.type',
-            [], // All records
+            [],
             ['id', 'name', 'requires_allocation', 'request_unit']
         );
         res.json({ types });
@@ -65,18 +121,15 @@ router.get('/types', async (req, res) => {
 // POST / - Create Time Off Request
 router.post('/', async (req, res) => {
     try {
-        // In a real app, we'd extract employee_id from the JWT token.
-        // For now, we trust the frontend to send the ID of the logged-in employee.
         const body = createLeaveSchema.parse(req.body);
-
         const uid = await odooClient.authenticate();
+        const leaveTypeField = await getLeaveTypeField(uid);
 
-        // Convert ISO datetime to Odoo format (YYYY-MM-DD HH:MM:SS)
         const formatDatetime = (isoString: string) => isoString.replace('T', ' ').substring(0, 19);
 
         const newLeaveId = await odooClient.createRecord(uid, 'hr.leave', {
             employee_id: body.employee_id,
-            leave_type_id: body.leave_type_id,
+            [leaveTypeField]: body.leave_type_id,   // use detected field name
             date_from: formatDatetime(body.date_from),
             date_to: formatDatetime(body.date_to),
             name: body.name || 'Time Off Request from Portal',
@@ -84,13 +137,11 @@ router.post('/', async (req, res) => {
             request_date_to: body.date_to.split('T')[0],
         });
 
-        // Upload supporting documents if provided (e.g. medical certificate)
         if (body.attachments && body.attachments.length > 0) {
             try {
                 await odooClient.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId as number);
             } catch (attachError: any) {
                 console.error('Leave attachment upload error:', attachError);
-                // Don't fail the whole request for attachment errors
             }
         }
 
