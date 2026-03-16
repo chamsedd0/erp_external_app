@@ -86,7 +86,12 @@ router.get('/', async (req, res) => {
             uid,
             'hr.leave',
             [['employee_id', '=', parseInt(employeeId as string)]],
-            ['id', 'name', leaveTypeField, 'date_from', 'date_to', 'number_of_days', 'state', 'create_date']
+            [
+                'id', 'name', leaveTypeField,
+                'date_from', 'date_to',
+                'request_date_from', 'request_date_to',   // date-only fields for display
+                'number_of_days', 'state', 'create_date', 'employee_id',
+            ]
         );
 
         // Normalise: always expose the leave type under a stable key for the frontend
@@ -105,16 +110,19 @@ router.get('/', async (req, res) => {
 router.get('/types', async (req, res) => {
     try {
         const uid = await odooClient.authenticate();
+        // Only request id + name — other fields (requires_allocation, request_unit) were
+        // renamed/restructured in Odoo 17+ and are not needed by the frontend anyway.
         const types: any = await odooClient.searchRead(
             uid,
             'hr.leave.type',
             [],
-            ['id', 'name', 'requires_allocation', 'request_unit']
+            ['id', 'name']
         );
-        res.json({ types });
+        res.json({ types: Array.isArray(types) ? types : [] });
     } catch (error: any) {
         console.error('Fetch Leave Types Error:', error);
-        res.status(500).json({ error: error.message });
+        // Return empty list instead of 500 so the frontend can still function
+        res.json({ types: [], error: error.message });
     }
 });
 

@@ -130,17 +130,14 @@ router.post('/', async (req, res) => {
 
         const project = projects[0];
 
-        // analytic_account_id may be a [id, name] tuple or false
+        // analytic_account_id may be a [id, name] tuple, a plain number, or false.
+        // In Odoo 17+ this field is not always auto-populated on projects —
+        // we attempt to set it but do NOT block submission if it's absent.
+        // Odoo 17+ hr_timesheet can derive the account from project_id at write time.
         const analyticAccountId =
             Array.isArray(project.analytic_account_id)
                 ? project.analytic_account_id[0]
-                : project.analytic_account_id || false;
-
-        if (!analyticAccountId) {
-            return res.status(400).json({
-                error: 'This project does not have an analytic account configured in Odoo. Please contact your administrator.',
-            });
-        }
+                : (typeof project.analytic_account_id === 'number' ? project.analytic_account_id : false);
 
         const recordData: Record<string, any> = {
             name: body.name,
@@ -148,8 +145,12 @@ router.post('/', async (req, res) => {
             project_id: body.project_id,
             date: body.date,
             unit_amount: body.unit_amount,
-            account_id: analyticAccountId, // required field in account.analytic.line
         };
+
+        // Only include account_id when we can resolve it — Odoo 17+ may auto-compute it
+        if (analyticAccountId) {
+            recordData.account_id = analyticAccountId;
+        }
 
         if (body.task_id) {
             recordData.task_id = body.task_id;

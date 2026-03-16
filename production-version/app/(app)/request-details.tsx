@@ -122,7 +122,7 @@ export default function RequestDetails() {
     const titleForRequest = () => {
         if (!request) return '';
         switch (type) {
-            case 'timeoff': return request.holiday_status_id?.[1] || 'Leave';
+            case 'timeoff': return request.leave_type_id?.[1] || 'Leave';
             case 'expense': return request.name || 'Expense';
             case 'timesheet': return request.name || 'Work Entry';
             case 'helpdesk': return request.name || 'Support Ticket';

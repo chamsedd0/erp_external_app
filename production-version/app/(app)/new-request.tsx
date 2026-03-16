@@ -76,20 +76,21 @@ export default function NewRequest() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
+            // Each call has its own .catch() so a single failure does not block the rest
             const [typesData, productsData, teamsData, categoriesData] = await Promise.all([
-                apiClient.getTimeOffTypes(),
-                apiClient.getExpenseProducts(),
-                apiClient.getHelpdeskTeams().catch(() => ({ available: false, teams: [] })),
-                apiClient.getMaintenanceCategories().catch(() => ({ categories: [] })),
+                apiClient.getTimeOffTypes().catch(() => ({ types: [] as any[] })),
+                apiClient.getExpenseProducts().catch(() => ({ products: [] as any[] })),
+                apiClient.getHelpdeskTeams().catch(() => ({ available: false, teams: [] as any[] })),
+                apiClient.getMaintenanceCategories().catch(() => ({ categories: [] as any[] })),
             ]);
-            setLeaveTypes(typesData.types || []);
-            setExpenseProducts(productsData.products || []);
-            if (teamsData.available === false) {
+            setLeaveTypes((typesData as any).types || []);
+            setExpenseProducts((productsData as any).products || []);
+            if ((teamsData as any).available === false) {
                 setHelpdeskAvailable(false);
             } else {
-                setHelpdeskTeams(teamsData.teams || []);
+                setHelpdeskTeams((teamsData as any).teams || []);
             }
-            setMaintenanceCategories(categoriesData.categories || []);
+            setMaintenanceCategories((categoriesData as any).categories || []);
         } catch (error) {
             toast.error('Failed to fetch form data. Please check your connection.');
         } finally {

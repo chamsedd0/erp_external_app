@@ -67,17 +67,56 @@ router.get('/pending', async (req, res) => {
 router.get('/products', async (req, res) => {
     try {
         const uid = await odooClient.authenticate();
-        // Fetch products that can be expensed
-        const products: any = await odooClient.searchRead(
-            uid,
-            'product.product',
-            [['can_be_expensed', '=', true]],
-            ['id', 'name', 'standard_price']
-        );
+
+        let products: any[] = [];
+
+        // ── Attempt 1: product.product with can_be_expensed filter ─────────────
+        // This is the ideal query but can fail on some Odoo versions if the field
+        // is not stored/searchable on product.product directly.
+        try {
+            const result: any = await odooClient.searchRead(
+                uid,
+                'product.product',
+                [['can_be_expensed', '=', true]],
+                ['id', 'name', 'standard_price']
+            );
+            products = Array.isArray(result) ? result : [];
+        } catch (e) {
+            console.warn('product.product can_be_expensed query failed, trying product.template fallback:', e);
+        }
+
+        // ── Attempt 2: product.template fallback ────────────────────────────────
+        // In some Odoo versions can_be_expensed lives on product.template only.
+        // We map each template to its first product variant (product.product).
+        if (products.length === 0) {
+            try {
+                const templates: any = await odooClient.searchRead(
+                    uid,
+                    'product.template',
+                    [['can_be_expensed', '=', true]],
+                    ['id', 'name', 'standard_price', 'product_variant_ids']
+                );
+                if (Array.isArray(templates)) {
+                    products = templates
+                        .filter((t: any) =>
+                            Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0
+                        )
+                        .map((t: any) => ({
+                            id: t.product_variant_ids[0],
+                            name: t.name,
+                            standard_price: t.standard_price,
+                        }));
+                }
+            } catch (e) {
+                console.warn('product.template fallback also failed:', e);
+            }
+        }
+
         res.json({ products });
     } catch (error: any) {
         console.error('Fetch Expense Products Error:', error);
-        res.status(500).json({ error: error.message });
+        // Return empty list instead of 500 so the frontend still renders
+        res.json({ products: [], error: error.message });
     }
 });
 
