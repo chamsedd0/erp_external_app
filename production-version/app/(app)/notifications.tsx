@@ -130,14 +130,18 @@ export default function Notifications() {
     const groupNotifications = (notifs: Notification[]) => {
         const groups: { [key: string]: Notification[] } = {};
 
+        // Compute today and yesterday ONCE outside the loop to avoid date mutation bugs
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
         notifs.forEach(n => {
             const date = new Date(n.timestamp);
-            const now = new Date();
             let key = 'Earlier';
 
-            if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+            if (date.toDateString() === today.toDateString()) {
                 key = 'Today';
-            } else if (new Date(now.setDate(now.getDate() - 1)).toDateString() === date.toDateString()) {
+            } else if (date.toDateString() === yesterday.toDateString()) {
                 key = 'Yesterday';
             }
 

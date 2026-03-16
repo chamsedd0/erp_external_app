@@ -70,6 +70,10 @@ router.get('/', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
 
         const uid = await odooClient.authenticate();
 
@@ -83,7 +87,7 @@ router.get('/', async (req, res) => {
             requests = await odooClient.searchRead(
                 uid,
                 'maintenance.request',
-                [['employee_id', '=', parseInt(employeeId as string)]],
+                [['employee_id', '=', parsedEmployeeId]],
                 ['id', 'name', 'description', 'stage_id', 'category_id', 'maintenance_type', 'create_date', 'request_date']
             );
         } catch {
@@ -91,7 +95,7 @@ router.get('/', async (req, res) => {
             requests = await odooClient.searchRead(
                 uid,
                 'maintenance.request',
-                [['employee_id', '=', parseInt(employeeId as string)]],
+                [['employee_id', '=', parsedEmployeeId]],
                 ['id', 'name', 'stage_id', 'category_id', 'maintenance_type', 'create_date']
             );
         }

@@ -1,14 +1,29 @@
 import { Tabs, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Platform, TextInput, Pressable } from 'react-native';
 import { Home, Plus, User, Bell, Search } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColor } from '../../hooks/useColor';
 import * as Notifications from 'expo-notifications';
+import { useSession } from '../../providers/auth-context';
+import { apiClient } from '../../api/client';
 
 export default function AppLayout() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { user } = useSession();
+    const [hasUnread, setHasUnread] = useState(false);
+
+    // Fetch unread notification count on mount — badge dot only shown when > 0
+    useEffect(() => {
+        if (!user?.id) return;
+        apiClient.getNotifications(user.id)
+            .then((data: any) => {
+                const unread = (data.notifications || []).filter((n: any) => !n.read);
+                setHasUnread(unread.length > 0);
+            })
+            .catch(() => {});
+    }, [user?.id]);
 
     // Handle notification taps → navigate to the relevant request detail screen
     useEffect(() => {

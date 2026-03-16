@@ -85,6 +85,11 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
 
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
+
         const uid = await odooClient.authenticate();
         let leaveTypeField = await getLeaveTypeField(uid);
 
@@ -94,7 +99,7 @@ router.get('/', async (req, res) => {
             'request_date_from', 'request_date_to',
             'number_of_days', 'state', 'create_date', 'employee_id',
         ];
-        const domain = [['employee_id', '=', parseInt(employeeId as string)]];
+        const domain = [['employee_id', '=', parsedEmployeeId]];
 
         let leaves: any;
         try {
@@ -137,17 +142,19 @@ router.get('/types', async (req, res) => {
         const uid = await odooClient.authenticate();
         // Only request id + name — other fields (requires_allocation, request_unit) were
         // renamed/restructured in Odoo 17+ and are not needed by the frontend anyway.
+        // silent=true: prevent TITLE/HTML noise in console if module has issues
         const types: any = await odooClient.searchRead(
             uid,
             'hr.leave.type',
             [],
-            ['id', 'name']
+            ['id', 'name'],
+            true
         );
         res.json({ types: Array.isArray(types) ? types : [] });
-    } catch (error: any) {
-        console.error('Fetch Leave Types Error:', error);
-        // Return empty list instead of 500 so the frontend can still function
-        res.json({ types: [], error: error.message });
+    } catch {
+        // hr.leave.type may not be accessible (module issue, SaaS restriction, etc.)
+        // Return empty list so the frontend can still render the form
+        res.json({ types: [], available: false });
     }
 });
 

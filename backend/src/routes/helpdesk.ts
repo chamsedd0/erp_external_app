@@ -85,11 +85,16 @@ router.get('/', async (req, res) => {
             return res.json({ available: false, tickets: [] });
         }
 
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
+
         // Get the employee's partner_id to filter tickets
         const employees: any = await odooClient.searchRead(
             uid,
             'hr.employee',
-            [['id', '=', parseInt(employeeId as string)]],
+            [['id', '=', parsedEmployeeId]],
             ['id', 'name', 'user_id']
         );
 
@@ -115,8 +120,12 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // If we can't link by partner, fetch all tickets created recently for context
-        // (fallback: empty domain shows all — restrict by create_uid if needed)
+        // If we can't resolve a partner_id, return an empty list rather than
+        // accidentally leaking every ticket in the company.
+        if (domain.length === 0) {
+            return res.json({ available: true, tickets: [] });
+        }
+
         const tickets: any = await odooClient.searchRead(
             uid,
             'helpdesk.ticket',

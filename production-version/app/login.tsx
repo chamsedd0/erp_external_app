@@ -35,7 +35,12 @@ export default function Login() {
             await signIn(data.token, data.user);
             router.replace('/(app)/dashboard');
         } catch (error: any) {
-            toast.error(error.message || 'Login failed. Please check your credentials.');
+            const msg: string = error?.message || '';
+            if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('failed to fetch')) {
+                toast.error('Connection error. Please check your internet connection.');
+            } else {
+                toast.error('Login failed. Please check your Employee ID and PIN.');
+            }
         } finally {
             setLoading(false);
         }

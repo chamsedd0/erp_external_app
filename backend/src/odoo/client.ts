@@ -14,6 +14,13 @@ const objectClient = xmlrpc.createSecureClient({
 // ──────────────────────────────────────────────────────────────────────────────
 let _odooMajorVersion: number = 0;
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Odoo Admin UID Cache — avoid a fresh XML-RPC authenticate call on every request
+// ──────────────────────────────────────────────────────────────────────────────
+let _cachedUid: number | null = null;
+let _uidCachedAt: number = 0;
+const UID_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 /** Returns the Odoo major version integer (e.g. 14, 16, 17). Cached after first call. */
 export const getOdooVersion = async (): Promise<number> => {
     if (_odooMajorVersion > 0) return _odooMajorVersion;
@@ -34,6 +41,10 @@ export const getOdooVersion = async (): Promise<number> => {
 
 export const odooClient = {
     authenticate: async (): Promise<number> => {
+        const now = Date.now();
+        if (_cachedUid && now - _uidCachedAt < UID_TTL_MS) {
+            return _cachedUid;
+        }
         return new Promise((resolve, reject) => {
             commonClient.methodCall(
                 'authenticate',
@@ -45,6 +56,8 @@ export const odooClient = {
                     } else if (!uid) {
                         reject(new Error('Authentication failed (uid is false)'));
                     } else {
+                        _cachedUid = uid as number;
+                        _uidCachedAt = Date.now();
                         resolve(uid as number);
                     }
                 }

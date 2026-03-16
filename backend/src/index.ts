@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import jwt from 'jsonwebtoken';
 import { config } from './config';
 import { authRouter } from './routes/auth';
 import { timeOffRouter } from './routes/time_off';
@@ -13,7 +14,8 @@ import rateLimit from 'express-rate-limit';
 
 const app = express();
 
-app.use(cors());
+// Allow Authorization header in cross-origin requests (required for JWT)
+app.use(cors({ allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Increase JSON payload limit to support base64 attachments (up to 3 × 5 MB ≈ 15 MB)
 app.use(express.json({ limit: '20mb' }));
 
@@ -44,6 +46,25 @@ const limiter = rateLimit({
     legacyHeaders: false,
 });
 app.use(limiter);
+
+// ── JWT Middleware ─────────────────────────────────────────────────────────────
+// All routes except /auth/* require a valid JWT. Auth routes are self-managing
+// (login issues the token; push-token registration happens right after login).
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith('/auth/')) {
+        return next();
+    }
+    const token = (req.headers.authorization ?? '').split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    try {
+        (req as any).jwtPayload = jwt.verify(token, config.jwtSecret);
+        next();
+    } catch {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRouter);

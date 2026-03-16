@@ -6,6 +6,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Search as SearchIcon, X, Clock, DollarSign, ChevronRight, ChevronLeft, Filter } from 'lucide-react-native';
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
+import { useToast } from '../../providers/toast-context';
 
 type RequestType = 'all' | 'timeoff' | 'expense';
 type DateFilter = 'all' | 'this_month' | 'last_month';
@@ -21,6 +22,7 @@ export default function Search() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const { user } = useSession();
+    const toast = useToast();
 
     const background = useColor('background');
     const text = useColor('text');
@@ -116,6 +118,7 @@ export default function Search() {
             setResults(filtered);
         } catch (error) {
             console.error(error);
+            toast.error('Could not load results. Please try again.');
         } finally {
             setLoading(false);
         }

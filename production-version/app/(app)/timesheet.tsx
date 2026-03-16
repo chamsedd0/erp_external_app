@@ -106,8 +106,8 @@ export default function Timesheet() {
             const data = await apiClient.getTasks(id);
             setTasks(data.tasks || []);
         } catch (error) {
-            // Tasks are optional — some projects have none
             setTasks([]);
+            toast.error('Could not load tasks for this project.');
         } finally {
             setTasksLoading(false);
         }

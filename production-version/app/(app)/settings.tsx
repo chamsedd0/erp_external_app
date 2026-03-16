@@ -3,8 +3,11 @@ import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Moon, Sun, Bell, Globe, Shield, Database, LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../../providers/toast-context';
+import { useSession } from '../../providers/auth-context';
+import { apiClient } from '../../api/client';
 
 type ToggleItem = {
     icon: LucideIcon;
@@ -27,6 +30,7 @@ type SettingsItem = ToggleItem | NavigationItem;
 export default function Settings() {
     const router = useRouter();
     const toast = useToast();
+    const { user } = useSession();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [emailNotifications, setEmailNotifications] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -35,8 +39,35 @@ export default function Settings() {
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
 
+    // Load persisted settings on mount
+    useEffect(() => {
+        AsyncStorage.multiGet(['setting_push_notifications', 'setting_email_notifications'])
+            .then(([[, pushVal], [, emailVal]]) => {
+                if (pushVal !== null) setNotificationsEnabled(pushVal === 'true');
+                if (emailVal !== null) setEmailNotifications(emailVal === 'true');
+            })
+            .catch(() => {});
+    }, []);
+
     const handleToggle = (setting: string, value: boolean) => {
         toast.success(`${setting} ${value ? 'enabled' : 'disabled'}`);
+    };
+
+    // Push notifications: persist preference and remove token when disabling
+    const handlePushToggle = (val: boolean) => {
+        setNotificationsEnabled(val);
+        AsyncStorage.setItem('setting_push_notifications', String(val)).catch(() => {});
+        if (!val && user?.id) {
+            apiClient.deletePushToken(user.id).catch(() => {});
+        }
+        handleToggle('Push notifications', val);
+    };
+
+    // Email notifications: persist preference only (no backend action needed)
+    const handleEmailToggle = (val: boolean) => {
+        setEmailNotifications(val);
+        AsyncStorage.setItem('setting_email_notifications', String(val)).catch(() => {});
+        handleToggle('Email notifications', val);
     };
 
     const onRefresh = () => {
@@ -53,20 +84,14 @@ export default function Settings() {
                     label: 'Push Notifications',
                     type: 'toggle' as const,
                     value: notificationsEnabled,
-                    onToggle: (val: boolean) => {
-                        setNotificationsEnabled(val);
-                        handleToggle('Push notifications', val);
-                    },
+                    onToggle: handlePushToggle,
                 },
                 {
                     icon: Bell,
                     label: 'Email Notifications',
                     type: 'toggle' as const,
                     value: emailNotifications,
-                    onToggle: (val: boolean) => {
-                        setEmailNotifications(val);
-                        handleToggle('Email notifications', val);
-                    },
+                    onToggle: handleEmailToggle,
                 },
             ],
         },

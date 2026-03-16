@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { apiClient } from '../api/client';
+import { apiClient, setUnauthorizedHandler } from '../api/client';
 
 interface AuthContextType {
     signIn: (token: string, user: any) => Promise<void>;
@@ -140,6 +140,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setIsNewUser(false);
         await AsyncStorage.setItem('is_new_user', 'false');
     };
+
+    // ── Unauthorized handler (5F) ──────────────────────────────────────────────
+    // Register a callback in apiFetch so any 401 response automatically signs
+    // the user out and redirects them to the login screen.
+    // useRef ensures the handler always calls the latest signOut closure without
+    // needing to re-register on every render.
+    const signOutRef = useRef(signOut);
+    signOutRef.current = signOut;
+
+    useEffect(() => {
+        setUnauthorizedHandler(() => {
+            signOutRef.current();
+        });
+    }, []);
 
     return (
         <AuthContext.Provider

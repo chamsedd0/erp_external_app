@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants';
 
 // ── Shared Types ──────────────────────────────────────────────────────────────
@@ -8,16 +9,37 @@ export interface Attachment {
     mimetype: string; // e.g. 'image/jpeg', 'application/pdf'
 }
 
+// ── Unauthorized handler ──────────────────────────────────────────────────────
+// Registered by SessionProvider so apiFetch can trigger a sign-out on 401.
+
+let _onUnauthorized: (() => void) | null = null;
+
+export const setUnauthorizedHandler = (handler: () => void) => {
+    _onUnauthorized = handler;
+};
+
 // ── Generic fetch helper ──────────────────────────────────────────────────────
 
 async function apiFetch<T = any>(
     path: string,
     options?: RequestInit
 ): Promise<T> {
+    const token = await AsyncStorage.getItem('user_token').catch(() => null);
+
     const response = await fetch(`${API_URL}${path}`, {
-        headers: { 'Content-Type': 'application/json' },
         ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(options?.headers as Record<string, string> || {}),
+        },
     });
+
+    if (response.status === 401) {
+        _onUnauthorized?.();
+        throw new Error('Session expired. Please log in again.');
+    }
+
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(error.error || `Request failed (${response.status})`);

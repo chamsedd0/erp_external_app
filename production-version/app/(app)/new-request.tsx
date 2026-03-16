@@ -83,14 +83,23 @@ export default function NewRequest() {
                 apiClient.getHelpdeskTeams().catch(() => ({ available: false, teams: [] as any[] })),
                 apiClient.getMaintenanceCategories().catch(() => ({ categories: [] as any[] })),
             ]);
-            setLeaveTypes((typesData as any).types || []);
-            setExpenseProducts((productsData as any).products || []);
+            const types = (typesData as any).types || [];
+            const products = (productsData as any).products || [];
+            const categories = (categoriesData as any).categories || [];
+
+            setLeaveTypes(types);
+            setExpenseProducts(products);
             if ((teamsData as any).available === false) {
                 setHelpdeskAvailable(false);
             } else {
                 setHelpdeskTeams((teamsData as any).teams || []);
             }
-            setMaintenanceCategories((categoriesData as any).categories || []);
+            setMaintenanceCategories(categories);
+
+            // If all three main data sources came back empty, the API is likely unreachable
+            if (types.length === 0 && products.length === 0 && categories.length === 0) {
+                toast.error('Could not load form data. Please check your connection.');
+            }
         } catch (error) {
             toast.error('Failed to fetch form data. Please check your connection.');
         } finally {

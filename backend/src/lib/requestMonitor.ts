@@ -90,16 +90,38 @@ export const requestMonitor = {
         }
 
         // Helpdesk — Enterprise only, silent=true
+        // We must filter by the employee's partner_id to avoid leaking all company tickets.
+        // If we can't resolve the partner_id, skip helpdesk monitoring for this employee.
         try {
-            const result = await odooClient.searchRead(uid, 'helpdesk.ticket',
-                [['id', '>', 0]],
-                ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
+            const empResult: any = await odooClient.searchRead(uid, 'hr.employee',
+                [['id', '=', employeeId]],
+                ['id', 'user_id'],
                 true
             );
-            helpdeskTickets = Array.isArray(result) ? result : [];
-            fetched.helpdesk = true;
+            const emp = Array.isArray(empResult) ? empResult[0] : null;
+            if (emp && Array.isArray(emp.user_id) && emp.user_id[0]) {
+                const userResult: any = await odooClient.searchRead(uid, 'res.users',
+                    [['id', '=', emp.user_id[0]]],
+                    ['id', 'partner_id'],
+                    true
+                );
+                const partnerId = Array.isArray(userResult) && userResult[0]?.partner_id
+                    ? userResult[0].partner_id[0]
+                    : null;
+
+                if (partnerId) {
+                    const result = await odooClient.searchRead(uid, 'helpdesk.ticket',
+                        [['partner_id', '=', partnerId]],
+                        ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
+                        true
+                    );
+                    helpdeskTickets = Array.isArray(result) ? result : [];
+                    fetched.helpdesk = true;
+                }
+                // If no partner_id resolved, skip helpdesk — leave fetched.helpdesk = false
+            }
         } catch {
-            // Module not installed — skip silently
+            // Module not installed or employee has no linked user — skip silently
         }
 
         // Maintenance — may not be installed on all instances, silent=true

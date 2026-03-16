@@ -58,41 +58,6 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// SECURE: Debug routes disabled for production
-router.get('/debug', async (req, res) => {
-    try {
-        console.log('Testing Odoo Connection...');
-        const version = await odooClient.testConnection();
-        res.json({ status: 'success', odoo_version: version });
-    } catch (error: any) {
-        console.error('Debug Error:', error);
-        res.status(500).json({ status: 'error', message: error.message });
-    }
-});
-
-router.get('/employees', async (req, res) => {
-    try {
-        const uid = await odooClient.authenticate();
-        const employees = await odooClient.getAllEmployees(uid);
-        res.json({ count: (employees as any[]).length, employees });
-    } catch (error: any) {
-        console.error('Fetch Employees Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-router.get('/schema/:model', async (req, res) => {
-    try {
-        const { model } = req.params;
-        const uid = await odooClient.authenticate();
-        const schema = await odooClient.getSchema(uid, model);
-        res.json({ model, schema });
-    } catch (error: any) {
-        console.error(`Schema Error (${req.params.model}):`, error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // ── Push Notification Token Management ───────────────────────────────────────
 
 const pushTokenSchema = z.object({

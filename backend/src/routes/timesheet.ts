@@ -28,6 +28,10 @@ router.get('/', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
 
         const uid = await odooClient.authenticate();
 
@@ -37,7 +41,7 @@ router.get('/', async (req, res) => {
             uid,
             'account.analytic.line',
             [
-                ['employee_id', '=', parseInt(employeeId as string)],
+                ['employee_id', '=', parsedEmployeeId],
                 ['project_id', '!=', false],
             ],
             ['id', 'name', 'project_id', 'task_id', 'date', 'unit_amount', 'create_date']
@@ -86,13 +90,17 @@ router.get('/tasks', async (req, res) => {
         if (!projectId) {
             return res.status(400).json({ error: 'project_id query parameter required' });
         }
+        const parsedProjectId = parseInt(projectId as string);
+        if (isNaN(parsedProjectId)) {
+            return res.status(400).json({ error: 'Invalid project_id' });
+        }
 
         const uid = await odooClient.authenticate();
         const tasks: any = await odooClient.searchRead(
             uid,
             'project.task',
             [
-                ['project_id', '=', parseInt(projectId as string)],
+                ['project_id', '=', parsedProjectId],
                 ['active', '=', true],
             ],
             ['id', 'name']

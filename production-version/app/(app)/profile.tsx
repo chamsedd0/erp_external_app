@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { Button } from '../../components/ui/button';
 import { useColor } from '../../hooks/useColor';
@@ -12,7 +12,6 @@ export default function Profile() {
     const { user, signOut } = useSession();
     const router = useRouter();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
     const background = useColor('background');
     const text = useColor('text');
     const cardColor = useColor('card');
@@ -26,18 +25,10 @@ export default function Profile() {
         signOut();
     };
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        setTimeout(() => setRefreshing(false), 1000);
-    };
-
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: background }}
             contentContainerStyle={{ padding: 24, paddingBottom: 180 }}
-            refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
         >
             {/* Header / Avatar */}
             <View style={{ alignItems: 'center', marginBottom: 32, marginTop: 20 }}>

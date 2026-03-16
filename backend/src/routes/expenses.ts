@@ -29,12 +29,16 @@ router.get('/', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
         }
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
 
         const uid = await odooClient.authenticate();
         const expenses: any = await odooClient.searchRead(
             uid,
             'hr.expense',
-            [['employee_id', '=', parseInt(employeeId as string)]],
+            [['employee_id', '=', parsedEmployeeId]],
             ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
         );
         res.json({ expenses });
@@ -44,19 +48,27 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /pending - Fetch pending expenses (draft or reported)
+// GET /pending?employee_id=X - Fetch pending expenses (draft or reported) for an employee
 router.get('/pending', async (req, res) => {
     try {
+        const employeeId = req.query.employee_id;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'employee_id query parameter required' });
+        }
+        const id = parseInt(employeeId as string);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
+
         const uid = await odooClient.authenticate();
-        // Search for expenses in 'draft' or 'reported' state
-        // Note: 'approved' is NOT considered pending for the employee as per user request
         const expenses: any = await odooClient.searchRead(
             uid,
             'hr.expense',
-            [['state', 'in', ['draft', 'reported']]],
+            [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]],
             ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
         );
-        res.json({ requests: expenses });
+        // Response key is 'expenses' for consistency with GET /
+        res.json({ expenses });
     } catch (error: any) {
         console.error('Fetch Pending Expenses Error:', error);
         res.status(500).json({ error: error.message });

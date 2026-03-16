@@ -56,7 +56,7 @@ export default function RequestDetails() {
                 const data = await apiClient.getMaintenanceRequests(user.id);
                 list = data.requests || (Array.isArray(data) ? data : []);
             }
-            const found = list.find((r: any) => r.id === parseInt(id));
+            const found = list.find((r: any) => String(r.id) === String(id));
             setRequest(found || null);
         } catch (error) {
             console.error(error);

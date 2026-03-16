@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useCallback } from 'react';
-import { View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { ThemeProvider } from '../theme/theme-provider';
 import { SessionProvider, useSession } from '../providers/auth-context';
 import { ToastProvider } from '../providers/toast-context';
@@ -71,7 +71,7 @@ function InitialLayout() {
     if (isLoading) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                {/* Add a spinner or splash screen here */}
+                <ActivityIndicator size="large" />
             </View>
         );
     }
