@@ -114,30 +114,39 @@ router.post('/', async (req, res) => {
         const body = createTimesheetSchema.parse(req.body);
         const uid = await odooClient.authenticate();
 
-        // account.analytic.line requires 'account_id' (the analytic account).
-        // In Odoo timesheets the project's analytic account is used.
-        // We fetch it from project.project.
+        // Step 1: Verify the project exists using safe fields only.
         const projects: any = await odooClient.searchRead(
             uid,
             'project.project',
             [['id', '=', body.project_id]],
-            ['id', 'name', 'analytic_account_id']
+            ['id', 'name']
         );
 
         if (!Array.isArray(projects) || projects.length === 0) {
             return res.status(400).json({ error: 'Project not found' });
         }
 
-        const project = projects[0];
-
-        // analytic_account_id may be a [id, name] tuple, a plain number, or false.
-        // In Odoo 17+ this field is not always auto-populated on projects —
-        // we attempt to set it but do NOT block submission if it's absent.
-        // Odoo 17+ hr_timesheet can derive the account from project_id at write time.
-        const analyticAccountId =
-            Array.isArray(project.analytic_account_id)
-                ? project.analytic_account_id[0]
-                : (typeof project.analytic_account_id === 'number' ? project.analytic_account_id : false);
+        // Step 2: Try to resolve analytic_account_id (Odoo ≤16).
+        // In Odoo 17+ this field may not exist on project.project — the analytic account
+        // is derived automatically from project_id at write time by the hr_timesheet module.
+        // We use silent=true so an "Invalid field" error doesn't log noise in the console.
+        let analyticAccountId: number | false = false;
+        try {
+            const projectAccount: any = await odooClient.searchRead(
+                uid,
+                'project.project',
+                [['id', '=', body.project_id]],
+                ['id', 'analytic_account_id'],
+                true  // silent
+            );
+            if (Array.isArray(projectAccount) && projectAccount[0]) {
+                const a = projectAccount[0].analytic_account_id;
+                analyticAccountId = Array.isArray(a) ? a[0]
+                    : (typeof a === 'number' ? a : false);
+            }
+        } catch {
+            // Field doesn't exist on this Odoo version — skip silently
+        }
 
         const recordData: Record<string, any> = {
             name: body.name,

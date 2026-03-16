@@ -52,21 +52,25 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await odooClient.authenticate();
-        const requests: any = await odooClient.searchRead(
-            uid,
-            'maintenance.request',
-            [['employee_id', '=', parseInt(employeeId as string)]],
-            [
-                'id',
-                'name',
-                'description',
-                'stage_id',
-                'category_id',
-                'maintenance_type',
-                'create_date',
-                'request_date',
-            ]
-        );
+
+        // Fetch with full field list first; fall back to safe minimal fields if any field is rejected
+        let requests: any = [];
+        try {
+            requests = await odooClient.searchRead(
+                uid,
+                'maintenance.request',
+                [['employee_id', '=', parseInt(employeeId as string)]],
+                ['id', 'name', 'description', 'stage_id', 'category_id', 'maintenance_type', 'create_date', 'request_date']
+            );
+        } catch {
+            // One of the optional fields may not exist — retry with safe-only fields
+            requests = await odooClient.searchRead(
+                uid,
+                'maintenance.request',
+                [['employee_id', '=', parseInt(employeeId as string)]],
+                ['id', 'name', 'stage_id', 'category_id', 'maintenance_type', 'create_date']
+            );
+        }
 
         const sorted = Array.isArray(requests)
             ? requests
@@ -94,13 +98,20 @@ router.post('/', async (req, res) => {
         const body = createMaintenanceSchema.parse(req.body);
         const uid = await odooClient.authenticate();
 
+        // Core fields (stable across all Odoo versions with maintenance module)
         const recordData: Record<string, any> = {
             name: body.name,
             employee_id: body.employee_id,
             maintenance_type: body.maintenance_type,
-            description: body.description || '',
-            request_date: new Date().toISOString().split('T')[0], // today YYYY-MM-DD
         };
+
+        // request_date: standard field on maintenance.request (Odoo 12+)
+        recordData.request_date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        // description: HTML text field — only include if provided to avoid empty-value issues
+        if (body.description) {
+            recordData.description = body.description;
+        }
 
         if (body.category_id) {
             recordData.category_id = body.category_id;

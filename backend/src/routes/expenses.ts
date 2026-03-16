@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
             uid,
             'hr.expense',
             [['employee_id', '=', parseInt(employeeId as string)]],
-            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date', 'description']
+            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
         );
         res.json({ expenses });
     } catch (error: any) {
@@ -54,7 +54,7 @@ router.get('/pending', async (req, res) => {
             uid,
             'hr.expense',
             [['state', 'in', ['draft', 'reported']]],
-            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date', 'description']
+            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
         );
         res.json({ requests: expenses });
     } catch (error: any) {
@@ -153,21 +153,38 @@ router.post('/', async (req, res) => {
             ? companies[0].currency_id[0]
             : 1; // Default to currency ID 1 if not set
 
-        // Step 2: Create expense record with all required fields
-        const newExpenseId = await odooClient.createRecord(uid, 'hr.expense', {
+        // Step 2: Create expense record.
+        // Base fields stable across all supported Odoo versions (13+).
+        const baseExpenseData: Record<string, any> = {
             employee_id: body.employee_id,
             product_id: body.product_id,
             name: body.name,
-            // For variable cost products (cost=0), we must set total_amount_currency or total_amount
-            // We set both price_unit and total_amount_currency to be safe
             price_unit: body.unit_amount,
-            total_amount_currency: body.unit_amount,
             quantity: body.quantity,
             date: body.date,
-            company_id: companyId, // Required field
-            currency_id: currencyId, // Required field
-            payment_mode: 'own_account', // Employee paid, needs reimbursement
-        });
+            company_id: companyId,
+            currency_id: currencyId,
+            payment_mode: 'own_account', // Employee paid out-of-pocket
+        };
+
+        // total_amount_currency: added in Odoo 13, possibly renamed in Odoo 18+.
+        // Try with it first; if Odoo rejects it as "Invalid field", retry without it
+        // so Odoo computes the total automatically from price_unit × quantity.
+        let newExpenseId: any;
+        try {
+            newExpenseId = await odooClient.createRecord(uid, 'hr.expense', {
+                ...baseExpenseData,
+                total_amount_currency: body.unit_amount,
+            });
+        } catch (createErr: any) {
+            const errMsg: string = String(createErr?.faultString || createErr?.message || '');
+            if (errMsg.toLowerCase().includes('total_amount_currency') || errMsg.toLowerCase().includes('invalid field')) {
+                console.warn('[expenses] total_amount_currency not accepted, retrying without it:', errMsg);
+                newExpenseId = await odooClient.createRecord(uid, 'hr.expense', baseExpenseData);
+            } else {
+                throw createErr;
+            }
+        }
 
         // Step 3: Upload attachments (receipts) if provided
         if (body.attachments && body.attachments.length > 0) {

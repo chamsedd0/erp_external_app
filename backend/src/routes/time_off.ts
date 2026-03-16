@@ -34,58 +34,35 @@ let _leaveTypeField: string | null = null;
 async function getLeaveTypeField(uid: number): Promise<string> {
     if (_leaveTypeField) return _leaveTypeField;
 
-    try {
-        const schema: any = await odooClient.getSchema(uid, 'hr.leave');
-
-        // ── Step 1: Check known candidate names (fast path) ───────────────────
-        const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id'];
-        for (const name of candidates) {
-            if (schema[name]) {
-                _leaveTypeField = name;
-                console.log(`[time_off] Detected leave type field (name match): "${name}"`);
-                return name;
-            }
+    // ── Probe-based detection ─────────────────────────────────────────────────
+    // We use searchRead with an impossible domain [['id','=',0]] to validate field
+    // names WITHOUT calling fields_get. This is critical because on Odoo SaaS the
+    // fields_get endpoint can return an HTML error page instead of valid XML-RPC,
+    // causing "Unknown XML-RPC tag 'TITLE'" errors that always land in the catch block
+    // and cause the fallback to silently use the wrong field name.
+    //
+    // Order: try Odoo 17+ name first ('leave_type_id'), then legacy ('holiday_status_id').
+    // searchRead with a zero-match domain returns [] on success, or throws ValueError on
+    // invalid field — exactly what we need.
+    const candidates = ['leave_type_id', 'holiday_status_id', 'time_off_type_id'];
+    for (const fieldName of candidates) {
+        try {
+            await odooClient.searchRead(
+                uid, 'hr.leave', [['id', '=', 0]], [fieldName],
+                true  // silent — suppress console.error for expected field-not-found errors
+            );
+            // No error thrown → field exists on this Odoo version
+            _leaveTypeField = fieldName;
+            console.log(`[time_off] Detected leave type field via probe: "${fieldName}"`);
+            return fieldName;
+        } catch {
+            // Field doesn't exist on this Odoo version — try next candidate
         }
-
-        // ── Step 2: Find by relation → 'hr.leave.type' ────────────────────────
-        // This is the most reliable method and works regardless of field name.
-        // Requires 'relation' attribute in getSchema (now included).
-        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
-            if (def.type === 'many2one' && def.relation === 'hr.leave.type') {
-                _leaveTypeField = fieldName;
-                console.log(`[time_off] Detected leave type field (relation match): "${fieldName}"`);
-                return fieldName;
-            }
-        }
-
-        // ── Step 3: Broad name-pattern scan ───────────────────────────────────
-        // Catches names like time_off_type_id, leave_policy_id, etc.
-        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
-            if (
-                def.type === 'many2one' &&
-                (fieldName.includes('leave') || fieldName.includes('holiday') || fieldName.includes('time_off')) &&
-                (fieldName.includes('type') || fieldName.includes('status') || fieldName.includes('policy'))
-            ) {
-                _leaveTypeField = fieldName;
-                console.log(`[time_off] Detected leave type field (pattern scan): "${fieldName}"`);
-                return fieldName;
-            }
-        }
-
-        // ── Debug: log all Many2one fields so admins can identify the correct name
-        console.warn('[time_off] Could not auto-detect leave type field. All Many2one fields on hr.leave:');
-        for (const [fieldName, def] of Object.entries(schema as Record<string, any>)) {
-            if ((def as any).type === 'many2one') {
-                console.warn(`  [time_off]   field="${fieldName}"  relation="${(def as any).relation || '?'}"`);
-            }
-        }
-    } catch (e) {
-        console.warn('[time_off] Could not detect leave type field from schema:', e);
     }
 
-    // Final fallback — still try holiday_status_id but log clearly that detection failed
-    _leaveTypeField = 'holiday_status_id';
-    console.warn('[time_off] Leave type field detection failed. Add the correct field name to the candidates list above.');
+    // All probes failed (extremely unlikely — would mean none of the known field names exist)
+    console.warn('[time_off] All leave type field probes failed. Defaulting to "leave_type_id".');
+    _leaveTypeField = 'leave_type_id';
     return _leaveTypeField;
 }
 
