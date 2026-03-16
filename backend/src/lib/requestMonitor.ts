@@ -54,66 +54,79 @@ export const requestMonitor = {
             return;
         }
 
-        // 2. Fetch current data from Odoo (all 4 request types)
+        // 2. Fetch current data from Odoo — each type is independent.
+        // IMPORTANT: use separate try/catch per type so a failure in one does NOT
+        // prevent the others from fetching, and does NOT corrupt their cache entries.
         let timeOffRequests: any[] = [];
         let expenses: any[] = [];
         let helpdeskTickets: any[] = [];
         let maintenanceRequests: any[] = [];
 
-        try {
-            const [leavesResult, expensesResult] = await Promise.all([
-                odooClient.searchRead(uid, 'hr.leave',
-                    [['employee_id', '=', employeeId]],
-                    ['id', 'name', 'state', 'date_from', 'date_to']
-                ),
-                odooClient.searchRead(uid, 'hr.expense',
-                    [['employee_id', '=', employeeId]],
-                    ['id', 'name', 'state', 'total_amount', 'date', 'product_id']
-                ),
-            ]);
+        // Track which types were successfully fetched so we know which cache entries to update.
+        const fetched = { timeOff: false, expense: false, helpdesk: false, maintenance: false };
 
-            timeOffRequests = Array.isArray(leavesResult) ? leavesResult : [];
-            expenses = Array.isArray(expensesResult) ? expensesResult : [];
-        } catch (error) {
-            console.error('Monitor failed to fetch leave/expense from Odoo:', error);
-        }
-
-        // Helpdesk — Enterprise only. Use silent=true so HTML-response errors
-        // (returned by Odoo SaaS when the module isn't installed) don't spam the console.
         try {
-            const helpdeskResult = await odooClient.searchRead(
-                uid,
-                'helpdesk.ticket',
-                [['id', '>', 0]],
-                ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
-                true  // silent — expected to fail when Helpdesk module not installed
-            );
-            helpdeskTickets = Array.isArray(helpdeskResult) ? helpdeskResult : [];
-        } catch {
-            // Helpdesk module not installed — skip silently
-        }
-
-        // Maintenance — use silent=true as well since it may not be installed on all instances
-        try {
-            const maintenanceResult = await odooClient.searchRead(
-                uid,
-                'maintenance.request',
+            const result = await odooClient.searchRead(uid, 'hr.leave',
                 [['employee_id', '=', employeeId]],
-                ['id', 'name', 'stage_id', 'create_date', 'maintenance_type'],
+                ['id', 'name', 'state', 'date_from', 'date_to'],
                 true  // silent
             );
-            maintenanceRequests = Array.isArray(maintenanceResult) ? maintenanceResult : [];
+            timeOffRequests = Array.isArray(result) ? result : [];
+            fetched.timeOff = true;
         } catch {
-            // Maintenance module not available — skip silently
+            console.warn(`[monitor] Could not fetch hr.leave for employee ${employeeId} — keeping cached state.`);
+        }
+
+        try {
+            const result = await odooClient.searchRead(uid, 'hr.expense',
+                [['employee_id', '=', employeeId]],
+                ['id', 'name', 'state', 'total_amount', 'date', 'product_id'],
+                true  // silent
+            );
+            expenses = Array.isArray(result) ? result : [];
+            fetched.expense = true;
+        } catch {
+            console.warn(`[monitor] Could not fetch hr.expense for employee ${employeeId} — keeping cached state.`);
+        }
+
+        // Helpdesk — Enterprise only, silent=true
+        try {
+            const result = await odooClient.searchRead(uid, 'helpdesk.ticket',
+                [['id', '>', 0]],
+                ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
+                true
+            );
+            helpdeskTickets = Array.isArray(result) ? result : [];
+            fetched.helpdesk = true;
+        } catch {
+            // Module not installed — skip silently
+        }
+
+        // Maintenance — may not be installed on all instances, silent=true
+        try {
+            const result = await odooClient.searchRead(uid, 'maintenance.request',
+                [['employee_id', '=', employeeId]],
+                ['id', 'name', 'stage_id', 'create_date', 'maintenance_type'],
+                true
+            );
+            maintenanceRequests = Array.isArray(result) ? result : [];
+            fetched.maintenance = true;
+        } catch {
+            // Module not available — skip silently
         }
 
         // 3. Load Cache from Redis
         const employeeCache = await loadCache(employeeId);
-        const newCache: EmployeeCache = {};
+
+        // Start newCache from the EXISTING cache so that entries for types that
+        // failed to fetch this cycle are preserved, not wiped out.
+        // Each successfully-fetched type will overwrite only its own entries below.
+        const newCache: EmployeeCache = { ...employeeCache };
         const notificationsToAdd: Notification[] = [];
 
         // ── 4. Compare Time Off (string state) ────────────────────────────────
-        for (const req of timeOffRequests) {
+        // Only update time_off cache entries if we successfully fetched them this cycle.
+        if (fetched.timeOff) for (const req of timeOffRequests) {
             const uniqueId = `time_off_${req.id}`;
             const currentState = req.state as string;
             const previous = employeeCache[uniqueId];
@@ -127,7 +140,7 @@ export const requestMonitor = {
         }
 
         // ── 5. Compare Expenses (string state) ────────────────────────────────
-        for (const req of expenses) {
+        if (fetched.expense) for (const req of expenses) {
             const uniqueId = `expense_${req.id}`;
             const currentState = req.state as string;
             const previous = employeeCache[uniqueId];
@@ -141,7 +154,7 @@ export const requestMonitor = {
         }
 
         // ── 6. Compare Helpdesk Tickets (stage_id based) ──────────────────────
-        for (const req of helpdeskTickets) {
+        if (fetched.helpdesk) for (const req of helpdeskTickets) {
             const uniqueId = `helpdesk_${req.id}`;
             const stageId = Array.isArray(req.stage_id) ? String(req.stage_id[0]) : String(req.stage_id);
             const stageName = Array.isArray(req.stage_id) ? (req.stage_id[1] as string) : '';
@@ -167,7 +180,7 @@ export const requestMonitor = {
         }
 
         // ── 7. Compare Maintenance Requests (stage_id based) ──────────────────
-        for (const req of maintenanceRequests) {
+        if (fetched.maintenance) for (const req of maintenanceRequests) {
             const uniqueId = `maintenance_${req.id}`;
             const stageId = Array.isArray(req.stage_id) ? String(req.stage_id[0]) : String(req.stage_id);
             const stageName = Array.isArray(req.stage_id) ? (req.stage_id[1] as string) : '';

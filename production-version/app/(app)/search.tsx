@@ -47,10 +47,10 @@ export default function Search() {
         try {
             if (!user?.id) return;
 
-            // Fetch ALL requests
+            // Fetch ALL requests — use independent catches so one failure doesn't kill both
             const [timeOffData, expenseData] = await Promise.all([
-                apiClient.getTimeOffRequests(user.id),
-                apiClient.getExpenses(user.id)
+                apiClient.getTimeOffRequests(user.id).catch(() => ({ leaves: [] as any[] })),
+                apiClient.getExpenses(user.id).catch(() => ({ expenses: [] as any[] })),
             ]);
 
             let allResults: any[] = [];
@@ -311,7 +311,7 @@ export default function Search() {
                                 <View style={{ flex: 1 }}>
                                     <Text style={{ fontSize: 16, fontWeight: '600', color: text, marginBottom: 2 }}>
                                         {result.type === 'timeoff'
-                                            ? result.holiday_status_id?.[1] || 'Time Off'
+                                            ? result.leave_type_id?.[1] || result.name || 'Time Off'
                                             : result.name}
                                     </Text>
                                     <Text style={{ fontSize: 13, color: muted }}>

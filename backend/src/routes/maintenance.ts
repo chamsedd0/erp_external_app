@@ -5,6 +5,22 @@ import { attachmentSchema } from './helpdesk';
 
 const router = Router();
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Runtime check: verify the maintenance.request model is accessible.
+ * Returns false if the module is not installed or returns an HTML response
+ * (which happens on Odoo SaaS trial when the Maintenance module isn't enabled).
+ */
+const isMaintenanceAvailable = async (uid: number): Promise<boolean> => {
+    try {
+        await odooClient.searchRead(uid, 'maintenance.request', [['id', '=', 0]], ['id'], true);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
 // ── Schema ────────────────────────────────────────────────────────────────────
 
 const createMaintenanceSchema = z.object({
@@ -25,17 +41,21 @@ const createMaintenanceSchema = z.object({
 router.get('/categories', async (req, res) => {
     try {
         const uid = await odooClient.authenticate();
+
+        if (!(await isMaintenanceAvailable(uid))) {
+            return res.json({ available: false, categories: [] });
+        }
+
         const categories: any = await odooClient.searchRead(
             uid,
             'maintenance.equipment.category',
             [],
             ['id', 'name']
         );
-        res.json({ categories: Array.isArray(categories) ? categories : [] });
+        res.json({ available: true, categories: Array.isArray(categories) ? categories : [] });
     } catch (error: any) {
         console.error('Fetch Maintenance Categories Error:', error);
-        // Maintenance module should always be on Community — but handle gracefully
-        res.json({ categories: [], message: error.message });
+        res.json({ available: false, categories: [], message: error.message });
     }
 });
 
@@ -52,6 +72,10 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await odooClient.authenticate();
+
+        if (!(await isMaintenanceAvailable(uid))) {
+            return res.json({ available: false, requests: [] });
+        }
 
         // Fetch with full field list first; fall back to safe minimal fields if any field is rejected
         let requests: any = [];
@@ -97,6 +121,10 @@ router.post('/', async (req, res) => {
     try {
         const body = createMaintenanceSchema.parse(req.body);
         const uid = await odooClient.authenticate();
+
+        if (!(await isMaintenanceAvailable(uid))) {
+            return res.json({ available: false, message: 'Maintenance module not available on this Odoo instance' });
+        }
 
         // Core fields (stable across all Odoo versions with maintenance module)
         const recordData: Record<string, any> = {

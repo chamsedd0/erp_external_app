@@ -35,34 +35,43 @@ async function getLeaveTypeField(uid: number): Promise<string> {
     if (_leaveTypeField) return _leaveTypeField;
 
     // ── Probe-based detection ─────────────────────────────────────────────────
-    // We use searchRead with an impossible domain [['id','=',0]] to validate field
-    // names WITHOUT calling fields_get. This is critical because on Odoo SaaS the
-    // fields_get endpoint can return an HTML error page instead of valid XML-RPC,
-    // causing "Unknown XML-RPC tag 'TITLE'" errors that always land in the catch block
-    // and cause the fallback to silently use the wrong field name.
+    // We use searchRead with a domain that will never match real records but looks
+    // like a normal query (avoids SaaS trial controller interception).
+    // Domain [['state','=','__probe__']] matches nothing but is a valid field query.
     //
-    // Order: try Odoo 17+ name first ('leave_type_id'), then legacy ('holiday_status_id').
-    // searchRead with a zero-match domain returns [] on success, or throws ValueError on
-    // invalid field — exactly what we need.
-    const candidates = ['leave_type_id', 'holiday_status_id', 'time_off_type_id'];
+    // KEY: we distinguish two error classes differently:
+    //   • "Invalid field" / "KeyError" → field definitively does NOT exist → try next
+    //   • Any other error (TITLE/HTML, etc.) → could be SaaS interception with a valid
+    //     field; stop and use this candidate rather than falling back to a wrong default.
+    const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id'];
     for (const fieldName of candidates) {
         try {
             await odooClient.searchRead(
-                uid, 'hr.leave', [['id', '=', 0]], [fieldName],
-                true  // silent — suppress console.error for expected field-not-found errors
+                uid, 'hr.leave', [['state', '=', '__probe__']], [fieldName],
+                true  // silent — suppress console.error for expected failures
             );
-            // No error thrown → field exists on this Odoo version
+            // No error → field confirmed to exist
             _leaveTypeField = fieldName;
-            console.log(`[time_off] Detected leave type field via probe: "${fieldName}"`);
+            console.log(`[time_off] Detected leave type field: "${fieldName}"`);
             return fieldName;
-        } catch {
-            // Field doesn't exist on this Odoo version — try next candidate
+        } catch (e: any) {
+            const msg = String(e?.faultString || e?.message || '');
+            if (msg.includes('Invalid field') || msg.includes('KeyError')) {
+                // Field definitively doesn't exist on this Odoo version — try next
+                continue;
+            }
+            // Any other error (TITLE/HTML, network, etc.): the SaaS controller may be
+            // intercepting but the field likely exists. Use it and let the real query decide.
+            _leaveTypeField = fieldName;
+            console.log(`[time_off] Probe hit non-field error for "${fieldName}", using it: ${msg.substring(0, 80)}`);
+            return fieldName;
         }
     }
 
-    // All probes failed (extremely unlikely — would mean none of the known field names exist)
-    console.warn('[time_off] All leave type field probes failed. Defaulting to "leave_type_id".');
-    _leaveTypeField = 'leave_type_id';
+    // All probes threw "Invalid field" — field name must be something else entirely.
+    // Fall back to the legacy name; GET / will reset this if it's also wrong.
+    console.warn('[time_off] All probes returned "Invalid field". Defaulting to "holiday_status_id".');
+    _leaveTypeField = 'holiday_status_id';
     return _leaveTypeField;
 }
 
@@ -77,23 +86,42 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await odooClient.authenticate();
-        const leaveTypeField = await getLeaveTypeField(uid);
+        let leaveTypeField = await getLeaveTypeField(uid);
 
-        const leaves: any = await odooClient.searchRead(
-            uid,
-            'hr.leave',
-            [['employee_id', '=', parseInt(employeeId as string)]],
-            [
-                'id', 'name', leaveTypeField,
-                'date_from', 'date_to',
-                'request_date_from', 'request_date_to',   // date-only fields for display
-                'number_of_days', 'state', 'create_date', 'employee_id',
-            ]
-        );
+        const safeFields = [
+            'id', 'name',
+            'date_from', 'date_to',
+            'request_date_from', 'request_date_to',
+            'number_of_days', 'state', 'create_date', 'employee_id',
+        ];
+        const domain = [['employee_id', '=', parseInt(employeeId as string)]];
 
-        // Normalise: always expose the leave type under a stable key for the frontend
+        let leaves: any;
+        try {
+            leaves = await odooClient.searchRead(
+                uid, 'hr.leave', domain, [...safeFields, leaveTypeField]
+            );
+        } catch (e: any) {
+            const msg = String(e?.faultString || e?.message || '');
+            if (msg.includes('Invalid field')) {
+                // The detected field name is wrong for this Odoo version.
+                // Reset the cache so re-detection happens on the next request.
+                console.warn(`[time_off] Field "${leaveTypeField}" rejected, resetting cache and retrying without it.`);
+                _leaveTypeField = null;
+                leaveTypeField = '';
+                // Retry with only the safe fields — leave type will be null in response
+                leaves = await odooClient.searchRead(uid, 'hr.leave', domain, safeFields);
+            } else {
+                throw e;
+            }
+        }
+
+        // Normalise: always expose the leave type under a stable 'leave_type_id' key
         const normalised = Array.isArray(leaves)
-            ? leaves.map((l: any) => ({ ...l, leave_type_id: l[leaveTypeField] ?? null }))
+            ? leaves.map((l: any) => ({
+                ...l,
+                leave_type_id: leaveTypeField ? (l[leaveTypeField] ?? null) : null,
+            }))
             : leaves;
 
         res.json({ leaves: normalised });

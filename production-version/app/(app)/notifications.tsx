@@ -212,7 +212,7 @@ export default function Notifications() {
                                                 style={{
                                                     flexDirection: 'row',
                                                     padding: 16,
-                                                    backgroundColor: item.read ? 'transparent' : `${pastelPurple}10`, // Slight highlight for unread
+                                                    backgroundColor: item.read ? 'transparent' : `${semanticInfo}12`, // Slight highlight for unread
                                                     alignItems: 'flex-start',
                                                     gap: 16
                                                 }}
