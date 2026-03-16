@@ -170,7 +170,7 @@ router.post('/', async (req, res) => {
         res.json({ status: 'success', id: newId });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: 'Invalid input', details: error.errors });
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
         console.error('Create Timesheet Error:', error);
         res.status(500).json({ error: error.message });
