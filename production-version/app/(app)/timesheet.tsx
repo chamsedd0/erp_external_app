@@ -565,7 +565,7 @@ export default function Timesheet() {
         >
             {/* Header */}
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-                <TouchableOpacity onPress={() => router.back()}
+                <TouchableOpacity onPress={() => router.navigate('/(app)/new-request')}
                     style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: cardColor, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, marginBottom: 20 }}>
                     <ChevronLeft size={20} color={text} style={{ marginRight: 4 }} />
                     <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: text }}>Back</Text>

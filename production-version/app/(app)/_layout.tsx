@@ -1,5 +1,5 @@
-import { Tabs, useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { Tabs, useRouter, usePathname } from 'expo-router';
+import { useState, useEffect, useRef } from 'react';
 import { View, TouchableOpacity, Platform, TextInput, Pressable } from 'react-native';
 import { Home, Plus, User, Bell, Search } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,17 +13,26 @@ export default function AppLayout() {
     const insets = useSafeAreaInsets();
     const { user } = useSession();
     const [hasUnread, setHasUnread] = useState(false);
+    const pathname = usePathname();
+    const prevPathname = useRef<string>('');
 
-    // Fetch unread notification count on mount — badge dot only shown when > 0
+    // Re-fetch unread count on mount and whenever we navigate away from the
+    // notifications screen (so the dot disappears only after actually reading).
     useEffect(() => {
         if (!user?.id) return;
-        apiClient.getNotifications(user.id)
-            .then((data: any) => {
-                const unread = (data.notifications || []).filter((n: any) => !n.read);
-                setHasUnread(unread.length > 0);
-            })
-            .catch(() => {});
-    }, [user?.id]);
+        const wasOnNotifications = prevPathname.current.includes('notifications');
+        const nowOnNotifications = pathname.includes('notifications');
+        // Fetch on mount (empty prev) or when leaving notifications screen
+        if (prevPathname.current === '' || (wasOnNotifications && !nowOnNotifications)) {
+            apiClient.getNotifications(user.id)
+                .then((data: any) => {
+                    const unread = (data.notifications || []).filter((n: any) => !n.read);
+                    setHasUnread(unread.length > 0);
+                })
+                .catch(() => {});
+        }
+        prevPathname.current = pathname;
+    }, [pathname, user?.id]);
 
     // Handle notification taps → navigate to the relevant request detail screen
     useEffect(() => {
@@ -74,7 +83,7 @@ export default function AppLayout() {
                         </Pressable>
 
                         {/* Notification Bell */}
-                        <TouchableOpacity onPress={() => { setHasUnread(false); router.push('/(app)/notifications'); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                        <TouchableOpacity onPress={() => router.push('/(app)/notifications')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                             <Bell size={24} color={text} />
                             {hasUnread && (
                                 <View style={{ position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: 'red', borderWidth: 1, borderColor: backgroundColor }} />
@@ -151,7 +160,6 @@ export default function AppLayout() {
                 name="timesheet"
                 options={{
                     href: null, // Hide from tab bar — accessed via new-request hub
-                    headerShown: false,
                 }}
             />
 
