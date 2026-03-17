@@ -16,7 +16,7 @@ interface Notification {
     read: boolean;
     timestamp: string;
     targetId?: string;
-    targetType?: 'time_off' | 'expense';
+    targetType?: 'timeoff' | 'expense' | 'helpdesk' | 'maintenance';
 }
 
 export default function Notifications() {
@@ -93,7 +93,7 @@ export default function Notifications() {
             case 'request_approved': return semanticSuccess; // Green
             case 'request_rejected': return semanticError; // Red
             default:
-                if (targetType === 'time_off') return semanticInfo; // Blue
+                if (targetType === 'timeoff') return semanticInfo; // Blue
                 if (targetType === 'expense') return semanticSuccess; // Green
                 return semanticInfo; // Fallback
         }
@@ -103,7 +103,7 @@ export default function Notifications() {
         const color = getNotificationColor(type, targetType);
         if (type === 'request_approved') return <Check size={20} color={color} strokeWidth={3} />;
         if (type === 'request_rejected') return <X size={20} color={color} strokeWidth={3} />;
-        if (targetType === 'time_off') return <Clock size={20} color={color} strokeWidth={2.5} />;
+        if (targetType === 'timeoff') return <Clock size={20} color={color} strokeWidth={2.5} />;
         if (targetType === 'expense') return <DollarSign size={20} color={color} strokeWidth={2.5} />;
         return <Bell size={20} color={color} strokeWidth={2.5} />;
     };

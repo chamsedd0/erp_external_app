@@ -28,10 +28,15 @@ export const getOdooVersion = async (): Promise<number> => {
         const info: any = await new Promise((resolve, reject) =>
             commonClient.methodCall('version', [], (err, val) => (err ? reject(err) : resolve(val)))
         );
-        // server_version_info = [major, minor, patch, release_type, serial]
-        _odooMajorVersion = Array.isArray(info?.server_version_info)
-            ? (info.server_version_info[0] as number)
-            : 14; // safe fallback
+        // server_version_info[0] can be an integer (14, 16, 17) or a SaaS
+        // version string like "saas~19". Extract the numeric part either way.
+        if (Array.isArray(info?.server_version_info)) {
+            const raw = info.server_version_info[0];
+            const parsed = typeof raw === 'number' ? raw : parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
+            _odooMajorVersion = isNaN(parsed) ? 14 : parsed;
+        } else {
+            _odooMajorVersion = 14; // safe fallback
+        }
         console.log(`Odoo version detected: ${_odooMajorVersion}`);
     } catch {
         _odooMajorVersion = 14; // fallback — assume v14 compatible

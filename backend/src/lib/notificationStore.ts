@@ -13,7 +13,7 @@ export interface Notification {
     read: boolean;
     timestamp: string; // ISO string
     targetId?: string;
-    targetType?: 'time_off' | 'expense' | 'helpdesk' | 'maintenance' | 'timesheet';
+    targetType?: 'timeoff' | 'expense' | 'helpdesk' | 'maintenance' | 'timesheet';
 }
 
 async function readAll(): Promise<Notification[]> {

@@ -40,10 +40,13 @@ async function getLeaveTypeField(uid: number): Promise<string> {
     // Domain [['state','=','__probe__']] matches nothing but is a valid field query.
     //
     // KEY: we distinguish two error classes differently:
-    //   • "Invalid field" / "KeyError" → field definitively does NOT exist → try next
+    //   • "Invalid field" / "KeyError" / "ValueError" → field does NOT exist → try next
     //   • Any other error (TITLE/HTML, etc.) → could be SaaS interception with a valid
     //     field; stop and use this candidate rather than falling back to a wrong default.
-    const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id'];
+    //
+    // Odoo 19+: work_entry_type_id is tried first (hr.leave.type merged into hr.work.entry.type)
+    // Odoo 14–18: holiday_status_id
+    const candidates = ['work_entry_type_id', 'holiday_status_id', 'leave_type_id', 'time_off_type_id'];
     for (const fieldName of candidates) {
         try {
             await odooClient.searchRead(
@@ -56,7 +59,7 @@ async function getLeaveTypeField(uid: number): Promise<string> {
             return fieldName;
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '');
-            if (msg.includes('Invalid field') || msg.includes('KeyError')) {
+            if (msg.includes('Invalid field') || msg.includes('KeyError') || msg.includes('ValueError')) {
                 // Field definitively doesn't exist on this Odoo version — try next
                 continue;
             }
@@ -69,9 +72,9 @@ async function getLeaveTypeField(uid: number): Promise<string> {
     }
 
     // All probes threw "Invalid field" — field name must be something else entirely.
-    // Fall back to the legacy name; GET / will reset this if it's also wrong.
-    console.warn('[time_off] All probes returned "Invalid field". Defaulting to "holiday_status_id".');
-    _leaveTypeField = 'holiday_status_id';
+    // Fall back to the Odoo 19+ name as the safest default.
+    console.warn('[time_off] All probes returned "Invalid field". Defaulting to "work_entry_type_id".');
+    _leaveTypeField = 'work_entry_type_id';
     return _leaveTypeField;
 }
 
@@ -137,24 +140,81 @@ router.get('/', async (req, res) => {
 });
 
 // GET /types - Fetch Leave Types
+// In Odoo 14–18 these live on hr.leave.type; in Odoo 19+ they were merged into
+// hr.work.entry.type (codes starting with "LEAVE" are time-off types).
 router.get('/types', async (req, res) => {
     try {
         const uid = await odooClient.authenticate();
-        // Only request id + name — other fields (requires_allocation, request_unit) were
-        // renamed/restructured in Odoo 17+ and are not needed by the frontend anyway.
-        // silent=true: prevent TITLE/HTML noise in console if module has issues
-        const types: any = await odooClient.searchRead(
-            uid,
-            'hr.leave.type',
-            [],
-            ['id', 'name'],
-            true
-        );
-        res.json({ types: Array.isArray(types) ? types : [] });
-    } catch {
-        // hr.leave.type may not be accessible (module issue, SaaS restriction, etc.)
-        // Return empty list so the frontend can still render the form
+
+        // ── Attempt 1: hr.leave.type (Odoo 14–18) ────────────────────────────
+        // silent=true: prevent TITLE/HTML noise if model doesn't exist
+        try {
+            const types: any = await odooClient.searchRead(
+                uid, 'hr.leave.type', [], ['id', 'name'], true
+            );
+            if (Array.isArray(types) && types.length > 0) {
+                return res.json({ types });
+            }
+        } catch {
+            // Model doesn't exist on this version — fall through to Odoo 19+ approach
+        }
+
+        // ── Attempt 2: hr.work.entry.type (Odoo 19+) ─────────────────────────
+        // Time-off types have codes starting with "LEAVE"; filter them client-side
+        // since the `code` field filter is more reliable than a `time_off` boolean.
+        try {
+            const allTypes: any = await odooClient.searchRead(
+                uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true
+            );
+            if (Array.isArray(allTypes)) {
+                const leaveTypes = allTypes
+                    .filter((t: any) => typeof t.code === 'string' && t.code.startsWith('LEAVE'))
+                    .map((t: any) => ({ id: t.id, name: t.name }));
+                return res.json({ types: leaveTypes });
+            }
+        } catch {
+            // Fall through
+        }
+
+        // Nothing worked — return empty list so the frontend can still render
         res.json({ types: [], available: false });
+    } catch (error: any) {
+        res.json({ types: [], available: false });
+    }
+});
+
+// GET /pending - Fetch pending time-off requests for the authenticated employee
+router.get('/pending', async (req, res) => {
+    try {
+        const employeeId = req.query.employee_id;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'employee_id query parameter required' });
+        }
+        const parsedEmployeeId = parseInt(employeeId as string);
+        if (isNaN(parsedEmployeeId)) {
+            return res.status(400).json({ error: 'Invalid employee_id' });
+        }
+
+        const uid = await odooClient.authenticate();
+        const domain = [
+            ['employee_id', '=', parsedEmployeeId],
+            ['state', 'in', ['draft', 'confirm', 'validate1']],
+        ];
+
+        let leaves: any;
+        try {
+            leaves = await odooClient.searchRead(
+                uid, 'hr.leave', domain,
+                ['id', 'name', 'date_from', 'date_to', 'number_of_days', 'state']
+            );
+        } catch {
+            leaves = [];
+        }
+
+        res.json({ leaves: Array.isArray(leaves) ? leaves : [] });
+    } catch (error: any) {
+        console.error('Fetch Pending Leaves Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

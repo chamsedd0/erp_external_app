@@ -5,7 +5,7 @@ import { redisGet, redisSet } from './redis';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RequestType = 'time_off' | 'expense' | 'helpdesk' | 'maintenance';
+type RequestType = 'timeoff' | 'expense' | 'helpdesk' | 'maintenance';
 
 interface RequestState {
     id: number;
@@ -153,10 +153,10 @@ export const requestMonitor = {
             const currentState = req.state as string;
             const previous = employeeCache[uniqueId];
 
-            newCache[uniqueId] = { id: req.id, type: 'time_off', state: currentState, updated_at: new Date().toISOString() };
+            newCache[uniqueId] = { id: req.id, type: 'timeoff', state: currentState, updated_at: new Date().toISOString() };
 
             if (previous && previous.state !== currentState) {
-                const notif = createLeaveExpenseNotification(employeeId, req, 'time_off', previous.state, currentState);
+                const notif = createLeaveExpenseNotification(employeeId, req, 'timeoff', previous.state, currentState);
                 if (notif) notificationsToAdd.push(notif);
             }
         }
@@ -247,7 +247,7 @@ export const requestMonitor = {
 function createLeaveExpenseNotification(
     employeeId: number,
     req: any,
-    type: 'time_off' | 'expense',
+    type: 'timeoff' | 'expense',
     oldState: string,
     newState: string
 ): Notification | null {
@@ -255,18 +255,18 @@ function createLeaveExpenseNotification(
     let message = '';
     let notifType: Notification['type'] = 'system';
 
-    const label = type === 'time_off' ? 'time off request' : 'expense';
-    const cleanName = req.name || (type === 'time_off' ? 'Time Off Request' : 'Expense');
+    const label = type === 'timeoff' ? 'time off request' : 'expense';
+    const cleanName = req.name || (type === 'timeoff' ? 'Time Off Request' : 'Expense');
 
     const approvedStates = ['approved', 'validate', 'validate1', 'done', 'posted'];
     const refusedStates = ['refuse', 'refused', 'cancel'];
 
     if (approvedStates.includes(newState) && !approvedStates.includes(oldState)) {
-        title = type === 'time_off' ? 'Request Approved ✅' : 'Expense Approved ✅';
+        title = type === 'timeoff' ? 'Request Approved ✅' : 'Expense Approved ✅';
         message = `Your ${label} "${cleanName}" has been approved.`;
         notifType = 'request_approved';
     } else if (refusedStates.includes(newState)) {
-        title = type === 'time_off' ? 'Request Rejected ❌' : 'Expense Rejected ❌';
+        title = type === 'timeoff' ? 'Request Rejected ❌' : 'Expense Rejected ❌';
         message = `Your ${label} "${cleanName}" was rejected.`;
         notifType = 'request_rejected';
     }

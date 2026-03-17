@@ -108,7 +108,7 @@ export default function Dashboard() {
 
             // ── Recent Activities (all 5 types, newest 6) ─────────────────────
             const formattedLeaves = leaves.map((l: any) => ({
-                id: l.id, type: 'time_off',
+                id: l.id, type: 'timeoff',
                 title: l.name || 'Time Off Request',
                 date: l.date_from, status: l.state, amount: null,
             }));
@@ -169,7 +169,7 @@ export default function Dashboard() {
     // ── Activity icon/color helper ────────────────────────────────────────────
     function activityIcon(type: string, size = 24) {
         const props = { size, strokeWidth: 2.5 };
-        if (type === 'time_off') return <Calendar {...props} color={semanticInfo} />;
+        if (type === 'timeoff') return <Calendar {...props} color={semanticInfo} />;
         if (type === 'expense') return <DollarSign {...props} color={semanticSuccess} />;
         if (type === 'timesheet') return <Timer {...props} color={semanticSuccess} />;
         if (type === 'helpdesk') return <Monitor {...props} color={semanticWarning} />;
@@ -178,7 +178,7 @@ export default function Dashboard() {
     }
 
     function activityBorderColor(type: string) {
-        if (type === 'time_off') return semanticInfo;
+        if (type === 'timeoff') return semanticInfo;
         if (type === 'expense' || type === 'timesheet') return semanticSuccess;
         if (type === 'helpdesk') return semanticWarning;
         if (type === 'maintenance') return semanticError;
