@@ -167,9 +167,15 @@ router.get('/types', async (req, res) => {
                 uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true
             );
             if (Array.isArray(allTypes)) {
+                const seen = new Set<string>();
                 const leaveTypes = allTypes
                     .filter((t: any) => typeof t.code === 'string' && t.code.startsWith('LEAVE'))
-                    .map((t: any) => ({ id: t.id, name: t.name }));
+                    .map((t: any) => ({ id: t.id, name: t.name }))
+                    .filter((t: any) => {
+                        if (seen.has(t.name)) return false;
+                        seen.add(t.name);
+                        return true;
+                    });
                 return res.json({ types: leaveTypes });
             }
         } catch {

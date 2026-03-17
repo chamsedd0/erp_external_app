@@ -74,7 +74,7 @@ export default function AppLayout() {
                         </Pressable>
 
                         {/* Notification Bell */}
-                        <TouchableOpacity onPress={() => router.push('/(app)/notifications')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                        <TouchableOpacity onPress={() => { setHasUnread(false); router.push('/(app)/notifications'); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                             <Bell size={24} color={text} />
                             {hasUnread && (
                                 <View style={{ position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: 'red', borderWidth: 1, borderColor: backgroundColor }} />

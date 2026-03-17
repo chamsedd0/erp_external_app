@@ -9,13 +9,14 @@ import { Timer, ChevronLeft, Clock, Briefcase, ListChecks, PlusCircle } from 'lu
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 import { useToast } from '../../providers/toast-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 type TabState = 'log' | 'history';
 
 export default function Timesheet() {
     const { user } = useSession();
     const toast = useToast();
+    const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<TabState>('log');
     const [loading, setLoading] = useState(false);
@@ -564,6 +565,11 @@ export default function Timesheet() {
         >
             {/* Header */}
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+                <TouchableOpacity onPress={() => router.back()}
+                    style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: cardColor, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, marginBottom: 20 }}>
+                    <ChevronLeft size={20} color={text} style={{ marginRight: 4 }} />
+                    <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: text }}>Back</Text>
+                </TouchableOpacity>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 6 }}>
                     <View style={{
                         width: 52, height: 52, borderRadius: 20,

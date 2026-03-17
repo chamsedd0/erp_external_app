@@ -137,9 +137,6 @@ router.post('/', async (req, res) => {
             maintenance_type: body.maintenance_type,
         };
 
-        // request_date: standard field on maintenance.request (Odoo 12+)
-        recordData.request_date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
         // description: HTML text field — only include if provided to avoid empty-value issues
         if (body.description) {
             recordData.description = body.description;

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (Express + nodemon)",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "cd backend && npm run dev"],
+      "port": 3000,
+      "autoPort": false
+    }
+  ]
+}
