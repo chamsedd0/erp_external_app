@@ -185,7 +185,7 @@ export default function Dashboard() {
             {/* Header */}
             <Animated.View style={{
                 flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-                marginBottom: 32, marginTop: 20,
+                marginBottom: 18, marginTop: 15,
                 opacity: fadeAnim, transform: [{ translateY: slideAnim }],
             }}>
                 <View>

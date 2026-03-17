@@ -185,4 +185,7 @@ export const apiClient = {
 
     markNotificationRead: (id: string) =>
         apiFetch(`/notifications/${id}/read`, { method: 'PUT' }),
+
+    markAllNotificationsRead: () =>
+        apiFetch('/notifications/read-all', { method: 'PUT' }),
 };

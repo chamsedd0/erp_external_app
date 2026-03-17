@@ -43,3 +43,19 @@ notificationsRouter.put('/:id/read', async (req, res) => {
         res.status(500).json({ error: 'Failed to mark as read' });
     }
 });
+
+// Mark ALL as read for the authenticated employee
+notificationsRouter.put('/read-all', async (req, res) => {
+    try {
+        const jwtId: number | undefined = (req as any).jwtPayload?.id;
+        const employeeId: number = jwtId ?? parseInt(req.query.employee_id as string);
+        if (!employeeId || isNaN(employeeId)) {
+            res.status(400).json({ error: 'employee_id is required' });
+            return;
+        }
+        await notificationStore.markAllRead(employeeId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to mark all notifications as read' });
+    }
+});

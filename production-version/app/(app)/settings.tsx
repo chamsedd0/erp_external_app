@@ -1,250 +1,298 @@
-import { View, ScrollView, TouchableOpacity, Switch, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Switch, ActivityIndicator } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { useRouter } from 'expo-router';
-import { ChevronRight, Moon, Sun, Bell, Globe, Shield, Database, LucideIcon } from 'lucide-react-native';
+import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../../providers/toast-context';
 import { useSession } from '../../providers/auth-context';
 import { apiClient } from '../../api/client';
-
-type ToggleItem = {
-    icon: LucideIcon;
-    label: string;
-    type: 'toggle';
-    value: boolean;
-    onToggle: (val: boolean) => void;
-};
-
-type NavigationItem = {
-    icon: LucideIcon;
-    label: string;
-    subtitle?: string;
-    type: 'navigation';
-    onPress: () => void;
-};
-
-type SettingsItem = ToggleItem | NavigationItem;
+import Constants from 'expo-constants';
+import { HR_EMAIL } from '../../constants';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Settings() {
-    const router = useRouter();
     const toast = useToast();
     const { user } = useSession();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+    const [markingAllRead, setMarkingAllRead] = useState(false);
+    const [clearingCache, setClearingCache] = useState(false);
+
     const background = useColor('background');
     const text = useColor('text');
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
+    const semanticInfo = useColor('semanticInfo' as any);
+    const semanticError = useColor('semanticError' as any);
 
-    // Load persisted settings on mount
+    const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
     useEffect(() => {
-        AsyncStorage.multiGet(['setting_push_notifications', 'setting_email_notifications'])
-            .then(([[, pushVal], [, emailVal]]) => {
-                if (pushVal !== null) setNotificationsEnabled(pushVal === 'true');
-                if (emailVal !== null) setEmailNotifications(emailVal === 'true');
-            })
+        AsyncStorage.getItem('setting_push_notifications')
+            .then(val => { if (val !== null) setNotificationsEnabled(val === 'true'); })
             .catch(() => {});
     }, []);
 
-    const handleToggle = (setting: string, value: boolean) => {
-        toast.success(`${setting} ${value ? 'enabled' : 'disabled'}`);
-    };
-
-    // Push notifications: persist preference and remove token when disabling
     const handlePushToggle = (val: boolean) => {
         setNotificationsEnabled(val);
         AsyncStorage.setItem('setting_push_notifications', String(val)).catch(() => {});
-        if (!val && user?.id) {
-            apiClient.deletePushToken(user.id).catch(() => {});
+        if (!val && user?.id) apiClient.deletePushToken(user.id).catch(() => {});
+        toast.success(`Push notifications ${val ? 'enabled' : 'disabled'}`);
+    };
+
+    const handleMarkAllRead = async () => {
+        if (!user?.id) return;
+        setMarkingAllRead(true);
+        try {
+            await apiClient.markAllNotificationsRead();
+            toast.success('All notifications marked as read');
+        } catch (e: any) {
+            toast.error(e.message || 'Failed to mark notifications as read');
+        } finally {
+            setMarkingAllRead(false);
         }
-        handleToggle('Push notifications', val);
     };
 
-    // Email notifications: persist preference only (no backend action needed)
-    const handleEmailToggle = (val: boolean) => {
-        setEmailNotifications(val);
-        AsyncStorage.setItem('setting_email_notifications', String(val)).catch(() => {});
-        handleToggle('Email notifications', val);
+    const handleClearCache = async () => {
+        setClearingCache(true);
+        try {
+            const allKeys = await AsyncStorage.getAllKeys();
+            const keepKeys = new Set([
+                'user_token', 'user_data', 'is_new_user', 'setting_push_notifications',
+            ]);
+            const toRemove = allKeys.filter(k => !keepKeys.has(k));
+            if (toRemove.length > 0) await AsyncStorage.multiRemove(toRemove);
+            toast.success('Cache cleared successfully');
+        } catch {
+            toast.error('Failed to clear cache');
+        } finally {
+            setClearingCache(false);
+        }
     };
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        setTimeout(() => setRefreshing(false), 1000);
-    };
+    // ── Shared Components ───────────────────────────────────────────────────────
 
-    const settingsSections: Array<{ title: string; items: SettingsItem[] }> = [
-        {
-            title: 'Notifications',
-            items: [
-                {
-                    icon: Bell,
-                    label: 'Push Notifications',
-                    type: 'toggle' as const,
-                    value: notificationsEnabled,
-                    onToggle: handlePushToggle,
-                },
-                {
-                    icon: Bell,
-                    label: 'Email Notifications',
-                    type: 'toggle' as const,
-                    value: emailNotifications,
-                    onToggle: handleEmailToggle,
-                },
-            ],
-        },
-        {
-            title: 'Preferences',
-            items: [
-                {
-                    icon: Globe,
-                    label: 'Language',
-                    subtitle: 'English',
-                    type: 'navigation' as const,
-                    onPress: () => toast.info('Language selection coming soon'),
-                },
-                {
-                    icon: Moon,
-                    label: 'Dark Mode',
-                    subtitle: 'Coming soon',
-                    type: 'navigation' as const,
-                    onPress: () => toast.info('Dark mode coming soon'),
-                },
-            ],
-        },
-        {
-            title: 'Security & Privacy',
-            items: [
-                {
-                    icon: Shield,
-                    label: 'Privacy Policy',
-                    type: 'navigation' as const,
-                    onPress: () => toast.info('Opening privacy policy'),
-                },
-                {
-                    icon: Database,
-                    label: 'Data Management',
-                    type: 'navigation' as const,
-                    onPress: () => toast.info('Data management coming soon'),
-                },
-            ],
-        },
-    ];
+    const SectionHeader = ({ title }: { title: string }) => (
+        <Text style={{
+            fontFamily: 'DMSans_500Medium', fontSize: 12, color: muted,
+            textTransform: 'uppercase', letterSpacing: 1.2,
+            marginBottom: 12, paddingHorizontal: 4,
+        }}>
+            {title}
+        </Text>
+    );
+
+    const RowDivider = () => (
+        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginLeft: 72 }} />
+    );
+
+    // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: background }}
-            contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
-            refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            contentContainerStyle={{ padding: 24, paddingBottom: 140 }}
         >
-            {/* Header */}
-            <View style={{ marginBottom: 32 }}>
-                <Text style={{ fontSize: 32, fontWeight: 'bold', color: text, marginBottom: 8 }}>
+            {/* Page Header */}
+            <View style={{ marginBottom: 28 }}>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text, marginBottom: 4 }}>
                     Settings
                 </Text>
-                <Text style={{ fontSize: 15, color: muted }}>
-                    Manage your preferences
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>
+                    App preferences & account
                 </Text>
             </View>
 
-            {/* Settings Sections */}
-            {settingsSections.map((section, sectionIndex) => (
-                <View key={sectionIndex} style={{ marginBottom: 32 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: muted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {section.title}
+            {/* ── Account Card ─────────────────────────────────────────────────── */}
+            <View style={{
+                backgroundColor: semanticInfo + '18',
+                borderRadius: 28, padding: 20,
+                flexDirection: 'row', alignItems: 'center', gap: 16,
+                marginBottom: 32,
+            }}>
+                <LinearGradient
+                    colors={['#E9E4F5', '#CBF0F9']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                        width: 64, height: 64, borderRadius: 22,
+                        alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}
+                >
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: '#1a1a1a' }}>
+                        {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
                     </Text>
-                    <View style={{
-                        backgroundColor: cardColor,
-                        borderRadius: 20,
-                        overflow: 'hidden',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.05,
-                        shadowRadius: 8,
-                        elevation: 2,
-                    }}>
-                        {section.items.map((item, itemIndex) => {
-                            const Icon = item.icon;
-                            const isLast = itemIndex === section.items.length - 1;
+                </LinearGradient>
 
-                            if (item.type === 'toggle') {
-                                return (
-                                    <View
-                                        key={itemIndex}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            padding: 16,
-                                            borderBottomWidth: isLast ? 0 : 1,
-                                            borderBottomColor: 'rgba(0,0,0,0.05)',
-                                        }}
-                                    >
-                                        <View style={{
-                                            width: 36,
-                                            height: 36,
-                                            borderRadius: 18,
-                                            backgroundColor: 'rgba(0,0,0,0.05)',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            marginRight: 12,
-                                        }}>
-                                            <Icon size={18} color={text} />
-                                        </View>
-                                        <Text style={{ flex: 1, fontSize: 16, fontWeight: '500', color: text }}>
-                                            {item.label}
-                                        </Text>
-                                        <Switch
-                                            value={item.value}
-                                            onValueChange={item.onToggle}
-                                        />
-                                    </View>
-                                );
-                            }
-
-                            return (
-                                <TouchableOpacity
-                                    key={itemIndex}
-                                    onPress={item.onPress}
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        padding: 16,
-                                        borderBottomWidth: isLast ? 0 : 1,
-                                        borderBottomColor: 'rgba(0,0,0,0.05)',
-                                    }}
-                                >
-                                    <View style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 18,
-                                        backgroundColor: 'rgba(0,0,0,0.05)',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        marginRight: 12,
-                                    }}>
-                                        <Icon size={18} color={text} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '500', color: text }}>
-                                            {item.label}
-                                        </Text>
-                                        {item.subtitle && (
-                                            <Text style={{ fontSize: 13, color: muted, marginTop: 2 }}>
-                                                {item.subtitle}
-                                            </Text>
-                                        )}
-                                    </View>
-                                    <ChevronRight size={20} color={muted} />
-                                </TouchableOpacity>
-                            );
-                        })}
+                <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: text }} numberOfLines={1}>
+                        {user?.name || 'User'}
+                    </Text>
+                    <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted }} numberOfLines={1}>
+                        {user?.job_title || 'Employee'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        <View style={{ backgroundColor: semanticInfo + '28', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 99 }}>
+                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: semanticInfo }}>
+                                ID #{user?.id}
+                            </Text>
+                        </View>
+                        {user?.work_email ? (
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: muted }} numberOfLines={1}>
+                                {user.work_email}
+                            </Text>
+                        ) : null}
                     </View>
                 </View>
-            ))}
+            </View>
+
+            {/* ── Notifications Section ─────────────────────────────────────────── */}
+            <View style={{ marginBottom: 32 }}>
+                <SectionHeader title="Notifications" />
+                <View style={{ backgroundColor: cardColor, borderRadius: 24, overflow: 'hidden' }}>
+
+                    {/* Push Notifications toggle */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: semanticInfo + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <Bell size={20} color={semanticInfo} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Push Notifications
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                {notificationsEnabled ? 'Enabled for this device' : 'Disabled for this device'}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={notificationsEnabled}
+                            onValueChange={handlePushToggle}
+                            trackColor={{ false: 'rgba(0,0,0,0.1)', true: semanticInfo + '70' }}
+                            thumbColor={notificationsEnabled ? semanticInfo : '#999'}
+                            ios_backgroundColor="rgba(0,0,0,0.1)"
+                        />
+                    </View>
+
+                    <RowDivider />
+
+                    {/* Mark All as Read */}
+                    <TouchableOpacity
+                        onPress={handleMarkAllRead}
+                        disabled={markingAllRead}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: semanticInfo + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            {markingAllRead
+                                ? <ActivityIndicator size="small" color={semanticInfo} />
+                                : <CheckCheck size={20} color={semanticInfo} />
+                            }
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Mark All as Read
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                Clear all unread notification badges
+                            </Text>
+                        </View>
+                        {!markingAllRead && <ChevronRight size={18} color={muted} />}
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* ── About Section ─────────────────────────────────────────────────── */}
+            <View style={{ marginBottom: 32 }}>
+                <SectionHeader title="About" />
+                <View style={{ backgroundColor: cardColor, borderRadius: 24, overflow: 'hidden' }}>
+
+                    {/* App Version */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: muted + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <Info size={20} color={muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                App Version
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                Shadow Portal
+                            </Text>
+                        </View>
+                        <View style={{ backgroundColor: muted + '18', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 }}>
+                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 13, color: muted }}>
+                                v{appVersion}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <RowDivider />
+
+                    {/* HR Contact */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: muted + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <Mail size={20} color={muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                HR Contact
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                {HR_EMAIL}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+            </View>
+
+            {/* ── Data Section ──────────────────────────────────────────────────── */}
+            <View>
+                <SectionHeader title="Data" />
+                <View style={{ backgroundColor: cardColor, borderRadius: 24, overflow: 'hidden' }}>
+                    <TouchableOpacity
+                        onPress={handleClearCache}
+                        disabled={clearingCache}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: semanticError + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            {clearingCache
+                                ? <ActivityIndicator size="small" color={semanticError} />
+                                : <Trash2 size={20} color={semanticError} />
+                            }
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Clear App Cache
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                Remove locally stored filters & preferences
+                            </Text>
+                        </View>
+                        {!clearingCache && <ChevronRight size={18} color={muted} />}
+                    </TouchableOpacity>
+                </View>
+            </View>
         </ScrollView>
     );
 }

@@ -58,4 +58,11 @@ export const notificationStore = {
         const updated = all.map(n => (n.id === id ? { ...n, read: true } : n));
         await writeAll(updated);
     },
+
+    /** Mark all notifications for a given employee as read. */
+    markAllRead: async (employeeId: number): Promise<void> => {
+        const all = await readAll();
+        const updated = all.map(n => n.employeeId === employeeId ? { ...n, read: true } : n);
+        await writeAll(updated);
+    },
 };
