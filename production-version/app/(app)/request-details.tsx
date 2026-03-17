@@ -186,7 +186,7 @@ export default function RequestDetails() {
                     <View style={{
                         flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
                         paddingHorizontal: 16, paddingVertical: 10, borderRadius: 99, marginBottom: 24,
-                        gap: 8, borderWidth: 1, borderColor: statusConfig.color + '40',
+                        gap: 8, backgroundColor: statusConfig.color + '18',
                     }}>
                         <StatusIcon size={18} color={statusConfig.color} strokeWidth={2.5} />
                         <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 15, color: statusConfig.color }}>
@@ -198,14 +198,12 @@ export default function RequestDetails() {
 
             {/* Hero Card */}
             <View style={{
-                backgroundColor: 'transparent', borderRadius: 32, padding: 32, marginBottom: 24,
-                borderWidth: 1, borderColor: accentColor,
+                backgroundColor: accentColor + '18', borderRadius: 32, padding: 32, marginBottom: 24,
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16, marginBottom: type === 'expense' ? 24 : 0 }}>
                     <View style={{
                         width: 64, height: 64, borderRadius: 24,
-                        backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center',
-                        borderWidth: 1, borderColor: accentColor,
+                        backgroundColor: accentColor + '28', alignItems: 'center', justifyContent: 'center',
                     }}>
                         {iconForType()}
                     </View>
@@ -221,7 +219,7 @@ export default function RequestDetails() {
 
                 {/* Amount hero for expense */}
                 {type === 'expense' && (
-                    <View style={{ backgroundColor: 'transparent', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: accentColor }}>
+                    <View style={{ backgroundColor: accentColor + '20', padding: 16, borderRadius: 20 }}>
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, opacity: 0.7, marginBottom: 2 }}>Total Amount</Text>
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 42, color: text }}>
                             ${request.total_amount || request.unit_amount || '0.00'}
@@ -231,7 +229,7 @@ export default function RequestDetails() {
 
                 {/* Hours hero for timesheet */}
                 {type === 'timesheet' && (
-                    <View style={{ backgroundColor: 'transparent', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: accentColor, marginTop: 16 }}>
+                    <View style={{ backgroundColor: accentColor + '20', padding: 16, borderRadius: 20, marginTop: 16 }}>
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, opacity: 0.7, marginBottom: 2 }}>Hours Logged</Text>
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 42, color: text }}>
                             {(request.unit_amount || 0).toFixed(1)}<Text style={{ fontSize: 22, fontFamily: 'DMSans_400Regular', color: muted }}> hrs</Text>
@@ -387,8 +385,8 @@ export default function RequestDetails() {
                             <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Type</Text>
                             <View style={{
                                 alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 6,
-                                borderRadius: 100, borderWidth: 1,
-                                borderColor: request.maintenance_type === 'preventive' ? semanticInfo : semanticError,
+                                borderRadius: 100,
+                                backgroundColor: (request.maintenance_type === 'preventive' ? semanticInfo : semanticError) + '20',
                             }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: request.maintenance_type === 'preventive' ? semanticInfo : semanticError, textTransform: 'capitalize' }}>
                                     {request.maintenance_type || 'Corrective'}
@@ -434,8 +432,8 @@ export default function RequestDetails() {
                         <View style={{ gap: 8 }}>
                             <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Submitted By</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E0E7FF', alignItems: 'center', justifyContent: 'center' }}>
-                                    <User size={20} color="#4338ca" />
+                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: accentColor + '25', alignItems: 'center', justifyContent: 'center' }}>
+                                    <User size={20} color={accentColor} />
                                 </View>
                                 <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 18, color: text }}>
                                     {request.employee_id[1] || 'You'}

@@ -226,9 +226,7 @@ export default function Notifications() {
                                                     width: 48,
                                                     height: 48,
                                                     borderRadius: 24,
-                                                    backgroundColor: 'transparent',
-                                                    borderWidth: 1,
-                                                    borderColor: getNotificationColor(item.type, item.targetType),
+                                                    backgroundColor: getNotificationColor(item.type, item.targetType) + '20',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     marginTop: 2

@@ -227,36 +227,36 @@ export default function NewRequest() {
 
             {/* Time Off */}
             <TouchableOpacity activeOpacity={0.9} onPress={() => setCurrentView('time-off')}
-                style={{ backgroundColor: 'transparent', borderRadius: 32, padding: 32, borderWidth: 1, borderColor: semanticInfo, overflow: 'hidden', minHeight: 200, justifyContent: 'space-between' }}>
-                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
+                style={{ backgroundColor: semanticInfo + '18', borderRadius: 32, padding: 32, overflow: 'hidden', minHeight: 200, justifyContent: 'space-between' }}>
+                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.12, transform: [{ rotate: '15deg' }] }}>
                     <Clock size={160} color={semanticInfo} />
                 </View>
-                <View style={{ width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                <View style={{ width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticInfo + '28' }}>
                     <Clock size={28} color={semanticInfo} strokeWidth={2} />
                 </View>
                 <View>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticInfo, marginBottom: 8 }}>Time Off</Text>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>Vacation, Sick Leave & More</Text>
                 </View>
-                <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticInfo + '28' }}>
                     <ArrowRight size={24} color={semanticInfo} />
                 </View>
             </TouchableOpacity>
 
             {/* Expense */}
             <TouchableOpacity activeOpacity={0.9} onPress={() => setCurrentView('expense')}
-                style={{ backgroundColor: 'transparent', borderRadius: 32, padding: 32, borderWidth: 1, borderColor: semanticSuccess, overflow: 'hidden', minHeight: 200, justifyContent: 'space-between' }}>
-                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: [{ rotate: '15deg' }] }}>
+                style={{ backgroundColor: semanticSuccess + '18', borderRadius: 32, padding: 32, overflow: 'hidden', minHeight: 200, justifyContent: 'space-between' }}>
+                <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.12, transform: [{ rotate: '15deg' }] }}>
                     <DollarSign size={160} color={semanticSuccess} />
                 </View>
-                <View style={{ width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticSuccess }}>
+                <View style={{ width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticSuccess + '28' }}>
                     <DollarSign size={28} color={semanticSuccess} strokeWidth={2} />
                 </View>
                 <View>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticSuccess, marginBottom: 8 }}>Expense Claim</Text>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>Reimbursements & Purchases</Text>
                 </View>
-                <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticSuccess }}>
+                <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticSuccess + '28' }}>
                     <ArrowRight size={24} color={semanticSuccess} />
                 </View>
             </TouchableOpacity>
@@ -266,11 +266,11 @@ export default function NewRequest() {
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 {/* Timesheet → dedicated screen */}
                 <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/(app)/timesheet')}
-                    style={{ flex: 1, backgroundColor: 'transparent', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: semanticSuccess, overflow: 'hidden', minHeight: 160, justifyContent: 'space-between' }}>
-                    <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.08 }}>
+                    style={{ flex: 1, backgroundColor: semanticSuccess + '18', borderRadius: 28, padding: 24, overflow: 'hidden', minHeight: 160, justifyContent: 'space-between' }}>
+                    <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.1 }}>
                         <Timer size={100} color={semanticSuccess} />
                     </View>
-                    <View style={{ width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticSuccess }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticSuccess + '28' }}>
                         <Timer size={22} color={semanticSuccess} />
                     </View>
                     <View>
@@ -282,11 +282,11 @@ export default function NewRequest() {
                 {/* IT Support → inline form */}
                 <TouchableOpacity activeOpacity={0.9}
                     onPress={() => helpdeskAvailable ? setCurrentView('helpdesk') : toast.warning('IT Support is not enabled on your Odoo instance.')}
-                    style={{ flex: 1, backgroundColor: 'transparent', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: helpdeskAvailable ? semanticWarning : muted, overflow: 'hidden', minHeight: 160, justifyContent: 'space-between', opacity: helpdeskAvailable ? 1 : 0.5 }}>
-                    <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.08 }}>
+                    style={{ flex: 1, backgroundColor: (helpdeskAvailable ? semanticWarning : muted) + '18', borderRadius: 28, padding: 24, overflow: 'hidden', minHeight: 160, justifyContent: 'space-between', opacity: helpdeskAvailable ? 1 : 0.5 }}>
+                    <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.1 }}>
                         <Monitor size={100} color={semanticWarning} />
                     </View>
-                    <View style={{ width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: helpdeskAvailable ? semanticWarning : muted }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: (helpdeskAvailable ? semanticWarning : muted) + '28' }}>
                         <Monitor size={22} color={helpdeskAvailable ? semanticWarning : muted} />
                     </View>
                     <View>
@@ -298,12 +298,12 @@ export default function NewRequest() {
 
             {/* Maintenance → inline form */}
             <TouchableOpacity activeOpacity={0.9} onPress={() => setCurrentView('maintenance')}
-                style={{ backgroundColor: 'transparent', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: semanticError, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 90 }}>
-                <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.07 }}>
+                style={{ backgroundColor: semanticError + '18', borderRadius: 28, padding: 24, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 90 }}>
+                <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.09 }}>
                     <Wrench size={100} color={semanticError} />
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                    <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticError }}>
+                    <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticError + '28' }}>
                         <Wrench size={24} color={semanticError} />
                     </View>
                     <View>
@@ -311,7 +311,7 @@ export default function NewRequest() {
                         <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted }}>Equipment & facility issues</Text>
                     </View>
                 </View>
-                <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticError }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticError + '28' }}>
                     <ArrowRight size={20} color={semanticError} />
                 </View>
             </TouchableOpacity>
@@ -335,7 +335,7 @@ export default function NewRequest() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {leaveTypes.map((type: any) => (
                             <TouchableOpacity key={type.id} onPress={() => setHolidayStatusId(type.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: holidayStatusId === type.id ? 'transparent' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: holidayStatusId === type.id ? semanticInfo : 'transparent', minWidth: 100, alignItems: 'center' }}>
+                                style={{ backgroundColor: holidayStatusId === type.id ? semanticInfo + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: holidayStatusId === type.id ? semanticInfo : text }}>{type.name}</Text>
                             </TouchableOpacity>
                         ))}
@@ -403,7 +403,7 @@ export default function NewRequest() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {expenseProducts.map((prod: any) => (
                             <TouchableOpacity key={prod.id} onPress={() => setProductId(prod.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: productId === prod.id ? 'transparent' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: productId === prod.id ? semanticSuccess : 'transparent', minWidth: 100, alignItems: 'center' }}>
+                                style={{ backgroundColor: productId === prod.id ? semanticSuccess + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: productId === prod.id ? semanticSuccess : text }}>{prod.name}</Text>
                             </TouchableOpacity>
                         ))}
@@ -459,7 +459,7 @@ export default function NewRequest() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {helpdeskTeams.map((team: any) => (
                             <TouchableOpacity key={team.id} onPress={() => setHdTeamId(hdTeamId === team.id ? null : team.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: hdTeamId === team.id ? 'transparent' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: hdTeamId === team.id ? semanticWarning : 'transparent', minWidth: 100, alignItems: 'center' }}>
+                                style={{ backgroundColor: hdTeamId === team.id ? semanticWarning + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: hdTeamId === team.id ? semanticWarning : text }}>{team.name}</Text>
                             </TouchableOpacity>
                         ))}
@@ -520,7 +520,7 @@ export default function NewRequest() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {maintenanceCategories.map((cat: any) => (
                             <TouchableOpacity key={cat.id} onPress={() => setMntCategoryId(mntCategoryId === cat.id ? null : cat.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: mntCategoryId === cat.id ? 'transparent' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: mntCategoryId === cat.id ? semanticError : 'transparent', minWidth: 100, alignItems: 'center' }}>
+                                style={{ backgroundColor: mntCategoryId === cat.id ? semanticError + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: mntCategoryId === cat.id ? semanticError : text }}>{cat.name}</Text>
                             </TouchableOpacity>
                         ))}

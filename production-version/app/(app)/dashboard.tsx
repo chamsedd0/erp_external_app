@@ -69,7 +69,6 @@ export default function Dashboard() {
         if (!user?.id) return;
         setLoading(true);
         try {
-            // Use allSettled so that unavailable modules (e.g. helpdesk) don't block the whole dashboard
             const [leavesResult, expensesResult, timesheetResult, helpdeskResult, maintenanceResult] =
                 await Promise.allSettled([
                     apiClient.getTimeOffRequests(user.id),
@@ -86,11 +85,8 @@ export default function Dashboard() {
                 ? (helpdeskResult.value.tickets || []) : [];
             const maintenance = maintenanceResult.status === 'fulfilled' ? (maintenanceResult.value.requests || []) : [];
 
-            // ── Counts ────────────────────────────────────────────────────────
             const pl = leaves.filter((l: any) => ['confirm', 'validate1', 'draft'].includes(l.state)).length;
             const pe = expenses.filter((e: any) => ['draft', 'reported'].includes(e.state)).length;
-
-            // For helpdesk/maintenance, count "open" ones (not done/closed)
             const openTickets = tickets.filter((t: any) => {
                 const stageName = Array.isArray(t.stage_id) ? (t.stage_id[1] as string) : '';
                 return !(/\b(done|closed|resolved|cancel)/i.test(stageName));
@@ -106,7 +102,6 @@ export default function Dashboard() {
             setHelpdeskCount(openTickets);
             setMaintenanceCount(openMaintenance);
 
-            // ── Recent Activities (all 5 types, newest 6) ─────────────────────
             const formattedLeaves = leaves.map((l: any) => ({
                 id: l.id, type: 'timeoff',
                 title: l.name || 'Time Off Request',
@@ -140,18 +135,14 @@ export default function Dashboard() {
             }));
 
             const all = [
-                ...formattedLeaves,
-                ...formattedExpenses,
-                ...formattedTimesheets,
-                ...formattedTickets,
-                ...formattedMaintenance,
+                ...formattedLeaves, ...formattedExpenses, ...formattedTimesheets,
+                ...formattedTickets, ...formattedMaintenance,
             ]
                 .filter(a => a.date)
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .slice(0, 6);
 
             setRecentActivities(all);
-
         } catch (error) {
             console.error('Dashboard fetch error:', error);
         } finally {
@@ -166,23 +157,23 @@ export default function Dashboard() {
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' });
     const totalPending = pendingLeaves + pendingExpenses;
 
-    // ── Activity icon/color helper ────────────────────────────────────────────
-    function activityIcon(type: string, size = 24) {
-        const props = { size, strokeWidth: 2.5 };
-        if (type === 'timeoff') return <Calendar {...props} color={semanticInfo} />;
-        if (type === 'expense') return <DollarSign {...props} color={semanticSuccess} />;
-        if (type === 'timesheet') return <Timer {...props} color={semanticSuccess} />;
-        if (type === 'helpdesk') return <Monitor {...props} color={semanticWarning} />;
-        if (type === 'maintenance') return <Wrench {...props} color={semanticError} />;
-        return <Clock {...props} color={muted} />;
-    }
-
-    function activityBorderColor(type: string) {
+    function activityColor(type: string) {
         if (type === 'timeoff') return semanticInfo;
         if (type === 'expense' || type === 'timesheet') return semanticSuccess;
         if (type === 'helpdesk') return semanticWarning;
         if (type === 'maintenance') return semanticError;
         return muted;
+    }
+
+    function activityIcon(type: string, size = 24) {
+        const color = activityColor(type);
+        const props = { size, strokeWidth: 2.5, color };
+        if (type === 'timeoff') return <Calendar {...props} />;
+        if (type === 'expense') return <DollarSign {...props} />;
+        if (type === 'timesheet') return <Timer {...props} />;
+        if (type === 'helpdesk') return <Monitor {...props} />;
+        if (type === 'maintenance') return <Wrench {...props} />;
+        return <Clock {...props} />;
     }
 
     return (
@@ -192,13 +183,11 @@ export default function Dashboard() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
             {/* Header */}
-            <Animated.View
-                style={{
-                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-                    marginBottom: 32, marginTop: 20,
-                    opacity: fadeAnim, transform: [{ translateY: slideAnim }],
-                }}
-            >
+            <Animated.View style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+                marginBottom: 32, marginTop: 20,
+                opacity: fadeAnim, transform: [{ translateY: slideAnim }],
+            }}>
                 <View>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: primary, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                         {currentDate}
@@ -223,31 +212,27 @@ export default function Dashboard() {
 
             <View style={{ gap: 16 }}>
                 {/* Pending Requests Card */}
-                <Animated.View
-                    style={{
-                        opacity: card1Anim,
-                        transform: [{ translateY: card1Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
-                    }}
-                >
+                <Animated.View style={{
+                    opacity: card1Anim,
+                    transform: [{ translateY: card1Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+                }}>
                     <TouchableOpacity
                         onPress={() => router.push('/(app)/search?status=pending')}
                         activeOpacity={0.9}
                         style={{
-                            backgroundColor: 'transparent', borderRadius: 32, padding: 24,
+                            backgroundColor: semanticWarning + '18', borderRadius: 32, padding: 24,
                             justifyContent: 'space-between', overflow: 'hidden',
-                            borderColor: semanticWarning, borderWidth: 1,
                         }}
                     >
-                        {/* Watermark */}
-                        <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.05, transform: [{ rotate: '15deg' }] }}>
+                        <View style={{ position: 'absolute', right: -20, top: -20, opacity: 0.07, transform: [{ rotate: '15deg' }] }}>
                             <Clock size={160} color={semanticWarning} />
                         </View>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                            <View style={{ backgroundColor: 'transparent', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: semanticWarning }}>
+                            <View style={{ backgroundColor: semanticWarning + '30', padding: 10, borderRadius: 14 }}>
                                 <Clock size={20} color={semanticWarning} strokeWidth={2.5} />
                             </View>
-                            <View style={{ backgroundColor: 'transparent', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1, borderColor: semanticWarning }}>
+                            <View style={{ backgroundColor: semanticWarning + '30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 }}>
                                 <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: semanticWarning }}>Priority</Text>
                             </View>
                         </View>
@@ -257,7 +242,6 @@ export default function Dashboard() {
                             {loading ? '...' : `${totalPending} Waiting`}
                         </Text>
 
-                        {/* Per-type breakdown pills */}
                         {!loading && (
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                                 {[
@@ -269,7 +253,7 @@ export default function Dashboard() {
                                     <View key={item.label} style={{
                                         flexDirection: 'row', alignItems: 'center', gap: 4,
                                         paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100,
-                                        borderWidth: 1, borderColor: item.color,
+                                        backgroundColor: item.color + '28',
                                     }}>
                                         <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: item.color }}>{item.count}</Text>
                                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 12, color: item.color }}>{item.label}</Text>
@@ -281,18 +265,16 @@ export default function Dashboard() {
                 </Animated.View>
 
                 {/* Quick Actions Card */}
-                <Animated.View
-                    style={{
-                        opacity: card2Anim,
-                        transform: [{ translateY: card2Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
-                    }}
-                >
+                <Animated.View style={{
+                    opacity: card2Anim,
+                    transform: [{ translateY: card2Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+                }}>
                     <View style={{
-                        backgroundColor: 'transparent', borderRadius: 32, padding: 24,
-                        justifyContent: 'space-between', borderColor: semanticInfo, borderWidth: 1,
+                        backgroundColor: semanticInfo + '18', borderRadius: 32, padding: 24,
+                        justifyContent: 'space-between',
                     }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                            <View style={{ backgroundColor: 'transparent', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: semanticInfo }}>
+                            <View style={{ backgroundColor: semanticInfo + '30', padding: 10, borderRadius: 14 }}>
                                 <Plus size={20} color={semanticInfo} strokeWidth={2.5} />
                             </View>
                             <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: semanticInfo, opacity: 0.9 }}>Quick Actions</Text>
@@ -300,28 +282,28 @@ export default function Dashboard() {
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/new-request')}>
-                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Calendar size={22} color={semanticInfo} />
                                 </View>
                                 <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Time Off</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/new-request')}>
-                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <DollarSign size={22} color={semanticInfo} />
                                 </View>
                                 <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Expense</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/timesheet')}>
-                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Timer size={22} color={semanticInfo} />
                                 </View>
                                 <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Timesheet</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/new-request')}>
-                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: semanticInfo }}>
+                                <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Text style={{ fontFamily: 'Outfit_700Bold', color: semanticInfo }}>...</Text>
                                 </View>
                                 <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>More</Text>
@@ -330,24 +312,21 @@ export default function Dashboard() {
                     </View>
                 </Animated.View>
 
-                {/* Stats row — Timesheet hours & Open tickets */}
+                {/* Stats row */}
                 <View style={{ flexDirection: 'row', gap: 16 }}>
-                    <Animated.View
-                        style={{
-                            flex: 1, opacity: card3Anim,
-                            transform: [{ translateY: card3Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
-                        }}
-                    >
+                    <Animated.View style={{
+                        flex: 1, opacity: card3Anim,
+                        transform: [{ translateY: card3Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+                    }}>
                         <TouchableOpacity
                             activeOpacity={0.9}
                             onPress={() => router.push('/(app)/timesheet')}
                             style={{
-                                backgroundColor: 'transparent', borderRadius: 32, padding: 24,
+                                backgroundColor: semanticSuccess + '18', borderRadius: 32, padding: 24,
                                 height: 180, justifyContent: 'space-between',
-                                borderColor: semanticSuccess, borderWidth: 1,
                             }}
                         >
-                            <View style={{ backgroundColor: 'transparent', padding: 10, borderRadius: 14, alignSelf: 'flex-start', borderWidth: 1, borderColor: semanticSuccess }}>
+                            <View style={{ backgroundColor: semanticSuccess + '30', padding: 10, borderRadius: 14, alignSelf: 'flex-start' }}>
                                 <Timer size={20} color={semanticSuccess} strokeWidth={2.5} />
                             </View>
                             <View>
@@ -360,22 +339,19 @@ export default function Dashboard() {
                         </TouchableOpacity>
                     </Animated.View>
 
-                    <Animated.View
-                        style={{
-                            flex: 1, opacity: card4Anim,
-                            transform: [{ translateY: card4Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
-                        }}
-                    >
+                    <Animated.View style={{
+                        flex: 1, opacity: card4Anim,
+                        transform: [{ translateY: card4Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+                    }}>
                         <TouchableOpacity
                             activeOpacity={0.9}
                             onPress={() => router.push('/(app)/notifications')}
                             style={{
-                                backgroundColor: 'transparent', borderRadius: 32, padding: 24,
+                                backgroundColor: semanticWarning + '18', borderRadius: 32, padding: 24,
                                 height: 180, justifyContent: 'space-between',
-                                borderColor: semanticWarning, borderWidth: 1,
                             }}
                         >
-                            <View style={{ backgroundColor: 'transparent', padding: 10, borderRadius: 14, alignSelf: 'flex-start', borderWidth: 1, borderColor: semanticWarning }}>
+                            <View style={{ backgroundColor: semanticWarning + '30', padding: 10, borderRadius: 14, alignSelf: 'flex-start' }}>
                                 <Monitor size={20} color={semanticWarning} strokeWidth={2.5} />
                             </View>
                             <View>
@@ -390,12 +366,10 @@ export default function Dashboard() {
                 </View>
 
                 {/* Recent Activities */}
-                <Animated.View
-                    style={{
-                        marginTop: 24, opacity: card4Anim,
-                        transform: [{ translateY: card4Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
-                    }}
-                >
+                <Animated.View style={{
+                    marginTop: 24, opacity: card4Anim,
+                    transform: [{ translateY: card4Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+                }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: text }}>Recent Activities</Text>
                         <TouchableOpacity onPress={() => router.push('/(app)/notifications')}>
@@ -403,7 +377,7 @@ export default function Dashboard() {
                         </TouchableOpacity>
                     </View>
 
-                    <View style={{ gap: 16 }}>
+                    <View style={{ gap: 12 }}>
                         {recentActivities.length === 0 ? (
                             <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: cardColor, borderRadius: 24 }}>
                                 <Text style={{ fontFamily: 'DMSans_500Medium', color: muted, fontSize: 16 }}>No recent activities</Text>
@@ -418,23 +392,22 @@ export default function Dashboard() {
                                         params: { id: activity.id.toString(), type: activity.type },
                                     })}
                                     style={{
-                                        flexDirection: 'row', alignItems: 'center', padding: 20,
+                                        flexDirection: 'row', alignItems: 'center', padding: 16,
                                         backgroundColor: cardColor, borderRadius: 24,
-                                        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-                                        shadowOpacity: 0.05, shadowRadius: 12, elevation: 3,
+                                        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
                                     }}
                                 >
                                     <View style={{
-                                        width: 52, height: 52, borderRadius: 20,
-                                        backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center',
-                                        marginRight: 16, borderWidth: 1,
-                                        borderColor: activityBorderColor(activity.type),
+                                        width: 48, height: 48, borderRadius: 18,
+                                        backgroundColor: activityColor(activity.type) + '20',
+                                        alignItems: 'center', justifyContent: 'center', marginRight: 14,
                                     }}>
-                                        {activityIcon(activity.type)}
+                                        {activityIcon(activity.type, 22)}
                                     </View>
 
-                                    <View style={{ flex: 1, gap: 4 }}>
-                                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 17, color: text }}>
+                                    <View style={{ flex: 1, gap: 3 }}>
+                                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: text }}>
                                             {activity.title}
                                         </Text>
                                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: muted }}>
@@ -444,12 +417,12 @@ export default function Dashboard() {
 
                                     <View style={{ alignItems: 'flex-end', gap: 6 }}>
                                         {activity.amount !== null && (
-                                            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: text }}>
+                                            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: text }}>
                                                 {typeof activity.amount === 'string' ? activity.amount : `$${activity.amount}`}
                                             </Text>
                                         )}
-                                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.05)' }}>
-                                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, color: muted, textTransform: 'uppercase' }}>
+                                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: activityColor(activity.type) + '20' }}>
+                                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, color: activityColor(activity.type), textTransform: 'uppercase' }}>
                                                 {activity.status}
                                             </Text>
                                         </View>
