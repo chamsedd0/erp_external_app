@@ -7,7 +7,7 @@ import {
     ChevronLeft, ChevronDown, ChevronUp,
 } from 'lucide-react-native';
 import { useState } from 'react';
-import { HR_EMAIL } from '../../constants';
+import { useSession } from '../../providers/auth-context';
 
 const faqs = [
     {
@@ -39,6 +39,7 @@ const faqs = [
 export default function Help() {
     const router = useRouter();
     const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+    const { hrEmail } = useSession();
 
     const background = useColor('background');
     const text = useColor('text');
@@ -48,7 +49,7 @@ export default function Help() {
     const semanticWarning = useColor('semanticWarning' as any);
 
     const handleEmailSupport = () => {
-        Linking.openURL(`mailto:${HR_EMAIL}?subject=Support%20Request`);
+        Linking.openURL(`mailto:${hrEmail ?? ''}?subject=Support%20Request`);
     };
 
     const handlePinReset = () => {
@@ -61,7 +62,7 @@ export default function Help() {
                     text: 'Email HR',
                     onPress: () =>
                         Linking.openURL(
-                            `mailto:${HR_EMAIL}?subject=PIN%20Reset%20Request&body=Hi%2C%20I%20need%20my%20Portal%20PIN%20reset.%20My%20name%20is%3A%20`
+                            `mailto:${hrEmail ?? ''}?subject=PIN%20Reset%20Request&body=Hi%2C%20I%20need%20my%20Portal%20PIN%20reset.%20My%20name%20is%3A%20`
                         ),
                 },
             ]

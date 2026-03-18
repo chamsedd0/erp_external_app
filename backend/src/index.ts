@@ -2,14 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { config } from './config';
-import { authRouter } from './routes/auth';
+import { authRouter, adminRouter } from './routes/auth';
 import { timeOffRouter } from './routes/time_off';
 import { expensesRouter } from './routes/expenses';
 import { notificationsRouter } from './routes/notifications';
 import { timesheetRouter } from './routes/timesheet';
 import { helpdeskRouter } from './routes/helpdesk';
 import { maintenanceRouter } from './routes/maintenance';
-import { getOdooVersion } from './odoo/client';
 import rateLimit from 'express-rate-limit';
 
 const app = express();
@@ -24,34 +23,31 @@ app.get('/', (req, res) => {
     res.send('Shadow Portal Middleware is Active');
 });
 
-app.get('/health', async (req, res) => {
-    try {
-        const version = await getOdooVersion();
-        res.json({
-            status: 'ok',
-            odoo_version: version,
-            compatible: version >= 13,
-            min_supported_version: 13,
-        });
-    } catch (error: any) {
-        res.status(500).json({ status: 'error', message: error.message });
-    }
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
 });
 
 // ── Rate Limiter: Max 200 requests per 15 mins ────────────────────────────────
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200, // Increased from 100 to accommodate new modules
+    max: 200,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
 
+// ── Admin secret guard (runs before JWT middleware) ────────────────────────────
+app.use('/admin', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.headers['x-admin-secret'] !== config.adminSecret) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+});
+
 // ── JWT Middleware ─────────────────────────────────────────────────────────────
-// All routes except /auth/* require a valid JWT. Auth routes are self-managing
-// (login issues the token; push-token registration happens right after login).
+// All routes except /auth/* and /admin/* require a valid JWT.
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/auth/')) {
+    if (req.path.startsWith('/auth/') || req.path.startsWith('/admin/')) {
         return next();
     }
     const token = (req.headers.authorization ?? '').split(' ')[1];
@@ -68,6 +64,7 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRouter);
+app.use('/admin', adminRouter);
 app.use('/time-off', timeOffRouter);
 app.use('/expenses', expensesRouter);
 app.use('/notifications', notificationsRouter);

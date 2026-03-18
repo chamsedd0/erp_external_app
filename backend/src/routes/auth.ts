@@ -2,25 +2,37 @@ import { Router } from 'express';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { odooClient } from '../odoo/client';
+import { getOdooClient } from '../odoo/client';
+import { tenantStore, TenantConfig } from '../lib/tenantStore';
 import { pushStore } from '../lib/pushStore';
 
-const router = Router();
+// ── Auth routes ───────────────────────────────────────────────────────────────
+
+const authRouter = Router();
 
 const loginSchema = z.object({
     employee_id: z.string(),
     pin: z.string(),
+    tenant_slug: z.string(),
 });
 
-router.post('/login', async (req, res) => {
+authRouter.post('/login', async (req, res) => {
     try {
-        const { employee_id, pin } = loginSchema.parse(req.body);
+        const { employee_id, pin, tenant_slug } = loginSchema.parse(req.body);
 
-        // 1. Authenticate Admin to get UID (This could be cached)
-        const uid = await odooClient.authenticate();
+        // 1. Look up tenant
+        const tenantConfig = await tenantStore.getTenant(tenant_slug);
+        if (!tenantConfig) {
+            return res.status(401).json({ error: 'Unknown company code' });
+        }
 
-        // 2. Search for Employee
-        const employees: any = await odooClient.searchEmployee(uid, employee_id, pin);
+        const client = getOdooClient(tenant_slug, tenantConfig);
+
+        // 2. Authenticate Admin to get UID
+        const uid = await client.authenticate();
+
+        // 3. Search for Employee
+        const employees: any = await client.searchEmployee(uid, employee_id, pin);
 
         if (!employees || employees.length === 0) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -28,12 +40,13 @@ router.post('/login', async (req, res) => {
 
         const employee = employees[0];
 
-        // 3. Generate JWT
+        // 4. Generate JWT (includes tenantId)
         const token = jwt.sign(
             {
                 id: employee.id,
                 name: employee.name,
-                role: 'employee'
+                role: 'employee',
+                tenantId: tenant_slug,
             },
             config.jwtSecret,
             { expiresIn: '7d' }
@@ -46,6 +59,7 @@ router.post('/login', async (req, res) => {
                 name: employee.name,
                 department: employee.department_id ? employee.department_id[1] : null,
                 job_title: employee.job_title,
+                work_email: employee.work_email,
             },
         });
 
@@ -58,11 +72,19 @@ router.post('/login', async (req, res) => {
     }
 });
 
+/** GET /auth/tenant/:slug — public, returns display info only (no credentials) */
+authRouter.get('/tenant/:slug', async (req, res) => {
+    const cfg = await tenantStore.getTenant(req.params.slug);
+    if (!cfg) return res.status(404).json({ error: 'Company not found' });
+    res.json({ name: cfg.name, hr_email: cfg.hr_email });
+});
+
 // ── Push Notification Token Management ───────────────────────────────────────
 
 const pushTokenSchema = z.object({
     employee_id: z.number(),
     token: z.string().min(1),
+    tenant_slug: z.string(),
 });
 
 /**
@@ -70,10 +92,10 @@ const pushTokenSchema = z.object({
  * Saves an Expo push token for the given employee.
  * Called from the frontend after the user grants notification permission.
  */
-router.post('/push-token', async (req, res) => {
+authRouter.post('/push-token', async (req, res) => {
     try {
-        const { employee_id, token } = pushTokenSchema.parse(req.body);
-        await pushStore.saveToken(employee_id, token);
+        const { employee_id, token, tenant_slug } = pushTokenSchema.parse(req.body);
+        await pushStore.saveToken(tenant_slug, employee_id, token);
         res.json({ success: true });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -89,13 +111,14 @@ router.post('/push-token', async (req, res) => {
  * Removes the Expo push token for the given employee.
  * Called on logout so the device no longer receives notifications.
  */
-router.delete('/push-token', async (req, res) => {
+authRouter.delete('/push-token', async (req, res) => {
     try {
         const employeeId = req.body?.employee_id ?? req.query?.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id is required' });
+        const tenantSlug = req.body?.tenant_slug ?? req.query?.tenant_slug;
+        if (!employeeId || !tenantSlug) {
+            return res.status(400).json({ error: 'employee_id and tenant_slug are required' });
         }
-        await pushStore.removeToken(parseInt(String(employeeId)));
+        await pushStore.removeToken(String(tenantSlug), parseInt(String(employeeId)));
         res.json({ success: true });
     } catch (error: any) {
         console.error('Delete Push Token Error:', error);
@@ -103,4 +126,50 @@ router.delete('/push-token', async (req, res) => {
     }
 });
 
-export const authRouter = router;
+// ── Admin routes ──────────────────────────────────────────────────────────────
+
+const adminRouter = Router();
+
+const tenantBodySchema = z.object({
+    slug: z.string().min(1),
+    name: z.string().min(1),
+    hr_email: z.string().email(),
+    odoo_url: z.string().url(),
+    odoo_db: z.string().min(1),
+    odoo_username: z.string().min(1),
+    odoo_password: z.string().min(1),
+});
+
+/** POST /admin/tenants — register or update a tenant (protected by x-admin-secret) */
+adminRouter.post('/tenants', async (req, res) => {
+    try {
+        const { slug, ...cfg } = tenantBodySchema.parse(req.body);
+        await tenantStore.saveTenant(slug, cfg as TenantConfig);
+        res.json({ success: true, slug });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: error.errors });
+        }
+        console.error('Save Tenant Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/** GET /admin/tenants — list all tenants (protected by x-admin-secret) */
+adminRouter.get('/tenants', async (_req, res) => {
+    try {
+        const tenants = await tenantStore.listTenants();
+        // Strip passwords from response
+        const safe = Object.fromEntries(
+            Object.entries(tenants).map(([slug, cfg]) => [
+                slug,
+                { name: cfg.name, hr_email: cfg.hr_email, odoo_url: cfg.odoo_url, odoo_db: cfg.odoo_db },
+            ])
+        );
+        res.json(safe);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+export { authRouter, adminRouter };

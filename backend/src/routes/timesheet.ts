@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { odooClient } from '../odoo/client';
+import { getOdooClient } from '../odoo/client';
+import { tenantStore } from '../lib/tenantStore';
 
 const router = Router();
 
@@ -17,13 +18,13 @@ const createTimesheetSchema = z.object({
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-/**
- * GET /timesheet?employee_id=X
- * Returns all timesheet entries (account.analytic.line) for the employee.
- * Sorted newest-first, limited to 50.
- */
 router.get('/', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -33,11 +34,9 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
+        const uid = await client.authenticate();
 
-        // account.analytic.line — use 'employee_id' domain filter
-        // Note: 'project_id != false' ensures we only get timesheet lines (not accounting lines)
-        const entries: any = await odooClient.searchRead(
+        const entries: any = await client.searchRead(
             uid,
             'account.analytic.line',
             [
@@ -60,18 +59,16 @@ router.get('/', async (req, res) => {
     }
 });
 
-/**
- * GET /timesheet/projects
- * Returns all active projects.
- */
 router.get('/projects', async (req, res) => {
     try {
-        const uid = await odooClient.authenticate();
-        const projects: any = await odooClient.searchRead(
-            uid,
-            'project.project',
-            [['active', '=', true]],
-            ['id', 'name']
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+        const projects: any = await client.searchRead(
+            uid, 'project.project', [['active', '=', true]], ['id', 'name']
         );
         res.json({ projects: Array.isArray(projects) ? projects : [] });
     } catch (error: any) {
@@ -80,12 +77,13 @@ router.get('/projects', async (req, res) => {
     }
 });
 
-/**
- * GET /timesheet/tasks?project_id=X
- * Returns all active tasks for a given project.
- */
 router.get('/tasks', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const projectId = req.query.project_id;
         if (!projectId) {
             return res.status(400).json({ error: 'project_id query parameter required' });
@@ -95,14 +93,10 @@ router.get('/tasks', async (req, res) => {
             return res.status(400).json({ error: 'Invalid project_id' });
         }
 
-        const uid = await odooClient.authenticate();
-        const tasks: any = await odooClient.searchRead(
-            uid,
-            'project.task',
-            [
-                ['project_id', '=', parsedProjectId],
-                ['active', '=', true],
-            ],
+        const uid = await client.authenticate();
+        const tasks: any = await client.searchRead(
+            uid, 'project.task',
+            [['project_id', '=', parsedProjectId], ['active', '=', true]],
             ['id', 'name']
         );
         res.json({ tasks: Array.isArray(tasks) ? tasks : [] });
@@ -112,40 +106,28 @@ router.get('/tasks', async (req, res) => {
     }
 });
 
-/**
- * POST /timesheet
- * Body: { employee_id, project_id, task_id?, date, unit_amount, name }
- * Creates a new account.analytic.line (timesheet entry).
- */
 router.post('/', async (req, res) => {
     try {
-        const body = createTimesheetSchema.parse(req.body);
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
-        // Step 1: Verify the project exists using safe fields only.
-        const projects: any = await odooClient.searchRead(
-            uid,
-            'project.project',
-            [['id', '=', body.project_id]],
-            ['id', 'name']
+        const body = createTimesheetSchema.parse(req.body);
+        const uid = await client.authenticate();
+
+        const projects: any = await client.searchRead(
+            uid, 'project.project', [['id', '=', body.project_id]], ['id', 'name']
         );
 
         if (!Array.isArray(projects) || projects.length === 0) {
             return res.status(400).json({ error: 'Project not found' });
         }
 
-        // Step 2: Try to resolve analytic_account_id (Odoo ≤16).
-        // In Odoo 17+ this field may not exist on project.project — the analytic account
-        // is derived automatically from project_id at write time by the hr_timesheet module.
-        // We use silent=true so an "Invalid field" error doesn't log noise in the console.
         let analyticAccountId: number | false = false;
         try {
-            const projectAccount: any = await odooClient.searchRead(
-                uid,
-                'project.project',
-                [['id', '=', body.project_id]],
-                ['id', 'analytic_account_id'],
-                true  // silent
+            const projectAccount: any = await client.searchRead(
+                uid, 'project.project', [['id', '=', body.project_id]], ['id', 'analytic_account_id'], true
             );
             if (Array.isArray(projectAccount) && projectAccount[0]) {
                 const a = projectAccount[0].analytic_account_id;
@@ -164,16 +146,10 @@ router.post('/', async (req, res) => {
             unit_amount: body.unit_amount,
         };
 
-        // Only include account_id when we can resolve it — Odoo 17+ may auto-compute it
-        if (analyticAccountId) {
-            recordData.account_id = analyticAccountId;
-        }
+        if (analyticAccountId) recordData.account_id = analyticAccountId;
+        if (body.task_id) recordData.task_id = body.task_id;
 
-        if (body.task_id) {
-            recordData.task_id = body.task_id;
-        }
-
-        const newId = await odooClient.createRecord(uid, 'account.analytic.line', recordData);
+        const newId = await client.createRecord(uid, 'account.analytic.line', recordData);
 
         res.json({ status: 'success', id: newId });
     } catch (error: any) {

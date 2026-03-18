@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { odooClient } from '../odoo/client';
+import { getOdooClient } from '../odoo/client';
+import { tenantStore } from '../lib/tenantStore';
 
 const router = Router();
 
@@ -25,6 +26,11 @@ const createExpenseSchema = z.object({
 // GET / - Fetch user's expenses
 router.get('/', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -34,8 +40,8 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
-        const expenses: any = await odooClient.searchRead(
+        const uid = await client.authenticate();
+        const expenses: any = await client.searchRead(
             uid,
             'hr.expense',
             [['employee_id', '=', parsedEmployeeId]],
@@ -51,6 +57,11 @@ router.get('/', async (req, res) => {
 // GET /pending?employee_id=X - Fetch pending expenses (draft or reported) for an employee
 router.get('/pending', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -60,14 +71,13 @@ router.get('/pending', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
-        const expenses: any = await odooClient.searchRead(
+        const uid = await client.authenticate();
+        const expenses: any = await client.searchRead(
             uid,
             'hr.expense',
             [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]],
             ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
         );
-        // Response key is 'expenses' for consistency with GET /
         res.json({ expenses });
     } catch (error: any) {
         console.error('Fetch Pending Expenses Error:', error);
@@ -78,15 +88,16 @@ router.get('/pending', async (req, res) => {
 // GET /products - Fetch Expense Products
 router.get('/products', async (req, res) => {
     try {
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
+        const uid = await client.authenticate();
         let products: any[] = [];
 
-        // ── Attempt 1: product.product with can_be_expensed filter ─────────────
-        // This is the ideal query but can fail on some Odoo versions if the field
-        // is not stored/searchable on product.product directly.
         try {
-            const result: any = await odooClient.searchRead(
+            const result: any = await client.searchRead(
                 uid,
                 'product.product',
                 [['can_be_expensed', '=', true]],
@@ -97,12 +108,9 @@ router.get('/products', async (req, res) => {
             console.warn('product.product can_be_expensed query failed, trying product.template fallback:', e);
         }
 
-        // ── Attempt 2: product.template fallback ────────────────────────────────
-        // In some Odoo versions can_be_expensed lives on product.template only.
-        // We map each template to its first product variant (product.product).
         if (products.length === 0) {
             try {
-                const templates: any = await odooClient.searchRead(
+                const templates: any = await client.searchRead(
                     uid,
                     'product.template',
                     [['can_be_expensed', '=', true]],
@@ -127,7 +135,6 @@ router.get('/products', async (req, res) => {
         res.json({ products });
     } catch (error: any) {
         console.error('Fetch Expense Products Error:', error);
-        // Return empty list instead of 500 so the frontend still renders
         res.json({ products: [], error: error.message });
     }
 });
@@ -135,11 +142,15 @@ router.get('/products', async (req, res) => {
 // POST / - Create Expense
 router.post('/', async (req, res) => {
     try {
-        const body = createExpenseSchema.parse(req.body);
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
-        // Step 1: Get employee's company_id and currency
-        const employees: any = await odooClient.searchRead(
+        const body = createExpenseSchema.parse(req.body);
+        const uid = await client.authenticate();
+
+        const employees: any = await client.searchRead(
             uid,
             'hr.employee',
             [['id', '=', body.employee_id]],
@@ -153,8 +164,7 @@ router.post('/', async (req, res) => {
         const employee = employees[0];
         const companyId = employee.company_id[0];
 
-        // Fetch the currency from the company
-        const companies: any = await odooClient.searchRead(
+        const companies: any = await client.searchRead(
             uid,
             'res.company',
             [['id', '=', companyId]],
@@ -163,10 +173,8 @@ router.post('/', async (req, res) => {
 
         const currencyId = companies && companies[0] && companies[0].currency_id
             ? companies[0].currency_id[0]
-            : 1; // Default to currency ID 1 if not set
+            : 1;
 
-        // Step 2: Create expense record.
-        // Base fields stable across all supported Odoo versions (13+).
         const baseExpenseData: Record<string, any> = {
             employee_id: body.employee_id,
             product_id: body.product_id,
@@ -176,15 +184,12 @@ router.post('/', async (req, res) => {
             date: body.date,
             company_id: companyId,
             currency_id: currencyId,
-            payment_mode: 'own_account', // Employee paid out-of-pocket
+            payment_mode: 'own_account',
         };
 
-        // total_amount_currency: added in Odoo 13, possibly renamed in Odoo 18+.
-        // Try with it first; if Odoo rejects it as "Invalid field", retry without it
-        // so Odoo computes the total automatically from price_unit × quantity.
         let newExpenseId: any;
         try {
-            newExpenseId = await odooClient.createRecord(uid, 'hr.expense', {
+            newExpenseId = await client.createRecord(uid, 'hr.expense', {
                 ...baseExpenseData,
                 total_amount_currency: body.unit_amount,
             });
@@ -192,26 +197,22 @@ router.post('/', async (req, res) => {
             const errMsg: string = String(createErr?.faultString || createErr?.message || '');
             if (errMsg.toLowerCase().includes('total_amount_currency') || errMsg.toLowerCase().includes('invalid field')) {
                 console.warn('[expenses] total_amount_currency not accepted, retrying without it:', errMsg);
-                newExpenseId = await odooClient.createRecord(uid, 'hr.expense', baseExpenseData);
+                newExpenseId = await client.createRecord(uid, 'hr.expense', baseExpenseData);
             } else {
                 throw createErr;
             }
         }
 
-        // Step 3: Upload attachments (receipts) if provided
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await odooClient.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId as number);
+                await client.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId as number);
                 console.log(`${body.attachments.length} attachment(s) uploaded for expense ${newExpenseId}`);
             } catch (attachError: any) {
                 console.error('Attachment upload error:', attachError);
-                // Continue even if attachments fail — expense record is already saved
             }
         }
 
-        // Step 4: Submit - SKIPPED as per user request (Leave in Draft)
         res.json({ status: 'success', id: newExpenseId, state: 'draft', message: 'Expense created in draft state' });
-
 
     } catch (error: any) {
         if (error instanceof z.ZodError) {

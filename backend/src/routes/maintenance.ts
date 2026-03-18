@@ -1,20 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { odooClient } from '../odoo/client';
+import { getOdooClient, OdooClientInstance } from '../odoo/client';
+import { tenantStore } from '../lib/tenantStore';
 import { attachmentSchema } from './helpdesk';
 
 const router = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Runtime check: verify the maintenance.request model is accessible.
- * Returns false if the module is not installed or returns an HTML response
- * (which happens on Odoo SaaS trial when the Maintenance module isn't enabled).
- */
-const isMaintenanceAvailable = async (uid: number): Promise<boolean> => {
+const isMaintenanceAvailable = async (client: OdooClientInstance, uid: number): Promise<boolean> => {
     try {
-        await odooClient.searchRead(uid, 'maintenance.request', [['id', '=', 0]], ['id'], true);
+        await client.searchRead(uid, 'maintenance.request', [['id', '=', 0]], ['id'], true);
         return true;
     } catch {
         return false;
@@ -34,23 +30,21 @@ const createMaintenanceSchema = z.object({
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-/**
- * GET /maintenance/categories
- * Returns all maintenance equipment categories.
- */
 router.get('/categories', async (req, res) => {
     try {
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
-        if (!(await isMaintenanceAvailable(uid))) {
+        const uid = await client.authenticate();
+
+        if (!(await isMaintenanceAvailable(client, uid))) {
             return res.json({ available: false, categories: [] });
         }
 
-        const categories: any = await odooClient.searchRead(
-            uid,
-            'maintenance.equipment.category',
-            [],
-            ['id', 'name']
+        const categories: any = await client.searchRead(
+            uid, 'maintenance.equipment.category', [], ['id', 'name']
         );
         res.json({ available: true, categories: Array.isArray(categories) ? categories : [] });
     } catch (error: any) {
@@ -59,13 +53,13 @@ router.get('/categories', async (req, res) => {
     }
 });
 
-/**
- * GET /maintenance?employee_id=X
- * Returns all maintenance requests submitted by the employee.
- * NOTE: maintenance.request uses stage_id (not a string 'state').
- */
 router.get('/', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -75,26 +69,22 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
+        const uid = await client.authenticate();
 
-        if (!(await isMaintenanceAvailable(uid))) {
+        if (!(await isMaintenanceAvailable(client, uid))) {
             return res.json({ available: false, requests: [] });
         }
 
-        // Fetch with full field list first; fall back to safe minimal fields if any field is rejected
         let requests: any = [];
         try {
-            requests = await odooClient.searchRead(
-                uid,
-                'maintenance.request',
+            requests = await client.searchRead(
+                uid, 'maintenance.request',
                 [['employee_id', '=', parsedEmployeeId]],
                 ['id', 'name', 'description', 'stage_id', 'category_id', 'maintenance_type', 'create_date', 'request_date']
             );
         } catch {
-            // One of the optional fields may not exist — retry with safe-only fields
-            requests = await odooClient.searchRead(
-                uid,
-                'maintenance.request',
+            requests = await client.searchRead(
+                uid, 'maintenance.request',
                 [['employee_id', '=', parsedEmployeeId]],
                 ['id', 'name', 'stage_id', 'category_id', 'maintenance_type', 'create_date']
             );
@@ -102,10 +92,7 @@ router.get('/', async (req, res) => {
 
         const sorted = Array.isArray(requests)
             ? requests
-                .sort(
-                    (a: any, b: any) =>
-                        new Date(b.create_date).getTime() - new Date(a.create_date).getTime()
-                )
+                .sort((a: any, b: any) => new Date(b.create_date).getTime() - new Date(a.create_date).getTime())
                 .slice(0, 30)
             : [];
 
@@ -116,41 +103,33 @@ router.get('/', async (req, res) => {
     }
 });
 
-/**
- * POST /maintenance
- * Body: { employee_id, name, description?, category_id?, maintenance_type, attachments? }
- * Creates a new maintenance.request record.
- */
 router.post('/', async (req, res) => {
     try {
-        const body = createMaintenanceSchema.parse(req.body);
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
-        if (!(await isMaintenanceAvailable(uid))) {
+        const body = createMaintenanceSchema.parse(req.body);
+        const uid = await client.authenticate();
+
+        if (!(await isMaintenanceAvailable(client, uid))) {
             return res.json({ available: false, message: 'Maintenance module not available on this Odoo instance' });
         }
 
-        // Core fields (stable across all Odoo versions with maintenance module)
         const recordData: Record<string, any> = {
             name: body.name,
             employee_id: body.employee_id,
             maintenance_type: body.maintenance_type,
         };
 
-        // description: HTML text field — only include if provided to avoid empty-value issues
-        if (body.description) {
-            recordData.description = body.description;
-        }
+        if (body.description) recordData.description = body.description;
+        if (body.category_id) recordData.category_id = body.category_id;
 
-        if (body.category_id) {
-            recordData.category_id = body.category_id;
-        }
+        const newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
 
-        const newId = await odooClient.createRecord(uid, 'maintenance.request', recordData) as number;
-
-        // Upload attachments if provided
         if (body.attachments && body.attachments.length > 0) {
-            await odooClient.uploadAttachments(uid, body.attachments, 'maintenance.request', newId);
+            await client.uploadAttachments(uid, body.attachments, 'maintenance.request', newId);
         }
 
         res.json({ status: 'success', id: newId });

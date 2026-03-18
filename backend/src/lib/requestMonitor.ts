@@ -1,4 +1,5 @@
-import { odooClient } from '../odoo/client';
+import { getOdooClient } from '../odoo/client';
+import { tenantStore } from './tenantStore';
 import { notificationStore, Notification } from './notificationStore';
 import { sendPushNotification } from './pushStore';
 import { redisGet, redisSet } from './redis';
@@ -19,11 +20,11 @@ interface EmployeeCache {
     [uniqueId: string]: RequestState;
 }
 
-const cacheKey = (employeeId: number) => `shadow:req_cache:${employeeId}`;
+const cacheKey = (tenantId: string, employeeId: number) => `shadow:t:${tenantId}:req_cache:${employeeId}`;
 
-async function loadCache(employeeId: number): Promise<EmployeeCache> {
+async function loadCache(tenantId: string, employeeId: number): Promise<EmployeeCache> {
     try {
-        const raw = await redisGet(cacheKey(employeeId));
+        const raw = await redisGet(cacheKey(tenantId, employeeId));
         if (!raw) return {};
         return JSON.parse(raw) as EmployeeCache;
     } catch {
@@ -31,9 +32,9 @@ async function loadCache(employeeId: number): Promise<EmployeeCache> {
     }
 }
 
-async function saveCache(employeeId: number, cache: EmployeeCache): Promise<void> {
+async function saveCache(tenantId: string, employeeId: number, cache: EmployeeCache): Promise<void> {
     try {
-        await redisSet(cacheKey(employeeId), JSON.stringify(cache));
+        await redisSet(cacheKey(tenantId, employeeId), JSON.stringify(cache));
     } catch (e) {
         console.error('Monitor failed to write cache to Redis:', e);
     }
@@ -42,15 +43,24 @@ async function saveCache(employeeId: number, cache: EmployeeCache): Promise<void
 // ── Monitor ───────────────────────────────────────────────────────────────────
 
 export const requestMonitor = {
-    checkUpdates: async (employeeId: number) => {
-        console.log(`Checking updates for employee ${employeeId}...`);
+    checkUpdates: async (employeeId: number, tenantId: string) => {
+        console.log(`[${tenantId}] Checking updates for employee ${employeeId}...`);
+
+        // Load tenant config
+        const cfg = await tenantStore.getTenant(tenantId);
+        if (!cfg) {
+            console.error(`[${tenantId}] Monitor: unknown tenant`);
+            return;
+        }
+
+        const client = getOdooClient(tenantId, cfg);
 
         // 1. Authenticate
         let uid = 0;
         try {
-            uid = await odooClient.authenticate();
+            uid = await client.authenticate();
         } catch (e) {
-            console.error('Monitor failed to authenticate with Odoo:', e);
+            console.error(`[${tenantId}] Monitor failed to authenticate with Odoo:`, e);
             return;
         }
 
@@ -66,7 +76,7 @@ export const requestMonitor = {
         const fetched = { timeOff: false, expense: false, helpdesk: false, maintenance: false };
 
         try {
-            const result = await odooClient.searchRead(uid, 'hr.leave',
+            const result = await client.searchRead(uid, 'hr.leave',
                 [['employee_id', '=', employeeId]],
                 ['id', 'name', 'state', 'date_from', 'date_to'],
                 true  // silent
@@ -74,11 +84,11 @@ export const requestMonitor = {
             timeOffRequests = Array.isArray(result) ? result : [];
             fetched.timeOff = true;
         } catch {
-            console.warn(`[monitor] Could not fetch hr.leave for employee ${employeeId} — keeping cached state.`);
+            console.warn(`[${tenantId}] [monitor] Could not fetch hr.leave for employee ${employeeId} — keeping cached state.`);
         }
 
         try {
-            const result = await odooClient.searchRead(uid, 'hr.expense',
+            const result = await client.searchRead(uid, 'hr.expense',
                 [['employee_id', '=', employeeId]],
                 ['id', 'name', 'state', 'total_amount', 'date', 'product_id'],
                 true  // silent
@@ -86,21 +96,21 @@ export const requestMonitor = {
             expenses = Array.isArray(result) ? result : [];
             fetched.expense = true;
         } catch {
-            console.warn(`[monitor] Could not fetch hr.expense for employee ${employeeId} — keeping cached state.`);
+            console.warn(`[${tenantId}] [monitor] Could not fetch hr.expense for employee ${employeeId} — keeping cached state.`);
         }
 
         // Helpdesk — Enterprise only, silent=true
         // We must filter by the employee's partner_id to avoid leaking all company tickets.
         // If we can't resolve the partner_id, skip helpdesk monitoring for this employee.
         try {
-            const empResult: any = await odooClient.searchRead(uid, 'hr.employee',
+            const empResult: any = await client.searchRead(uid, 'hr.employee',
                 [['id', '=', employeeId]],
                 ['id', 'user_id'],
                 true
             );
             const emp = Array.isArray(empResult) ? empResult[0] : null;
             if (emp && Array.isArray(emp.user_id) && emp.user_id[0]) {
-                const userResult: any = await odooClient.searchRead(uid, 'res.users',
+                const userResult: any = await client.searchRead(uid, 'res.users',
                     [['id', '=', emp.user_id[0]]],
                     ['id', 'partner_id'],
                     true
@@ -110,7 +120,7 @@ export const requestMonitor = {
                     : null;
 
                 if (partnerId) {
-                    const result = await odooClient.searchRead(uid, 'helpdesk.ticket',
+                    const result = await client.searchRead(uid, 'helpdesk.ticket',
                         [['partner_id', '=', partnerId]],
                         ['id', 'name', 'stage_id', 'create_date', 'partner_id'],
                         true
@@ -126,7 +136,7 @@ export const requestMonitor = {
 
         // Maintenance — may not be installed on all instances, silent=true
         try {
-            const result = await odooClient.searchRead(uid, 'maintenance.request',
+            const result = await client.searchRead(uid, 'maintenance.request',
                 [['employee_id', '=', employeeId]],
                 ['id', 'name', 'stage_id', 'create_date', 'maintenance_type'],
                 true
@@ -138,16 +148,14 @@ export const requestMonitor = {
         }
 
         // 3. Load Cache from Redis
-        const employeeCache = await loadCache(employeeId);
+        const employeeCache = await loadCache(tenantId, employeeId);
 
         // Start newCache from the EXISTING cache so that entries for types that
         // failed to fetch this cycle are preserved, not wiped out.
-        // Each successfully-fetched type will overwrite only its own entries below.
         const newCache: EmployeeCache = { ...employeeCache };
         const notificationsToAdd: Notification[] = [];
 
         // ── 4. Compare Time Off (string state) ────────────────────────────────
-        // Only update time_off cache entries if we successfully fetched them this cycle.
         if (fetched.timeOff) for (const req of timeOffRequests) {
             const uniqueId = `time_off_${req.id}`;
             const currentState = req.state as string;
@@ -229,8 +237,8 @@ export const requestMonitor = {
 
         // ── 8. Save notifications + send push ─────────────────────────────────
         for (const n of notificationsToAdd) {
-            await notificationStore.add(n);
-            sendPushNotification(employeeId, {
+            await notificationStore.add(tenantId, n);
+            sendPushNotification(tenantId, employeeId, {
                 title: n.title,
                 body: n.message,
                 data: { targetId: n.targetId, targetType: n.targetType },
@@ -238,7 +246,7 @@ export const requestMonitor = {
         }
 
         // ── 9. Save updated cache to Redis ────────────────────────────────────
-        await saveCache(employeeId, newCache);
+        await saveCache(tenantId, employeeId, newCache);
     },
 };
 

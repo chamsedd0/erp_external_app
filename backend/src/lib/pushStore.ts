@@ -1,7 +1,6 @@
 import { redisGet, redisSet, redisDel } from './redis';
 
-// Each employee's push token is stored under its own key so reads are O(1).
-const tokenKey = (employeeId: number) => `shadow:push_token:${employeeId}`;
+const tokenKey = (tenantId: string, employeeId: number) => `shadow:t:${tenantId}:push_token:${employeeId}`;
 
 interface PushTokenEntry {
     employeeId: number;
@@ -13,15 +12,15 @@ interface PushTokenEntry {
 
 export const pushStore = {
     /** Save or update the Expo push token for an employee. */
-    saveToken: async (employeeId: number, token: string): Promise<void> => {
+    saveToken: async (tenantId: string, employeeId: number, token: string): Promise<void> => {
         const entry: PushTokenEntry = { employeeId, token, updatedAt: new Date().toISOString() };
-        await redisSet(tokenKey(employeeId), JSON.stringify(entry));
+        await redisSet(tokenKey(tenantId, employeeId), JSON.stringify(entry));
     },
 
     /** Get the Expo push token for an employee. Returns null if not registered. */
-    getToken: async (employeeId: number): Promise<string | null> => {
+    getToken: async (tenantId: string, employeeId: number): Promise<string | null> => {
         try {
-            const raw = await redisGet(tokenKey(employeeId));
+            const raw = await redisGet(tokenKey(tenantId, employeeId));
             if (!raw) return null;
             const entry: PushTokenEntry = JSON.parse(raw);
             return entry.token;
@@ -31,8 +30,8 @@ export const pushStore = {
     },
 
     /** Remove the push token for an employee (called on logout). */
-    removeToken: async (employeeId: number): Promise<void> => {
-        await redisDel(tokenKey(employeeId));
+    removeToken: async (tenantId: string, employeeId: number): Promise<void> => {
+        await redisDel(tokenKey(tenantId, employeeId));
     },
 };
 
@@ -49,8 +48,8 @@ interface PushPayload {
  * Uses the free Expo Push API — no additional service needed.
  * Fails silently (logs error) so it never blocks the main flow.
  */
-export async function sendPushNotification(employeeId: number, payload: PushPayload): Promise<void> {
-    const token = await pushStore.getToken(employeeId);
+export async function sendPushNotification(tenantId: string, employeeId: number, payload: PushPayload): Promise<void> {
+    const token = await pushStore.getToken(tenantId, employeeId);
     if (!token) return;
 
     try {
@@ -74,7 +73,7 @@ export async function sendPushNotification(employeeId: number, payload: PushPayl
             const text = await response.text();
             console.error(`Expo Push API error (${response.status}):`, text);
         } else {
-            console.log(`Push sent to employee ${employeeId}`);
+            console.log(`[${tenantId}] Push sent to employee ${employeeId}`);
         }
     } catch (e) {
         console.error('Push notification send failed:', e);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { odooClient } from '../odoo/client';
+import { getOdooClient, OdooClientInstance } from '../odoo/client';
+import { tenantStore } from '../lib/tenantStore';
 
 const router = Router();
 
@@ -27,55 +28,38 @@ const createLeaveSchema = z.object({
 // Odoo has renamed the leave type Many2one field across versions:
 //   v14–v16  → holiday_status_id
 //   v17+     → may be holiday_status_id, leave_type_id, or something else
-// We detect the correct name once from the model schema and cache it.
+// We detect the correct name once per tenant and cache it.
 
-let _leaveTypeField: string | null = null;
+const _leaveTypeField = new Map<string, string>();
 
-async function getLeaveTypeField(uid: number): Promise<string> {
-    if (_leaveTypeField) return _leaveTypeField;
+async function getLeaveTypeField(tenantId: string, client: OdooClientInstance, uid: number): Promise<string> {
+    const cached = _leaveTypeField.get(tenantId);
+    if (cached) return cached;
 
-    // ── Probe-based detection ─────────────────────────────────────────────────
-    // We use searchRead with a domain that will never match real records but looks
-    // like a normal query (avoids SaaS trial controller interception).
-    // Domain [['state','=','__probe__']] matches nothing but is a valid field query.
-    //
-    // KEY: we distinguish two error classes differently:
-    //   • "Invalid field" / "KeyError" / "ValueError" → field does NOT exist → try next
-    //   • Any other error (TITLE/HTML, etc.) → could be SaaS interception with a valid
-    //     field; stop and use this candidate rather than falling back to a wrong default.
-    //
-    // Odoo 19+: work_entry_type_id is tried first (hr.leave.type merged into hr.work.entry.type)
-    // Odoo 14–18: holiday_status_id
     const candidates = ['work_entry_type_id', 'holiday_status_id', 'leave_type_id', 'time_off_type_id'];
     for (const fieldName of candidates) {
         try {
-            await odooClient.searchRead(
+            await client.searchRead(
                 uid, 'hr.leave', [['state', '=', '__probe__']], [fieldName],
-                true  // silent — suppress console.error for expected failures
+                true  // silent
             );
-            // No error → field confirmed to exist
-            _leaveTypeField = fieldName;
-            console.log(`[time_off] Detected leave type field: "${fieldName}"`);
+            _leaveTypeField.set(tenantId, fieldName);
+            console.log(`[${tenantId}] [time_off] Detected leave type field: "${fieldName}"`);
             return fieldName;
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '');
             if (msg.includes('Invalid field') || msg.includes('KeyError') || msg.includes('ValueError')) {
-                // Field definitively doesn't exist on this Odoo version — try next
                 continue;
             }
-            // Any other error (TITLE/HTML, network, etc.): the SaaS controller may be
-            // intercepting but the field likely exists. Use it and let the real query decide.
-            _leaveTypeField = fieldName;
-            console.log(`[time_off] Probe hit non-field error for "${fieldName}", using it: ${msg.substring(0, 80)}`);
+            _leaveTypeField.set(tenantId, fieldName);
+            console.log(`[${tenantId}] [time_off] Probe hit non-field error for "${fieldName}", using it: ${msg.substring(0, 80)}`);
             return fieldName;
         }
     }
 
-    // All probes threw "Invalid field" — field name must be something else entirely.
-    // Fall back to the Odoo 19+ name as the safest default.
-    console.warn('[time_off] All probes returned "Invalid field". Defaulting to "work_entry_type_id".');
-    _leaveTypeField = 'work_entry_type_id';
-    return _leaveTypeField;
+    console.warn(`[${tenantId}] [time_off] All probes returned "Invalid field". Defaulting to "work_entry_type_id".`);
+    _leaveTypeField.set(tenantId, 'work_entry_type_id');
+    return 'work_entry_type_id';
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -83,6 +67,11 @@ async function getLeaveTypeField(uid: number): Promise<string> {
 // GET / - Fetch employee's time-off requests
 router.get('/', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -93,8 +82,8 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
-        let leaveTypeField = await getLeaveTypeField(uid);
+        const uid = await client.authenticate();
+        let leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
 
         const safeFields = [
             'id', 'name',
@@ -106,25 +95,21 @@ router.get('/', async (req, res) => {
 
         let leaves: any;
         try {
-            leaves = await odooClient.searchRead(
+            leaves = await client.searchRead(
                 uid, 'hr.leave', domain, [...safeFields, leaveTypeField]
             );
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '');
             if (msg.includes('Invalid field')) {
-                // The detected field name is wrong for this Odoo version.
-                // Reset the cache so re-detection happens on the next request.
-                console.warn(`[time_off] Field "${leaveTypeField}" rejected, resetting cache and retrying without it.`);
-                _leaveTypeField = null;
+                console.warn(`[${tenantId}] [time_off] Field "${leaveTypeField}" rejected, resetting cache and retrying without it.`);
+                _leaveTypeField.delete(tenantId);
                 leaveTypeField = '';
-                // Retry with only the safe fields — leave type will be null in response
-                leaves = await odooClient.searchRead(uid, 'hr.leave', domain, safeFields);
+                leaves = await client.searchRead(uid, 'hr.leave', domain, safeFields);
             } else {
                 throw e;
             }
         }
 
-        // Normalise: always expose the leave type under a stable 'leave_type_id' key
         const normalised = Array.isArray(leaves)
             ? leaves.map((l: any) => ({
                 ...l,
@@ -140,30 +125,28 @@ router.get('/', async (req, res) => {
 });
 
 // GET /types - Fetch Leave Types
-// In Odoo 14–18 these live on hr.leave.type; in Odoo 19+ they were merged into
-// hr.work.entry.type (codes starting with "LEAVE" are time-off types).
 router.get('/types', async (req, res) => {
     try {
-        const uid = await odooClient.authenticate();
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
 
-        // ── Attempt 1: hr.leave.type (Odoo 14–18) ────────────────────────────
-        // silent=true: prevent TITLE/HTML noise if model doesn't exist
+        const uid = await client.authenticate();
+
         try {
-            const types: any = await odooClient.searchRead(
+            const types: any = await client.searchRead(
                 uid, 'hr.leave.type', [], ['id', 'name'], true
             );
             if (Array.isArray(types) && types.length > 0) {
                 return res.json({ types });
             }
         } catch {
-            // Model doesn't exist on this version — fall through to Odoo 19+ approach
+            // Fall through to Odoo 19+ approach
         }
 
-        // ── Attempt 2: hr.work.entry.type (Odoo 19+) ─────────────────────────
-        // Time-off types have codes starting with "LEAVE"; filter them client-side
-        // since the `code` field filter is more reliable than a `time_off` boolean.
         try {
-            const allTypes: any = await odooClient.searchRead(
+            const allTypes: any = await client.searchRead(
                 uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true
             );
             if (Array.isArray(allTypes)) {
@@ -182,7 +165,6 @@ router.get('/types', async (req, res) => {
             // Fall through
         }
 
-        // Nothing worked — return empty list so the frontend can still render
         res.json({ types: [], available: false });
     } catch (error: any) {
         res.json({ types: [], available: false });
@@ -192,6 +174,11 @@ router.get('/types', async (req, res) => {
 // GET /pending - Fetch pending time-off requests for the authenticated employee
 router.get('/pending', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const employeeId = req.query.employee_id;
         if (!employeeId) {
             return res.status(400).json({ error: 'employee_id query parameter required' });
@@ -201,7 +188,7 @@ router.get('/pending', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
-        const uid = await odooClient.authenticate();
+        const uid = await client.authenticate();
         const domain = [
             ['employee_id', '=', parsedEmployeeId],
             ['state', 'in', ['draft', 'confirm', 'validate1']],
@@ -209,7 +196,7 @@ router.get('/pending', async (req, res) => {
 
         let leaves: any;
         try {
-            leaves = await odooClient.searchRead(
+            leaves = await client.searchRead(
                 uid, 'hr.leave', domain,
                 ['id', 'name', 'date_from', 'date_to', 'number_of_days', 'state']
             );
@@ -227,15 +214,20 @@ router.get('/pending', async (req, res) => {
 // POST / - Create Time Off Request
 router.post('/', async (req, res) => {
     try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
         const body = createLeaveSchema.parse(req.body);
-        const uid = await odooClient.authenticate();
-        const leaveTypeField = await getLeaveTypeField(uid);
+        const uid = await client.authenticate();
+        const leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
 
         const formatDatetime = (isoString: string) => isoString.replace('T', ' ').substring(0, 19);
 
-        const newLeaveId = await odooClient.createRecord(uid, 'hr.leave', {
+        const newLeaveId = await client.createRecord(uid, 'hr.leave', {
             employee_id: body.employee_id,
-            [leaveTypeField]: body.leave_type_id,   // use detected field name
+            [leaveTypeField]: body.leave_type_id,
             date_from: formatDatetime(body.date_from),
             date_to: formatDatetime(body.date_to),
             name: body.name || 'Time Off Request from Portal',
@@ -245,7 +237,7 @@ router.post('/', async (req, res) => {
 
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await odooClient.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId as number);
+                await client.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId as number);
             } catch (attachError: any) {
                 console.error('Leave attachment upload error:', attachError);
             }

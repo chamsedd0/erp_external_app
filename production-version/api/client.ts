@@ -53,22 +53,25 @@ export const apiClient = {
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
-    login: (employee_id: string, pin: string) =>
+    login: (employee_id: string, pin: string, tenant_slug: string) =>
         apiFetch('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ employee_id, pin }),
+            body: JSON.stringify({ employee_id, pin, tenant_slug }),
         }),
 
-    savePushToken: (employee_id: number, token: string) =>
+    getTenantInfo: (slug: string) =>
+        apiFetch(`/auth/tenant/${slug}`),
+
+    savePushToken: (employee_id: number, token: string, tenant_slug: string) =>
         apiFetch('/auth/push-token', {
             method: 'POST',
-            body: JSON.stringify({ employee_id, token }),
+            body: JSON.stringify({ employee_id, token, tenant_slug }),
         }),
 
-    deletePushToken: (employee_id: number) =>
+    deletePushToken: (employee_id: number, tenant_slug: string) =>
         apiFetch('/auth/push-token', {
             method: 'DELETE',
-            body: JSON.stringify({ employee_id }),
+            body: JSON.stringify({ employee_id, tenant_slug }),
         }),
 
     // ── Time Off ──────────────────────────────────────────────────────────────

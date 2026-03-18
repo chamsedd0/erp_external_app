@@ -1,19 +1,18 @@
-import { View, ScrollView, TouchableOpacity, Switch, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight } from 'lucide-react-native';
+import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight, Building2 } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../../providers/toast-context';
 import { useSession } from '../../providers/auth-context';
 import { apiClient } from '../../api/client';
 import Constants from 'expo-constants';
-import { HR_EMAIL } from '../../constants';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Settings() {
     const toast = useToast();
-    const { user } = useSession();
+    const { user, tenantName, tenantSlug, hrEmail, clearTenant, signOut } = useSession();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [markingAllRead, setMarkingAllRead] = useState(false);
     const [clearingCache, setClearingCache] = useState(false);
@@ -23,6 +22,7 @@ export default function Settings() {
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
     const semanticInfo = useColor('semanticInfo' as any);
+    const semanticWarning = useColor('semanticWarning' as any);
     const semanticError = useColor('semanticError' as any);
 
     const appVersion = Constants.expoConfig?.version ?? '1.0.0';
@@ -254,7 +254,7 @@ export default function Settings() {
                                 HR Contact
                             </Text>
                             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
-                                {HR_EMAIL}
+                                {hrEmail ?? '—'}
                             </Text>
                         </View>
                     </View>
@@ -265,6 +265,48 @@ export default function Settings() {
             <View>
                 <SectionHeader title="Data" />
                 <View style={{ backgroundColor: cardColor, borderRadius: 24, overflow: 'hidden' }}>
+
+                    {/* Change Company */}
+                    <TouchableOpacity
+                        onPress={() => Alert.alert(
+                            'Change Company',
+                            `You are currently signed into ${tenantName ?? tenantSlug}. Changing company will sign you out.`,
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Change Company',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        await clearTenant();
+                                        await signOut();
+                                    },
+                                },
+                            ]
+                        )}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: semanticWarning + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <Building2 size={20} color={semanticWarning} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Change Company
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                {tenantName ?? tenantSlug ?? 'No company set'}
+                            </Text>
+                        </View>
+                        <ChevronRight size={18} color={muted} />
+                    </TouchableOpacity>
+
+                    <RowDivider />
+
+                    {/* Clear Cache */}
                     <TouchableOpacity
                         onPress={handleClearCache}
                         disabled={clearingCache}
