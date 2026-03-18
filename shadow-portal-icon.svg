@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Dark navy background gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#131328"/>
+      <stop offset="100%" stop-color="#080814"/>
+    </linearGradient>
+
+    <!-- Blue arch stroke gradient (bottom to top = dark to light) -->
+    <linearGradient id="archGrad" x1="0" y1="1" x2="0" y2="0" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#2A5FD4"/>
+      <stop offset="55%" stop-color="#4F8EF7"/>
+      <stop offset="100%" stop-color="#89BFFF"/>
+    </linearGradient>
+
+    <!-- Radial backdrop glow behind the portal -->
+    <radialGradient id="backdropGlow" cx="50%" cy="44%" r="38%">
+      <stop offset="0%" stop-color="#3A72E8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#3A72E8" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Outer glow filter for the arch -->
+    <filter id="archGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="18" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Soft glow for the apex dot -->
+    <filter id="dotGlow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── Background ── -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#backdropGlow)"/>
+
+  <!-- ── Arch outer glow (wide, faint) ── -->
+  <path d="M 284 760 L 284 490 A 228 228 0 0 1 740 490 L 740 760"
+        fill="none"
+        stroke="#4F8EF7"
+        stroke-width="98"
+        stroke-linecap="round"
+        opacity="0.12"
+        filter="url(#archGlow)"/>
+
+  <!-- ── Base threshold line glow ── -->
+  <line x1="244" y1="760" x2="780" y2="760"
+        stroke="#4F8EF7" stroke-width="56" stroke-linecap="round"
+        opacity="0.12"/>
+
+  <!-- ── Arch main stroke ── -->
+  <path d="M 284 760 L 284 490 A 228 228 0 0 1 740 490 L 740 760"
+        fill="none"
+        stroke="url(#archGrad)"
+        stroke-width="46"
+        stroke-linecap="round"/>
+
+  <!-- ── Base threshold line ── -->
+  <line x1="244" y1="760" x2="780" y2="760"
+        stroke="url(#archGrad)"
+        stroke-width="32"
+        stroke-linecap="round"
+        opacity="0.85"/>
+
+  <!-- ── Apex glow halo ── -->
+  <circle cx="512" cy="262" r="52" fill="#89BFFF" opacity="0.25" filter="url(#dotGlow)"/>
+
+  <!-- ── Apex bright dot ── -->
+  <circle cx="512" cy="262" r="20" fill="#FFFFFF" opacity="0.95" filter="url(#dotGlow)"/>
+</svg>

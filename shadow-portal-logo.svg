@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 480" width="1600" height="480">
+  <defs>
+    <!-- Background -->
+    <linearGradient id="logoBg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#131328"/>
+      <stop offset="100%" stop-color="#080814"/>
+    </linearGradient>
+
+    <!-- Arch gradient -->
+    <linearGradient id="archGradL" x1="0" y1="1" x2="0" y2="0" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#2A5FD4"/>
+      <stop offset="55%" stop-color="#4F8EF7"/>
+      <stop offset="100%" stop-color="#89BFFF"/>
+    </linearGradient>
+
+    <!-- Glow -->
+    <filter id="archGlowL" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="dotGlowL" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Separator gradient -->
+    <linearGradient id="sep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4F8EF7" stop-opacity="0"/>
+      <stop offset="35%" stop-color="#4F8EF7" stop-opacity="0.5"/>
+      <stop offset="65%" stop-color="#4F8EF7" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#4F8EF7" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Backdrop glow behind icon -->
+    <radialGradient id="iconBackdrop" cx="20%" cy="48%" r="22%">
+      <stop offset="0%" stop-color="#3A72E8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#3A72E8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="480" fill="url(#logoBg)"/>
+  <rect width="1600" height="480" fill="url(#iconBackdrop)"/>
+
+  <!-- Icon mark area (left side) -->
+  <!-- Arch glow -->
+  <path d="M 60 388 L 60 228 A 140 140 0 0 1 340 228 L 340 388" fill="none" stroke="#4F8EF7"
+        stroke-width="64" stroke-linecap="round"
+        opacity="0.12" filter="url(#archGlowL)"/>
+
+  <!-- Arch -->
+  <path d="M 60 388 L 60 228 A 140 140 0 0 1 340 228 L 340 388" fill="none" stroke="url(#archGradL)"
+        stroke-width="30" stroke-linecap="round"/>
+
+  <!-- Base line -->
+  <line x1="38" y1="388" x2="362" y2="388"
+        stroke="url(#archGradL)" stroke-width="20" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- Apex dot -->
+  <circle cx="200" cy="88" r="13" fill="#FFFFFF" opacity="0.95" filter="url(#dotGlowL)"/>
+
+  <!-- Separator line -->
+  <line x1="385" y1="0" x2="385" y2="480" stroke="url(#sep)" stroke-width="1.5"/>
+
+  <!-- Wordmark: "Shadow" -->
+  <text x="428" y="262"
+        font-family="Arial Black, Arial, sans-serif"
+        font-weight="900"
+        font-size="132"
+        fill="#FFFFFF"
+        letter-spacing="-2">Shadow</text>
+
+  <!-- Wordmark: "Portal" in blue -->
+  <text x="428" y="380"
+        font-family="Arial, sans-serif"
+        font-weight="300"
+        font-size="90"
+        fill="#4F8EF7"
+        letter-spacing="22">PORTAL</text>
+</svg>
