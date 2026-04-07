@@ -12,7 +12,6 @@ import { maintenanceRouter } from './routes/maintenance';
 import { cronRouter } from './routes/cron';
 import rateLimit from 'express-rate-limit';
 
-// Allow Authorization header in cross-origin requests (required for JWT)
 
 const app = express();
 
