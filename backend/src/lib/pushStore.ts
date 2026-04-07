@@ -1,4 +1,4 @@
-import { redisGet, redisSet, redisDel } from './redis';
+import { redisGet, redisSet, redisDel, redisScan } from './redis';
 
 const tokenKey = (tenantId: string, employeeId: number) => `shadow:t:${tenantId}:push_token:${employeeId}`;
 
@@ -32,6 +32,26 @@ export const pushStore = {
     /** Remove the push token for an employee (called on logout). */
     removeToken: async (tenantId: string, employeeId: number): Promise<void> => {
         await redisDel(tokenKey(tenantId, employeeId));
+    },
+
+    /**
+     * List every registered push token across all tenants.
+     * Returns an array of { tenantId, employeeId } pairs.
+     * Used by the cron job to know who to check.
+     */
+    listAllTokens: async (): Promise<{ tenantId: string; employeeId: number }[]> => {
+        try {
+            const keys = await redisScan('shadow:t:*:push_token:*');
+            return keys.map(key => {
+                // key format: shadow:t:<tenantId>:push_token:<employeeId>
+                const parts = key.split(':');
+                const tenantId = parts[2];
+                const employeeId = parseInt(parts[4], 10);
+                return { tenantId, employeeId };
+            }).filter(e => !isNaN(e.employeeId));
+        } catch {
+            return [];
+        }
     },
 };
 

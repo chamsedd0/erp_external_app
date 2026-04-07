@@ -9,6 +9,7 @@ import { notificationsRouter } from './routes/notifications';
 import { timesheetRouter } from './routes/timesheet';
 import { helpdeskRouter } from './routes/helpdesk';
 import { maintenanceRouter } from './routes/maintenance';
+import { cronRouter } from './routes/cron';
 import rateLimit from 'express-rate-limit';
 
 // Allow Authorization header in cross-origin requests (required for JWT)
@@ -67,6 +68,7 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRouter);
 app.use('/admin', adminRouter);
+app.use('/cron', cronRouter);
 app.use('/time-off', timeOffRouter);
 app.use('/expenses', expensesRouter);
 app.use('/notifications', notificationsRouter);

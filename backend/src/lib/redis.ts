@@ -38,3 +38,18 @@ export async function redisSet(key: string, value: string): Promise<void> {
 export async function redisDel(key: string): Promise<void> {
     await redisCommand('DEL', key);
 }
+
+/**
+ * Scan for all keys matching a glob pattern.
+ * Iterates cursor until complete. Returns all matching keys.
+ */
+export async function redisScan(pattern: string): Promise<string[]> {
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+        const result = await redisCommand<[string, string[]]>('SCAN', cursor, 'MATCH', pattern, 'COUNT', '100');
+        cursor = result[0];
+        keys.push(...result[1]);
+    } while (cursor !== '0');
+    return keys;
+}
