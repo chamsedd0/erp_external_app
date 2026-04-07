@@ -11,6 +11,8 @@ import { helpdeskRouter } from './routes/helpdesk';
 import { maintenanceRouter } from './routes/maintenance';
 import rateLimit from 'express-rate-limit';
 
+// Allow Authorization header in cross-origin requests (required for JWT)
+
 const app = express();
 
 // Allow Authorization header in cross-origin requests (required for JWT)
