@@ -17,7 +17,9 @@
       "Bash(NODE_PATH=\"C:/Users/User1/AppData/Roaming/npm/node_modules\" node generate-docs.js)",
       "Bash(python \"C:\\\\Users\\\\User1\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\be75a956-8e07-4a27-9189-2ef71bcbed24\\\\f9153666-a93e-4289-89dc-ff9a43366796\\\\skills\\\\docx\\\\scripts\\\\office\\\\validate.py\" Shadow-Portal-Product-Overview.docx)",
       "Bash(pip install defusedxml -q)",
-      "Bash(pip install lxml -q)"
+      "Bash(pip install lxml -q)",
+      "Bash(npm install:*)",
+      "Bash(npm list:*)"
     ]
   }
 }

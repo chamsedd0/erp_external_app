@@ -1,0 +1,16 @@
+module.exports = {
+    Platform: { OS: 'ios', select: (obj) => obj.ios ?? obj.default },
+    Alert: { alert: jest.fn() },
+    Linking: { openURL: jest.fn() },
+    View: () => null,
+    Text: () => null,
+    TextInput: () => null,
+    TouchableOpacity: () => null,
+    ScrollView: () => null,
+    FlatList: () => null,
+    Switch: () => null,
+    KeyboardAvoidingView: () => null,
+    ActivityIndicator: () => null,
+    StyleSheet: { create: (s) => s, flatten: (s) => s },
+    Dimensions: { get: () => ({ width: 390, height: 844 }) },
+};

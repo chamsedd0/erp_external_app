@@ -4,3 +4,11 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+node_modules/
+.expo/
+android/
+ios/
+dist/
+web-build/
+*.log

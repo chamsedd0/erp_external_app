@@ -148,7 +148,7 @@ adminRouter.post('/tenants', async (req, res) => {
         res.json({ success: true, slug });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: 'Invalid input', details: error.errors });
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
         }
         console.error('Save Tenant Error:', error);
         res.status(500).json({ error: error.message });
