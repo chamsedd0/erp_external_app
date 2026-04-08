@@ -36,7 +36,7 @@ async function getLeaveTypeField(tenantId: string, client: OdooClientInstance, u
     const cached = _leaveTypeField.get(tenantId);
     if (cached) return cached;
 
-    const candidates = ['work_entry_type_id', 'holiday_status_id', 'leave_type_id', 'time_off_type_id'];
+    const candidates = ['holiday_status_id', 'leave_type_id', 'time_off_type_id', 'work_entry_type_id'];
     for (const fieldName of candidates) {
         try {
             await client.searchRead(
@@ -225,15 +225,30 @@ router.post('/', async (req, res) => {
 
         const formatDatetime = (isoString: string) => isoString.replace('T', ' ').substring(0, 19);
 
-        const newLeaveId = await client.createRecord(uid, 'hr.leave', {
+        const leavePayload = (fieldName: string) => ({
             employee_id: body.employee_id,
-            [leaveTypeField]: body.leave_type_id,
+            [fieldName]: body.leave_type_id,
             date_from: formatDatetime(body.date_from),
             date_to: formatDatetime(body.date_to),
             name: body.name || 'Time Off Request from Portal',
             request_date_from: body.date_from.split('T')[0],
             request_date_to: body.date_to.split('T')[0],
         });
+
+        let newLeaveId: any;
+        try {
+            newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload(leaveTypeField));
+        } catch (createErr: any) {
+            const msg = String(createErr?.faultString || createErr?.message || '');
+            // If Odoo says KeyError: None, the leave type field name is wrong — reset cache and retry
+            if (msg.includes('KeyError: None') && leaveTypeField !== 'holiday_status_id') {
+                console.warn(`[${tenantId}] [time_off] Create failed with KeyError: None, retrying with holiday_status_id`);
+                _leaveTypeField.set(tenantId, 'holiday_status_id');
+                newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload('holiday_status_id'));
+            } else {
+                throw createErr;
+            }
+        }
 
         if (body.attachments && body.attachments.length > 0) {
             try {
