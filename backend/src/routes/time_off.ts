@@ -30,9 +30,9 @@ const createLeaveSchema = z.object({
 //   v17+     → may be holiday_status_id, leave_type_id, or something else
 // We detect the correct name once per tenant and cache it.
 
-const _leaveTypeField = new Map<string, string>();
+export const _leaveTypeField = new Map<string, string>();
 
-async function getLeaveTypeField(tenantId: string, client: OdooClientInstance, uid: number): Promise<string> {
+export async function getLeaveTypeField(tenantId: string, client: OdooClientInstance, uid: number): Promise<string> {
     const cached = _leaveTypeField.get(tenantId);
     if (cached) return cached;
 

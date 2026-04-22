@@ -9,6 +9,7 @@ import { notificationsRouter } from './routes/notifications';
 import { timesheetRouter } from './routes/timesheet';
 import { helpdeskRouter } from './routes/helpdesk';
 import { maintenanceRouter } from './routes/maintenance';
+import { attendanceRouter } from './routes/attendance';
 import { cronRouter } from './routes/cron';
 import rateLimit from 'express-rate-limit';
 
@@ -74,6 +75,7 @@ app.use('/notifications', notificationsRouter);
 app.use('/timesheet', timesheetRouter);
 app.use('/helpdesk', helpdeskRouter);
 app.use('/maintenance', maintenanceRouter);
+app.use('/attendance', attendanceRouter);
 
 // ── Local dev server ──────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {

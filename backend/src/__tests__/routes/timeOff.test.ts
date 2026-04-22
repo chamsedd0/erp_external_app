@@ -199,11 +199,10 @@ describe('POST /time-off', () => {
         const probeTenant = 'probe-tenant-holiday';
         mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
 
-        // First probe (work_entry_type_id): throws Invalid field → continue
-        // Second probe (holiday_status_id): resolves → cache and use it
+        // Probe order in time_off.ts: ['holiday_status_id', 'leave_type_id', 'time_off_type_id', 'work_entry_type_id']
+        // holiday_status_id is the FIRST candidate — resolve on first probe to cache and use it
         mockClient.searchRead
-            .mockRejectedValueOnce({ faultString: 'Invalid field work_entry_type_id' })
-            .mockResolvedValueOnce([]); // holiday_status_id probe succeeds
+            .mockResolvedValueOnce([]); // holiday_status_id probe succeeds immediately
         mockClient.createRecord.mockResolvedValueOnce(200);
 
         const res = await request(app)

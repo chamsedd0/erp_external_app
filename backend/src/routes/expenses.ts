@@ -17,11 +17,25 @@ const createExpenseSchema = z.object({
     employee_id: z.number(),
     product_id: z.number(),
     name: z.string(), // Description
-    unit_amount: z.number(), // Cost per unit (mapped to price_unit & total_amount_currency)
+    unit_amount: z.number(), // Cost per unit
     quantity: z.number().default(1),
     date: z.string(), // YYYY-MM-DD
+    payment_mode: z.enum(['own_account', 'company_account']).default('own_account'),
+    tax_ids: z.array(z.number()).optional(),
     attachments: z.array(attachmentSchema).max(3).optional(), // Up to 3 receipt images
 });
+
+// Fields to fetch for expenses — price_unit may not exist on Odoo 17+
+const EXPENSE_READ_FIELDS_FULL = ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
+const EXPENSE_READ_FIELDS_FALLBACK = ['id', 'name', 'product_id', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
+
+async function fetchExpenses(uid: number, client: any, domain: any[]): Promise<any[]> {
+    try {
+        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FULL);
+    } catch {
+        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FALLBACK);
+    }
+}
 
 // GET / - Fetch user's expenses
 router.get('/', async (req, res) => {
@@ -41,12 +55,7 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await client.authenticate();
-        const expenses: any = await client.searchRead(
-            uid,
-            'hr.expense',
-            [['employee_id', '=', parsedEmployeeId]],
-            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
-        );
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', parsedEmployeeId]]);
         res.json({ expenses });
     } catch (error: any) {
         console.error('Fetch Expenses Error:', error);
@@ -72,16 +81,33 @@ router.get('/pending', async (req, res) => {
         }
 
         const uid = await client.authenticate();
-        const expenses: any = await client.searchRead(
-            uid,
-            'hr.expense',
-            [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]],
-            ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date']
-        );
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]]);
         res.json({ expenses });
     } catch (error: any) {
         console.error('Fetch Pending Expenses Error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /taxes - Fetch applicable taxes for expenses
+router.get('/taxes', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+        const taxes: any = await client.searchRead(
+            uid,
+            'account.tax',
+            [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']]],
+            ['id', 'name', 'amount', 'amount_type']
+        );
+        res.json({ taxes: Array.isArray(taxes) ? taxes : [] });
+    } catch (error: any) {
+        console.error('Fetch Expense Taxes Error:', error);
+        res.json({ taxes: [], error: error.message });
     }
 });
 
@@ -175,38 +201,75 @@ router.post('/', async (req, res) => {
             ? companies[0].currency_id[0]
             : 1;
 
+        // Detect Odoo version to select the correct amount field.
+        // v17+ replaced price_unit (writable) with total_amount as the primary input field.
+        const odooVersion = await client.getVersion().catch(() => 16);
+        const useNewAmountField = odooVersion >= 17;
+
         const baseExpenseData: Record<string, any> = {
             employee_id: body.employee_id,
             product_id: body.product_id,
             name: body.name,
-            price_unit: body.unit_amount,
             quantity: body.quantity,
             date: body.date,
             company_id: companyId,
             currency_id: currencyId,
-            payment_mode: 'own_account',
+            payment_mode: body.payment_mode,
         };
+
+        if (body.tax_ids && body.tax_ids.length > 0) {
+            baseExpenseData.tax_ids = [[6, 0, body.tax_ids]];
+        }
+
+        // Build the amount field based on version, with layered retry fallback
+        const withPriceUnit = { ...baseExpenseData, price_unit: body.unit_amount };
+        const withTotalAmount = { ...baseExpenseData, total_amount: body.unit_amount * body.quantity };
+
+        const primaryPayload = useNewAmountField
+            ? { ...withTotalAmount, total_amount_currency: body.unit_amount * body.quantity }
+            : { ...withPriceUnit, total_amount_currency: body.unit_amount };
 
         let newExpenseId: any;
         try {
-            newExpenseId = await client.createRecord(uid, 'hr.expense', {
-                ...baseExpenseData,
-                total_amount_currency: body.unit_amount,
-            });
-        } catch (createErr: any) {
-            const errMsg: string = String(createErr?.faultString || createErr?.message || '');
-            if (errMsg.toLowerCase().includes('total_amount_currency') || errMsg.toLowerCase().includes('invalid field')) {
-                console.warn('[expenses] total_amount_currency not accepted, retrying without it:', errMsg);
-                newExpenseId = await client.createRecord(uid, 'hr.expense', baseExpenseData);
+            newExpenseId = await client.createRecord(uid, 'hr.expense', primaryPayload);
+        } catch (err1: any) {
+            const msg1 = String(err1?.faultString || err1?.message || '').toLowerCase();
+
+            // total_amount_currency rejected — strip it and retry same amount field
+            if (msg1.includes('total_amount_currency') || (msg1.includes('invalid field') && msg1.includes('total_amount_currency'))) {
+                console.warn('[expenses] total_amount_currency rejected, retrying without it');
+                const withoutCurrency = useNewAmountField ? withTotalAmount : withPriceUnit;
+                try {
+                    newExpenseId = await client.createRecord(uid, 'hr.expense', withoutCurrency);
+                } catch (err2: any) {
+                    const msg2 = String(err2?.faultString || err2?.message || '').toLowerCase();
+                    // price_unit rejected on v17+ — switch to total_amount
+                    if (msg2.includes('price_unit')) {
+                        console.warn('[expenses] price_unit rejected (Odoo 17+), switching to total_amount');
+                        newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
+                    } else {
+                        throw err2;
+                    }
+                }
+            } else if (msg1.includes('price_unit')) {
+                // price_unit rejected directly — switch to total_amount
+                console.warn('[expenses] price_unit rejected (Odoo 17+), switching to total_amount');
+                try {
+                    newExpenseId = await client.createRecord(uid, 'hr.expense', {
+                        ...withTotalAmount,
+                        total_amount_currency: body.unit_amount * body.quantity,
+                    });
+                } catch {
+                    newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
+                }
             } else {
-                throw createErr;
+                throw err1;
             }
         }
 
         if (body.attachments && body.attachments.length > 0) {
             try {
                 await client.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId as number);
-                console.log(`${body.attachments.length} attachment(s) uploaded for expense ${newExpenseId}`);
             } catch (attachError: any) {
                 console.error('Attachment upload error:', attachError);
             }

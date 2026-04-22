@@ -25,10 +25,61 @@ const createMaintenanceSchema = z.object({
     description: z.string().optional(),
     category_id: z.number().optional(),
     maintenance_type: z.enum(['corrective', 'preventive']).default('corrective'),
+    equipment_id: z.number().optional(),
+    maintenance_team_id: z.number().optional(),
+    schedule_date: z.string().optional(), // ISO datetime string
+    duration: z.number().optional(),      // hours as float
+    priority: z.enum(['0', '1', '2', '3']).optional(),
     attachments: z.array(attachmentSchema).max(3).optional(),
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+router.get('/equipment', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+
+        if (!(await isMaintenanceAvailable(client, uid))) {
+            return res.json({ available: false, equipment: [] });
+        }
+
+        const equipment: any = await client.searchRead(
+            uid, 'maintenance.equipment', [], ['id', 'name', 'category_id']
+        );
+        res.json({ available: true, equipment: Array.isArray(equipment) ? equipment : [] });
+    } catch (error: any) {
+        console.error('Fetch Maintenance Equipment Error:', error);
+        res.json({ available: false, equipment: [], message: error.message });
+    }
+});
+
+router.get('/teams', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+
+        if (!(await isMaintenanceAvailable(client, uid))) {
+            return res.json({ available: false, teams: [] });
+        }
+
+        const teams: any = await client.searchRead(
+            uid, 'maintenance.team', [], ['id', 'name']
+        );
+        res.json({ available: true, teams: Array.isArray(teams) ? teams : [] });
+    } catch (error: any) {
+        console.error('Fetch Maintenance Teams Error:', error);
+        res.json({ available: false, teams: [], message: error.message });
+    }
+});
 
 router.get('/categories', async (req, res) => {
     try {
@@ -125,8 +176,31 @@ router.post('/', async (req, res) => {
 
         if (body.description) recordData.description = body.description;
         if (body.category_id) recordData.category_id = body.category_id;
+        if (body.equipment_id) recordData.equipment_id = body.equipment_id;
+        if (body.maintenance_team_id) recordData.maintenance_team_id = body.maintenance_team_id;
+        if (body.priority) recordData.priority = body.priority;
 
-        const newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
+        // schedule_date and duration — may not exist on older Odoo versions; retry without if rejected
+        const extendedFields: Record<string, any> = {};
+        if (body.schedule_date) {
+            // Convert ISO string to Odoo datetime format 'YYYY-MM-DD HH:MM:SS'
+            const d = new Date(body.schedule_date);
+            extendedFields.schedule_date = d.toISOString().replace('T', ' ').substring(0, 19);
+        }
+        if (body.duration !== undefined) extendedFields.duration = body.duration;
+
+        let newId: number;
+        try {
+            newId = await client.createRecord(uid, 'maintenance.request', { ...recordData, ...extendedFields }) as number;
+        } catch (createErr: any) {
+            const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
+            if (msg.includes('schedule_date') || msg.includes('duration') || msg.includes('invalid field')) {
+                console.warn('[maintenance] schedule_date/duration rejected, retrying without them:', msg);
+                newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
+            } else {
+                throw createErr;
+            }
+        }
 
         if (body.attachments && body.attachments.length > 0) {
             await client.uploadAttachments(uid, body.attachments, 'maintenance.request', newId);

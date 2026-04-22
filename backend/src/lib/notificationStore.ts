@@ -11,7 +11,7 @@ export interface Notification {
     read: boolean;
     timestamp: string; // ISO string
     targetId?: string;
-    targetType?: 'timeoff' | 'expense' | 'helpdesk' | 'maintenance' | 'timesheet';
+    targetType?: 'timeoff' | 'expense' | 'helpdesk' | 'maintenance' | 'timesheet' | 'attendance';
 }
 
 async function readAll(tenantId: string): Promise<Notification[]> {

@@ -62,6 +62,12 @@ function friendlyError(raw: string, status?: number): string {
     if (s.includes('account.analytic') || s.includes('timesheet'))
         return 'Could not log your timesheet entry. Please try again.';
 
+    // Attendance
+    if (s.includes('hr.attendance') || s.includes('attendance'))
+        return 'Could not submit your attendance request. Please try again.';
+    if (s.includes('overtime module') || s.includes('requires odoo 16'))
+        return 'Overtime requests require Odoo 16 or newer. Please contact your administrator.';
+
     // Odoo / XML-RPC technical noise
     if (s.includes('xml-rpc') || s.includes('traceback') || s.includes('odoo') || s.includes('xmlrpc'))
         return 'Something went wrong on the server. Please try again or contact your administrator.';
@@ -165,6 +171,8 @@ export const apiClient = {
 
     getExpenseProducts: () => apiFetch('/expenses/products'),
 
+    getExpenseTaxes: () => apiFetch('/expenses/taxes'),
+
     getExpenses: (employeeId: number) =>
         apiFetch(`/expenses?employee_id=${employeeId}`),
 
@@ -177,6 +185,8 @@ export const apiClient = {
         unit_amount: number;
         quantity: number;
         date: string;
+        payment_mode?: 'own_account' | 'company_account';
+        tax_ids?: number[];
         attachments?: Attachment[];
     }) =>
         apiFetch('/expenses', {
@@ -214,11 +224,24 @@ export const apiClient = {
 
     getHelpdeskTeams: () => apiFetch('/helpdesk/teams'),
 
+    getHelpdeskTicketTypes: () => apiFetch('/helpdesk/ticket-types'),
+
+    getHelpdeskTags: () => apiFetch('/helpdesk/tags'),
+
+    getHelpdeskAgents: () => apiFetch('/helpdesk/agents'),
+
     createHelpdeskTicket: (data: {
         employee_id: number;
         name: string;
         description?: string;
         team_id?: number;
+        user_id?: number;
+        priority?: '0' | '1' | '2' | '3';
+        ticket_type_id?: number;
+        tag_ids?: number[];
+        partner_name?: string;
+        partner_email?: string;
+        partner_phone?: string;
         attachments?: Attachment[];
     }) =>
         apiFetch('/helpdesk', {
@@ -233,15 +256,68 @@ export const apiClient = {
 
     getMaintenanceCategories: () => apiFetch('/maintenance/categories'),
 
+    getMaintenanceEquipment: () => apiFetch('/maintenance/equipment'),
+
+    getMaintenanceTeams: () => apiFetch('/maintenance/teams'),
+
     createMaintenanceRequest: (data: {
         employee_id: number;
         name: string;
         description?: string;
         category_id?: number;
         maintenance_type?: 'corrective' | 'preventive';
+        equipment_id?: number;
+        maintenance_team_id?: number;
+        schedule_date?: string;
+        duration?: number;
+        priority?: '0' | '1' | '2' | '3';
         attachments?: Attachment[];
     }) =>
         apiFetch('/maintenance', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    // ── Attendance ────────────────────────────────────────────────────────────
+
+    getAttendanceHistory: (employeeId: number) =>
+        apiFetch(`/attendance?employee_id=${employeeId}`),
+
+    getAttendanceOvertime: (employeeId: number) =>
+        apiFetch(`/attendance/overtime?employee_id=${employeeId}`),
+
+    createAttendanceCorrection: (data: {
+        employee_id: number;
+        check_in: string;
+        check_out?: string;
+        reason?: string;
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/attendance/correction', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    createAttendanceOvertime: (data: {
+        employee_id: number;
+        date: string;
+        duration: number;
+        reason?: string;
+    }) =>
+        apiFetch('/attendance/overtime', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    createAttendanceJustification: (data: {
+        employee_id: number;
+        leave_type_id: number;
+        date_from: string;
+        date_to: string;
+        justification: string;
+        attachments?: Attachment[];
+    }) =>
+        apiFetch('/attendance/justification', {
             method: 'POST',
             body: JSON.stringify(data),
         }),

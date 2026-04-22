@@ -34,10 +34,87 @@ const createHelpdeskSchema = z.object({
     name: z.string().min(1, 'Subject is required'),
     description: z.string().optional(),
     team_id: z.number().optional(),
+    user_id: z.number().optional(),
+    priority: z.enum(['0', '1', '2', '3']).optional(),
+    ticket_type_id: z.number().optional(),
+    tag_ids: z.array(z.number()).optional(),
+    partner_name: z.string().optional(),
+    partner_email: z.string().email().optional(),
+    partner_phone: z.string().optional(),
     attachments: z.array(attachmentSchema).max(3).optional(),
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+router.get('/ticket-types', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+
+        if (!(await isHelpdeskAvailable(client, uid))) {
+            return res.json({ available: false, types: [] });
+        }
+
+        const types: any = await client.searchRead(uid, 'helpdesk.ticket.type', [], ['id', 'name'], true);
+        res.json({ available: true, types: Array.isArray(types) ? types : [] });
+    } catch (error: any) {
+        console.error('Fetch Helpdesk Ticket Types Error:', error);
+        res.json({ available: false, types: [], message: error.message });
+    }
+});
+
+router.get('/tags', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+
+        if (!(await isHelpdeskAvailable(client, uid))) {
+            return res.json({ available: false, tags: [] });
+        }
+
+        const tags: any = await client.searchRead(uid, 'helpdesk.tag', [], ['id', 'name', 'color'], true);
+        res.json({ available: true, tags: Array.isArray(tags) ? tags : [] });
+    } catch (error: any) {
+        console.error('Fetch Helpdesk Tags Error:', error);
+        res.json({ available: false, tags: [], message: error.message });
+    }
+});
+
+router.get('/agents', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        const uid = await client.authenticate();
+
+        if (!(await isHelpdeskAvailable(client, uid))) {
+            return res.json({ available: false, agents: [] });
+        }
+
+        const agents: any = await client.searchRead(
+            uid, 'res.users',
+            [['active', '=', true], ['share', '=', false]],
+            ['id', 'name'],
+            true
+        );
+        // Limit to 50 to keep response size reasonable
+        const list = Array.isArray(agents) ? agents.slice(0, 50) : [];
+        res.json({ available: true, agents: list });
+    } catch (error: any) {
+        console.error('Fetch Helpdesk Agents Error:', error);
+        res.json({ available: false, agents: [], message: error.message });
+    }
+});
 
 router.get('/teams', async (req, res) => {
     try {
@@ -166,8 +243,29 @@ router.post('/', async (req, res) => {
 
         if (partnerId) ticketData.partner_id = partnerId;
         if (body.team_id) ticketData.team_id = body.team_id;
+        if (body.user_id) ticketData.user_id = body.user_id;
+        if (body.priority) ticketData.priority = body.priority;
+        if (body.partner_name) ticketData.partner_name = body.partner_name;
+        if (body.partner_email) ticketData.partner_email = body.partner_email;
+        if (body.partner_phone) ticketData.partner_phone = body.partner_phone;
 
-        const newId = await client.createRecord(uid, 'helpdesk.ticket', ticketData) as number;
+        // ticket_type_id and tag_ids may not exist on all Enterprise versions — retry without if rejected
+        const optionalFields: Record<string, any> = {};
+        if (body.ticket_type_id) optionalFields.ticket_type_id = body.ticket_type_id;
+        if (body.tag_ids && body.tag_ids.length > 0) optionalFields.tag_ids = [[6, 0, body.tag_ids]];
+
+        let newId: number;
+        try {
+            newId = await client.createRecord(uid, 'helpdesk.ticket', { ...ticketData, ...optionalFields }) as number;
+        } catch (createErr: any) {
+            const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
+            if (msg.includes('ticket_type_id') || msg.includes('tag_ids') || msg.includes('invalid field')) {
+                console.warn('[helpdesk] optional fields rejected, retrying without ticket_type_id/tag_ids:', msg);
+                newId = await client.createRecord(uid, 'helpdesk.ticket', ticketData) as number;
+            } else {
+                throw createErr;
+            }
+        }
 
         if (body.attachments && body.attachments.length > 0) {
             await client.uploadAttachments(uid, body.attachments, 'helpdesk.ticket', newId);
