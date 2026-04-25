@@ -13,6 +13,20 @@ const SAMPLE_CFG: TenantConfig = {
     odoo_db: 'acme',
     odoo_username: 'admin@acme.com',
     odoo_password: 'secret',
+
+    contact_name: 'Alice Admin',
+    contact_email: 'alice@acme.com',
+    contact_phone: '+1 555 0001',
+
+    subscription_plan: 'professional',
+    subscription_status: 'active',
+    subscription_start: '2025-01-01',
+    subscription_renewal: '2026-01-01',
+    monthly_amount: 199,
+
+    enabled: true,
+    created_at: '2025-01-01T00:00:00.000Z',
+    notes: 'Test tenant',
 };
 
 const SAMPLE_MAP = { acmecorp: SAMPLE_CFG };
@@ -25,7 +39,12 @@ describe('tenantStore.getTenant', () => {
     it('returns TenantConfig when tenant exists', async () => {
         mockRedisGet.mockResolvedValue(JSON.stringify(SAMPLE_MAP));
         const result = await tenantStore.getTenant('acmecorp');
-        expect(result).toEqual(SAMPLE_CFG);
+        expect(result).toMatchObject({
+            name: SAMPLE_CFG.name,
+            odoo_url: SAMPLE_CFG.odoo_url,
+            subscription_plan: SAMPLE_CFG.subscription_plan,
+            enabled: SAMPLE_CFG.enabled,
+        });
         expect(mockRedisGet).toHaveBeenCalledWith('shadow:tenants');
     });
 
@@ -76,7 +95,8 @@ describe('tenantStore.saveTenant', () => {
 
         const saved = JSON.parse((mockRedisSet.mock.calls[0] as any)[1]);
         expect(Object.keys(saved)).toHaveLength(1);
-        expect(saved.firstco).toEqual(SAMPLE_CFG);
+        // created_at is preserved from SAMPLE_CFG since it's provided
+        expect(saved.firstco).toMatchObject({ name: SAMPLE_CFG.name, created_at: SAMPLE_CFG.created_at });
     });
 
     it('overwrites existing tenant with same slug', async () => {

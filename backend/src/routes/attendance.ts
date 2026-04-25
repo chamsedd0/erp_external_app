@@ -286,8 +286,10 @@ router.post('/justification', async (req, res) => {
             const msg = String(err?.faultString || err?.message || '').toLowerCase();
             if (msg.includes('keyerror') || msg.includes('invalid field')) {
                 console.warn(`[attendance] justification: retrying with holiday_status_id after: ${msg}`);
-                payload['holiday_status_id'] = body.leave_type_id;
+                // Remove the version-detected field first, then set the legacy field
+                // (guard handles the case where leaveTypeField is already holiday_status_id)
                 delete payload[leaveTypeField];
+                payload['holiday_status_id'] = body.leave_type_id;
                 newId = await client.createRecord(uid, 'hr.leave', payload) as number;
             } else {
                 throw err;

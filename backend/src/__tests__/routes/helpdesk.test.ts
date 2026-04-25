@@ -253,4 +253,195 @@ describe('POST /helpdesk', () => {
 
         expect(res.status).toBe(500);
     });
+
+    it('passes priority, user_id, ticket_type_id into ticketData', async () => {
+        setupAvailableWithEmployee(99);
+        mockClient.createRecord.mockResolvedValueOnce(210);
+
+        await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, priority: '2', user_id: 5, ticket_type_id: 3 });
+
+        const ticketData = mockClient.createRecord.mock.calls[0][2];
+        expect(ticketData.priority).toBe('2');
+        expect(ticketData.user_id).toBe(5);
+        expect(ticketData.ticket_type_id).toBe(3);
+    });
+
+    it('sends tag_ids as Many2many command [[6,0,[...]]]', async () => {
+        setupAvailableWithEmployee(99);
+        mockClient.createRecord.mockResolvedValueOnce(211);
+
+        await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, tag_ids: [1, 2, 3] });
+
+        const ticketData = mockClient.createRecord.mock.calls[0][2];
+        expect(ticketData.tag_ids).toEqual([[6, 0, [1, 2, 3]]]);
+    });
+
+    it('passes partner contact fields (name, email, phone) into ticketData', async () => {
+        setupAvailableWithEmployee(99);
+        mockClient.createRecord.mockResolvedValueOnce(212);
+
+        await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({
+                ...VALID_BODY,
+                partner_name: 'John Doe',
+                partner_email: 'john@company.com',
+                partner_phone: '+1 555 1234',
+            });
+
+        const ticketData = mockClient.createRecord.mock.calls[0][2];
+        expect(ticketData.partner_name).toBe('John Doe');
+        expect(ticketData.partner_email).toBe('john@company.com');
+        expect(ticketData.partner_phone).toBe('+1 555 1234');
+    });
+
+    it('retries without ticket_type_id when Odoo rejects it', async () => {
+        setupAvailableWithEmployee(99);
+        mockClient.createRecord
+            .mockRejectedValueOnce({ faultString: 'Invalid field ticket_type_id' })
+            .mockResolvedValueOnce(213);
+
+        const res = await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, ticket_type_id: 5 });
+
+        expect(res.status).toBe(200);
+        expect(mockClient.createRecord).toHaveBeenCalledTimes(2);
+        const retryData = mockClient.createRecord.mock.calls[1][2];
+        expect(retryData).not.toHaveProperty('ticket_type_id');
+    });
+});
+
+// ─── GET /helpdesk/ticket-types ────────────────────────────────────────────────
+
+describe('GET /helpdesk/ticket-types', () => {
+    it('returns ticket types when helpdesk available', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // availability probe
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Hardware Issue' },
+                { id: 2, name: 'Software Issue' },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk/ticket-types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(true);
+        expect(res.body.types).toHaveLength(2);
+    });
+
+    it('returns available:false when helpdesk not installed', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('helpdesk.ticket not found'));
+
+        const res = await request(app)
+            .get('/helpdesk/ticket-types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+        expect(res.body.types).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/helpdesk/ticket-types');
+        expect(res.status).toBe(401);
+    });
+});
+
+// ─── GET /helpdesk/tags ────────────────────────────────────────────────────────
+
+describe('GET /helpdesk/tags', () => {
+    it('returns tags when helpdesk available', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // availability probe
+            .mockResolvedValueOnce([
+                { id: 10, name: 'Urgent', color: 1 },
+                { id: 11, name: 'Bug', color: 2 },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk/tags')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(true);
+        expect(res.body.tags).toHaveLength(2);
+    });
+
+    it('returns available:false and empty tags when helpdesk unavailable', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('not installed'));
+
+        const res = await request(app)
+            .get('/helpdesk/tags')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+        expect(res.body.tags).toEqual([]);
+    });
+
+    it('handles searchRead throwing on tags fetch (available but empty)', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // probe ok
+            .mockRejectedValueOnce(new Error('access denied'));
+
+        const res = await request(app)
+            .get('/helpdesk/tags')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.tags).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/helpdesk/tags');
+        expect(res.status).toBe(401);
+    });
+});
+
+// ─── GET /helpdesk/agents ─────────────────────────────────────────────────────
+
+describe('GET /helpdesk/agents', () => {
+    it('returns internal users when helpdesk available', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // availability probe
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Bob Agent' },
+                { id: 2, name: 'Carol Agent' },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk/agents')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(true);
+        expect(res.body.agents).toHaveLength(2);
+    });
+
+    it('returns available:false when helpdesk unavailable', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('not installed'));
+
+        const res = await request(app)
+            .get('/helpdesk/agents')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/helpdesk/agents');
+        expect(res.status).toBe(401);
+    });
 });

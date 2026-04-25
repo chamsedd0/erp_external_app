@@ -271,4 +271,127 @@ describe('POST /maintenance', () => {
 
         expect(res.status).toBe(500);
     });
+
+    it('passes equipment_id, maintenance_team_id and priority when provided', async () => {
+        setupAvailable();
+        mockClient.createRecord.mockResolvedValueOnce(61);
+
+        await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, equipment_id: 5, maintenance_team_id: 2, priority: '2' });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.equipment_id).toBe(5);
+        expect(createArgs.maintenance_team_id).toBe(2);
+        expect(createArgs.priority).toBe('2');
+    });
+
+    it('retries without schedule_date and duration when Odoo rejects them', async () => {
+        setupAvailable();
+        mockClient.createRecord
+            .mockRejectedValueOnce({ faultString: 'Invalid field schedule_date on maintenance.request' })
+            .mockResolvedValueOnce(62);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, schedule_date: '2026-05-01T09:00:00Z', duration: 2.5 });
+
+        expect(res.status).toBe(200);
+        expect(mockClient.createRecord).toHaveBeenCalledTimes(2);
+        const retryData = mockClient.createRecord.mock.calls[1][2];
+        expect(retryData).not.toHaveProperty('schedule_date');
+        expect(retryData).not.toHaveProperty('duration');
+    });
+
+    it('formats schedule_date to YYYY-MM-DD HH:MM:SS', async () => {
+        setupAvailable();
+        mockClient.createRecord.mockResolvedValueOnce(63);
+
+        await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, schedule_date: '2026-05-01T09:00:00.000Z' });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        // Must be formatted as 'YYYY-MM-DD HH:MM:SS', not ISO with T
+        expect(createArgs.schedule_date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    });
+});
+
+// ─── GET /maintenance/equipment ───────────────────────────────────────────────
+
+describe('GET /maintenance/equipment', () => {
+    it('returns equipment list when module available', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // availability probe
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Printer A', category_id: [1, 'Office'] },
+                { id: 2, name: 'Server B', category_id: [2, 'IT'] },
+            ]);
+
+        const res = await request(app)
+            .get('/maintenance/equipment')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(true);
+        expect(res.body.equipment).toHaveLength(2);
+    });
+
+    it('returns available:false when module not installed', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('not installed'));
+
+        const res = await request(app)
+            .get('/maintenance/equipment')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+        expect(res.body.equipment).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/maintenance/equipment');
+        expect(res.status).toBe(401);
+    });
+});
+
+// ─── GET /maintenance/teams ───────────────────────────────────────────────────
+
+describe('GET /maintenance/teams', () => {
+    it('returns teams when module available', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // availability probe
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Facilities Team' },
+                { id: 2, name: 'IT Team' },
+            ]);
+
+        const res = await request(app)
+            .get('/maintenance/teams')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(true);
+        expect(res.body.teams).toHaveLength(2);
+    });
+
+    it('returns available:false when module not installed', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('not installed'));
+
+        const res = await request(app)
+            .get('/maintenance/teams')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+        expect(res.body.teams).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/maintenance/teams');
+        expect(res.status).toBe(401);
+    });
 });

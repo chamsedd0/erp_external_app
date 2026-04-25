@@ -303,4 +303,136 @@ describe('POST /expenses', () => {
         expect(res.status).toBe(400);
         expect(res.body.error).toMatch(/employee not found/i);
     });
+
+    it('passes payment_mode: company_account when provided', async () => {
+        setupValidCreate(77);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, payment_mode: 'company_account' });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.payment_mode).toBe('company_account');
+    });
+
+    it('uses payment_mode: own_account by default', async () => {
+        setupValidCreate(77);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY); // no payment_mode
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.payment_mode).toBe('own_account');
+    });
+
+    it('sends tax_ids as Many2many command [[6,0,[...]]] when provided', async () => {
+        setupValidCreate(78);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, tax_ids: [5, 6] });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.tax_ids).toEqual([[6, 0, [5, 6]]]);
+    });
+
+    it('omits tax_ids key when array is empty', async () => {
+        setupValidCreate(79);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, tax_ids: [] });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs).not.toHaveProperty('tax_ids');
+    });
+
+    it('returns 400 when more than 3 attachments are provided', async () => {
+        const res = await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({
+                ...VALID_BODY,
+                attachments: [
+                    { name: 'a.jpg', data: 'b64', mimetype: 'image/jpeg' },
+                    { name: 'b.jpg', data: 'b64', mimetype: 'image/jpeg' },
+                    { name: 'c.jpg', data: 'b64', mimetype: 'image/jpeg' },
+                    { name: 'd.jpg', data: 'b64', mimetype: 'image/jpeg' },
+                ],
+            });
+        expect(res.status).toBe(400);
+    });
+
+    it('uses total_amount instead of price_unit on Odoo 17+', async () => {
+        mockClient.getVersion.mockResolvedValue(17);
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
+        mockClient.createRecord.mockResolvedValueOnce(80);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, unit_amount: 100 });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs).toHaveProperty('total_amount');
+        expect(createArgs).not.toHaveProperty('price_unit');
+    });
+
+    it('uses price_unit on Odoo 16', async () => {
+        mockClient.getVersion.mockResolvedValue(16);
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
+        mockClient.createRecord.mockResolvedValueOnce(81);
+
+        await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, unit_amount: 100 });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs).toHaveProperty('price_unit');
+    });
+});
+
+// ─── GET /expenses/taxes ───────────────────────────────────────────────────────
+
+describe('GET /expenses/taxes', () => {
+    it('returns tax list filtered to purchase/all usage', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 1, name: 'VAT 20%', amount: 20, amount_type: 'percent' },
+            { id: 2, name: 'Fixed Fee', amount: 5, amount_type: 'fixed' },
+        ]);
+
+        const res = await request(app)
+            .get('/expenses/taxes')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.taxes).toHaveLength(2);
+        expect(res.body.taxes[0].name).toBe('VAT 20%');
+    });
+
+    it('returns empty taxes array when searchRead throws (silent fail)', async () => {
+        mockClient.searchRead.mockRejectedValueOnce(new Error('account.tax not found'));
+
+        const res = await request(app)
+            .get('/expenses/taxes')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.taxes).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/expenses/taxes');
+        expect(res.status).toBe(401);
+    });
 });
