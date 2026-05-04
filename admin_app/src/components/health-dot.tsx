@@ -1,5 +1,4 @@
 'use client';
-import { cn } from '@/lib/utils';
 
 interface HealthDotProps {
     status: 'ok' | 'error' | 'unknown';
@@ -8,19 +7,28 @@ interface HealthDotProps {
 
 export function HealthDot({ status, latency }: HealthDotProps) {
     const colors = {
-        ok: 'bg-emerald-500',
-        error: 'bg-red-500',
-        unknown: 'bg-slate-300',
+        ok:      '#10B981',
+        error:   '#EF4444',
+        unknown: '#94A3B8',
     };
     const labels = {
-        ok: latency ? `Online (${latency}ms)` : 'Online',
-        error: 'Unreachable',
-        unknown: 'Unknown',
+        ok:      latency ? `Online (${latency}ms)` : 'Online',
+        error:   'Unreachable',
+        unknown: 'Checking…',
     };
     return (
-        <span className="inline-flex items-center gap-1.5" title={labels[status]}>
-            <span className={cn('h-2 w-2 rounded-full', colors[status])} />
-            <span className="text-xs text-slate-500">{labels[status]}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span
+                className={status === 'unknown' ? 'pulse-dot' : ''}
+                style={{
+                    width: 8, height: 8,
+                    borderRadius: 999,
+                    background: colors[status],
+                    flexShrink: 0,
+                    boxShadow: status === 'ok' ? '0 0 0 3px rgba(16,185,129,0.15)' : 'none',
+                }}
+            />
+            <span style={{ fontSize: 12, color: '#64748B' }}>{labels[status]}</span>
         </span>
     );
 }

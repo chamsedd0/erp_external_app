@@ -1,134 +1,121 @@
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatusBadge, PlanBadge } from '@/components/ui/badge';
+import { DSStatCard, DSCard, DSCardHeader, DSCardContent, DSStatusBadge, DSPlanBadge, Th } from '@/components/ui/primitives';
 import { RenewalBadge } from '@/components/renewal-badge';
 import { BillingActions } from './billing-actions';
+import { DollarSign, AlertTriangle, Clock } from 'lucide-react';
 
 export const metadata = { title: 'Billing — Shadow Portal Admin' };
 
 export default async function BillingPage() {
-    const [tenants, stats] = await Promise.all([
-        api.listTenants().catch(() => [] as Awaited<ReturnType<typeof api.listTenants>>),
-        api.getPlatformStats().catch(() => null),
-    ]);
+    const tenants = await api.listTenants().catch(() => [] as Awaited<ReturnType<typeof api.listTenants>>);
 
     const now = new Date();
-    const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const in7  = new Date(now.getTime() + 7  * 86400000);
+    const in14 = new Date(now.getTime() + 14 * 86400000);
 
     const overdue = tenants.filter((t) => t.subscription_status === 'overdue');
-    const upcoming = tenants
-        .filter((t) => {
-            if (!t.subscription_renewal) return false;
-            const d = new Date(t.subscription_renewal);
-            return d >= now && d <= in30 && t.subscription_status !== 'cancelled';
-        })
-        .sort((a, b) => a.subscription_renewal.localeCompare(b.subscription_renewal));
+    const active  = tenants.filter((t) => ['active', 'trial', 'overdue'].includes(t.subscription_status));
 
     const mrr = tenants
-        .filter((t) => t.subscription_status === 'active' || t.subscription_status === 'trial')
-        .reduce((sum, t) => sum + t.monthly_amount, 0);
+        .filter((t) => ['active', 'trial'].includes(t.subscription_status))
+        .reduce((s, t) => s + t.monthly_amount, 0);
+    const overdueAmount = overdue.reduce((s, t) => s + t.monthly_amount, 0);
 
-    const overdueAmount = overdue.reduce((sum, t) => sum + t.monthly_amount, 0);
     const dueThisWeek = tenants.filter((t) => {
-        if (!t.subscription_renewal) return false;
         const d = new Date(t.subscription_renewal);
-        const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
         return d >= now && d <= in7;
     });
 
+    const upcoming14 = tenants
+        .filter((t) => {
+            const d = new Date(t.subscription_renewal);
+            return d >= now && d <= in14 && t.subscription_status !== 'cancelled';
+        })
+        .sort((a, b) => a.subscription_renewal.localeCompare(b.subscription_renewal));
+
+    const allSubs = tenants
+        .filter((t) => t.subscription_status !== 'cancelled')
+        .sort((a, b) => a.subscription_renewal.localeCompare(b.subscription_renewal));
+
+    const fmtDate = (d: string) =>
+        new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
     return (
-        <div className="p-8 max-w-6xl mx-auto">
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-slate-900">Billing</h1>
-                <p className="text-sm text-slate-500 mt-0.5">Subscription overview and payment tracking</p>
+        <div className="page-fade" style={{ padding: 32, maxWidth: 1280, margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{ marginBottom: 24 }}>
+                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0F172A', letterSpacing: -0.4 }}>Billing</h1>
+                <div style={{ marginTop: 4, fontSize: 14, color: '#64748B' }}>
+                    Subscription revenue, renewals, and overdue accounts
+                </div>
             </div>
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-                <Card>
-                    <CardContent className="pt-5 pb-5">
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                            Monthly Revenue
-                        </p>
-                        <p className="text-3xl font-bold text-blue-600 mt-1">
-                            ${mrr.toLocaleString()}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">active + trial</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-5 pb-5">
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                            Overdue Amount
-                        </p>
-                        <p className={`text-3xl font-bold mt-1 ${overdueAmount > 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                            {overdueAmount > 0 ? `$${overdueAmount.toLocaleString()}` : '$0'}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">{overdue.length} account{overdue.length !== 1 ? 's' : ''}</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-5 pb-5">
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                            Due This Week
-                        </p>
-                        <p className={`text-3xl font-bold mt-1 ${dueThisWeek.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
-                            {dueThisWeek.length}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">renewal{dueThisWeek.length !== 1 ? 's' : ''} in 7 days</p>
-                    </CardContent>
-                </Card>
+            {/* Stats row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+                <DSStatCard
+                    label="Monthly Revenue"
+                    value={`$${mrr.toLocaleString()}`}
+                    subtitle={`${active.length} active subscription${active.length !== 1 ? 's' : ''}`}
+                    icon={<DollarSign size={18} />}
+                    tint="blue"
+                />
+                <DSStatCard
+                    label="Overdue Amount"
+                    value={overdueAmount > 0 ? `$${overdueAmount.toLocaleString()}` : '$0'}
+                    subtitle={`${overdue.length} account${overdue.length !== 1 ? 's' : ''}`}
+                    icon={<AlertTriangle size={18} />}
+                    tint="red"
+                    valueColor={overdueAmount > 0 ? '#DC2626' : undefined}
+                />
+                <DSStatCard
+                    label="Due This Week"
+                    value={`$${dueThisWeek.reduce((s, t) => s + t.monthly_amount, 0).toLocaleString()}`}
+                    subtitle={`${dueThisWeek.length} renewal${dueThisWeek.length !== 1 ? 's' : ''}`}
+                    icon={<Clock size={18} />}
+                    tint="amber"
+                />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Two-column section */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 16, marginBottom: 24 }}>
                 {/* Overdue accounts */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Overdue Accounts</CardTitle>
-                        {overdue.length > 0 && (
-                            <span className="text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5 font-medium">
-                                {overdue.length} account{overdue.length !== 1 ? 's' : ''}
-                            </span>
-                        )}
-                    </CardHeader>
-                    <CardContent>
+                <DSCard>
+                    <DSCardHeader
+                        title="Overdue Accounts"
+                        subtitle={`${overdue.length} account${overdue.length !== 1 ? 's require' : ' requires'} attention`}
+                    />
+                    <DSCardContent>
                         {overdue.length === 0 ? (
-                            <p className="text-sm text-slate-400 py-4 text-center">
-                                No overdue accounts ✓
-                            </p>
+                            <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: '#64748B' }}>
+                                No overdue accounts. Nicely done.
+                            </div>
                         ) : (
-                            <div className="space-y-3">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {overdue.map((t) => {
-                                    const overdueDate = new Date(t.subscription_renewal);
-                                    const daysOverdue = Math.floor(
-                                        (now.getTime() - overdueDate.getTime()) / (1000 * 60 * 60 * 24)
-                                    );
+                                    const days = Math.abs(Math.round((now.getTime() - new Date(t.subscription_renewal).getTime()) / 86400000));
                                     return (
-                                        <div
-                                            key={t.slug}
-                                            className="rounded-lg border border-red-200 bg-red-50 p-3"
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div>
-                                                    <Link
-                                                        href={`/clients/${t.slug}`}
-                                                        className="text-sm font-medium text-slate-900 hover:underline"
-                                                    >
-                                                        {t.name}
-                                                    </Link>
-                                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        <div key={t.slug} style={{
+                                            background: '#FEF7F7', border: '1px solid #FECACA',
+                                            borderRadius: 10, padding: 14,
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <Link href={`/clients/${t.slug}`} style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', textDecoration: 'none' }}>
+                                                            {t.name}
+                                                        </Link>
+                                                        <DSPlanBadge plan={t.subscription_plan} />
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: '#991B1B', marginTop: 4 }}>
                                                         {t.contact_name} · {t.contact_email}
-                                                    </p>
-                                                    <p className="text-xs text-red-600 mt-0.5">
-                                                        {daysOverdue > 0 ? `${daysOverdue}d overdue` : 'Due today'}
-                                                    </p>
+                                                    </div>
                                                 </div>
-                                                <div className="text-right shrink-0">
-                                                    <p className="text-sm font-semibold text-slate-900">
+                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#7F1D1D', fontVariantNumeric: 'tabular-nums' }}>
                                                         ${t.monthly_amount.toLocaleString()}
-                                                    </p>
-                                                    <PlanBadge plan={t.subscription_plan} />
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: '#B91C1C', fontWeight: 500 }}>{days}d overdue</div>
                                                 </div>
                                             </div>
                                             <BillingActions slug={t.slug} />
@@ -137,101 +124,103 @@ export default async function BillingPage() {
                                 })}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </DSCardContent>
+                </DSCard>
 
                 {/* Upcoming renewals */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Upcoming Renewals</CardTitle>
-                        <span className="text-xs text-slate-400">Next 30 days</span>
-                    </CardHeader>
-                    <CardContent>
-                        {upcoming.length === 0 ? (
-                            <p className="text-sm text-slate-400 py-4 text-center">
-                                No renewals in the next 30 days ✓
-                            </p>
-                        ) : (
-                            <div className="divide-y divide-slate-100">
-                                {upcoming.map((t) => (
-                                    <div key={t.slug} className="flex items-center justify-between py-3 gap-3">
-                                        <div>
-                                            <Link
-                                                href={`/clients/${t.slug}`}
-                                                className="text-sm font-medium text-slate-900 hover:underline"
-                                            >
-                                                {t.name}
-                                            </Link>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                <PlanBadge plan={t.subscription_plan} />
-                                                <span className="text-xs text-slate-500">
-                                                    ${t.monthly_amount.toLocaleString()}/mo
-                                                </span>
+                <DSCard>
+                    <DSCardHeader title="Upcoming Renewals" subtitle="Next 14 days" />
+                    {upcoming14.length === 0 ? (
+                        <DSCardContent>
+                            <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: '#64748B' }}>
+                                No renewals in the next 14 days.
+                            </div>
+                        </DSCardContent>
+                    ) : (
+                        <div style={{ paddingBottom: 4 }}>
+                            {upcoming14.map((t, i) => {
+                                const diff = Math.round((new Date(t.subscription_renewal).getTime() - now.getTime()) / 86400000);
+                                const renewal = new Date(t.subscription_renewal);
+                                return (
+                                    <Link
+                                        key={t.slug}
+                                        href={`/clients/${t.slug}`}
+                                        className="row-hover"
+                                        style={{
+                                            display: 'grid', gridTemplateColumns: '48px 1fr auto', alignItems: 'center', gap: 12,
+                                            padding: '12px 20px', textDecoration: 'none',
+                                            borderBottom: i === upcoming14.length - 1 ? 'none' : '1px solid #F1F5F9',
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: 44, height: 44, borderRadius: 8,
+                                            background: diff <= 3 ? '#FEF3C7' : '#F1F5F9',
+                                            color: diff <= 3 ? '#92400E' : '#475569',
+                                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                            fontWeight: 600, lineHeight: 1,
+                                        }}>
+                                            <div style={{ fontSize: 16 }}>{renewal.getDate()}</div>
+                                            <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>
+                                                {renewal.toLocaleString('en-US', { month: 'short' })}
                                             </div>
                                         </div>
-                                        <RenewalBadge date={t.subscription_renewal} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontSize: 14, fontWeight: 500, color: '#0F172A' }}>{t.name}</div>
+                                            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                                                in {diff === 0 ? 'today' : `${diff}d`} · {t.subscription_plan}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                            ${t.monthly_amount.toLocaleString()}
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    )}
+                </DSCard>
             </div>
 
-            {/* All clients table */}
-            <div className="mt-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>All Subscriptions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <table className="w-full text-sm">
-                            <thead className="border-b border-slate-200 bg-slate-50">
-                                <tr>
-                                    {['Company', 'Plan', 'Status', 'Renewal', 'MRR'].map((h) => (
-                                        <th
-                                            key={h}
-                                            className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide"
-                                        >
-                                            {h}
-                                        </th>
-                                    ))}
+            {/* All subscriptions table */}
+            <DSCard style={{ overflow: 'hidden', padding: 0 }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>All Subscriptions</div>
+                        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>Sorted by renewal date ascending</div>
+                    </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <thead>
+                            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                <Th label="Company" />
+                                <Th label="Plan" />
+                                <Th label="Status" />
+                                <Th label="Renewal" />
+                                <Th label="Amount" align="right" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {allSubs.map((t) => (
+                                <tr key={t.slug} className="row-hover" style={{ borderTop: '1px solid #F1F5F9' }}>
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <Link href={`/clients/${t.slug}`} style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', textDecoration: 'none' }}>
+                                            {t.name}
+                                        </Link>
+                                        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{t.contact_email}</div>
+                                    </td>
+                                    <td style={{ padding: '12px 16px' }}><DSPlanBadge plan={t.subscription_plan} /></td>
+                                    <td style={{ padding: '12px 16px' }}><DSStatusBadge status={t.subscription_status} /></td>
+                                    <td style={{ padding: '12px 16px' }}><RenewalBadge date={t.subscription_renewal} /></td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: '#0F172A' }}>
+                                        ${t.monthly_amount.toLocaleString()}
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {tenants
-                                    .filter((t) => t.subscription_status !== 'cancelled')
-                                    .sort((a, b) => a.subscription_renewal.localeCompare(b.subscription_renewal))
-                                    .map((t) => (
-                                        <tr key={t.slug} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3">
-                                                <Link
-                                                    href={`/clients/${t.slug}`}
-                                                    className="font-medium text-slate-900 hover:underline"
-                                                >
-                                                    {t.name}
-                                                </Link>
-                                                <p className="text-xs text-slate-400">{t.contact_email}</p>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <PlanBadge plan={t.subscription_plan} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <StatusBadge status={t.subscription_status} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <RenewalBadge date={t.subscription_renewal} />
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-700 font-medium">
-                                                ${t.monthly_amount.toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                            </tbody>
-                        </table>
-                    </CardContent>
-                </Card>
-            </div>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </DSCard>
         </div>
     );
 }

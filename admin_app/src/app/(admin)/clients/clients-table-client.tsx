@@ -3,9 +3,10 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { Tenant } from '@/lib/types';
-import { StatusBadge, PlanBadge } from '@/components/ui/badge';
+import { DSStatusBadge, DSPlanBadge, MonoChip, Th, DSTextInput, DSSelectInput } from '@/components/ui/primitives';
 import { RenewalBadge } from '@/components/renewal-badge';
 import { HealthCheck } from '@/components/health-check';
+import { Search, Eye, Pencil, Building2 } from 'lucide-react';
 
 const PLAN_ORDER = { starter: 0, professional: 1, enterprise: 2 };
 
@@ -17,8 +18,8 @@ interface Props {
 
 export function ClientsTableClient({ tenants }: Props) {
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('');
-    const [planFilter, setPlanFilter] = useState<string>('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [planFilter, setPlanFilter] = useState('');
     const [sortKey, setSortKey] = useState<SortKey>('name');
     const [sortAsc, setSortAsc] = useState(true);
 
@@ -32,7 +33,10 @@ export function ClientsTableClient({ tenants }: Props) {
         if (search) {
             const q = search.toLowerCase();
             list = list.filter(
-                (t) => t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q)
+                (t) =>
+                    t.name.toLowerCase().includes(q) ||
+                    t.slug.toLowerCase().includes(q) ||
+                    t.contact_email.toLowerCase().includes(q)
             );
         }
         if (statusFilter) list = list.filter((t) => t.subscription_status === statusFilter);
@@ -50,134 +54,190 @@ export function ClientsTableClient({ tenants }: Props) {
         return list;
     }, [tenants, search, statusFilter, planFilter, sortKey, sortAsc]);
 
-    function Th({ label, sort }: { label: string; sort?: SortKey }) {
-        const active = sortKey === sort;
-        return (
-            <th
-                scope="col"
-                className={`px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide ${sort ? 'cursor-pointer hover:text-slate-700 select-none' : ''}`}
-                onClick={sort ? () => toggleSort(sort) : undefined}
-            >
-                {label}
-                {active && <span className="ml-1">{sortAsc ? '↑' : '↓'}</span>}
-            </th>
-        );
-    }
+    const hasFilters = search || statusFilter || planFilter;
+
+    const initials = (name: string) =>
+        name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
     return (
         <>
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-                <input
-                    type="search"
-                    placeholder="Search by name or slug…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent w-60"
-                />
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
-                >
-                    <option value="">All statuses</option>
-                    <option value="active">Active</option>
-                    <option value="trial">Trial</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="suspended">Suspended</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-                <select
-                    value={planFilter}
-                    onChange={(e) => setPlanFilter(e.target.value)}
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
-                >
-                    <option value="">All plans</option>
-                    <option value="starter">Starter</option>
-                    <option value="professional">Professional</option>
-                    <option value="enterprise">Enterprise</option>
-                </select>
-                {(search || statusFilter || planFilter) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 280px', maxWidth: 360 }}>
+                    <DSTextInput
+                        type="search"
+                        placeholder="Search by name, slug, or email…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        leftIcon={<Search size={14} />}
+                    />
+                </div>
+                <div style={{ width: 165 }}>
+                    <DSSelectInput
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        options={[
+                            { value: '', label: 'All statuses' },
+                            { value: 'active', label: 'Active' },
+                            { value: 'trial', label: 'Trial' },
+                            { value: 'overdue', label: 'Overdue' },
+                            { value: 'suspended', label: 'Suspended' },
+                            { value: 'cancelled', label: 'Cancelled' },
+                        ]}
+                    />
+                </div>
+                <div style={{ width: 150 }}>
+                    <DSSelectInput
+                        value={planFilter}
+                        onChange={(e) => setPlanFilter(e.target.value)}
+                        options={[
+                            { value: '', label: 'All plans' },
+                            { value: 'starter', label: 'Starter' },
+                            { value: 'professional', label: 'Professional' },
+                            { value: 'enterprise', label: 'Enterprise' },
+                        ]}
+                    />
+                </div>
+                {hasFilters && (
                     <button
                         onClick={() => { setSearch(''); setStatusFilter(''); setPlanFilter(''); }}
-                        className="text-xs text-slate-500 hover:text-slate-700"
+                        style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: 13, color: '#64748B', padding: '6px 8px',
+                            fontFamily: 'inherit',
+                        }}
                     >
-                        Clear filters
+                        Clear
                     </button>
                 )}
-                <span className="ml-auto text-xs text-slate-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+                <div style={{ marginLeft: 'auto', fontSize: 13, color: '#94A3B8' }}>
+                    {filtered.length} of {tenants.length}
+                </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <table className="w-full text-sm">
-                    <thead className="border-b border-slate-200 bg-slate-50">
-                        <tr>
-                            <Th label="Company" sort="name" />
-                            <Th label="Plan" sort="plan" />
-                            <Th label="Status" sort="status" />
-                            <Th label="Renewal" sort="renewal" />
-                            <Th label="MRR" sort="amount" />
-                            <Th label="Odoo Health" />
-                            <Th label="" />
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filtered.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-400">
-                                    No clients found
-                                </td>
-                            </tr>
-                        ) : (
-                            filtered.map((t) => (
-                                <tr key={t.slug} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-4 py-3">
-                                        <div className="font-medium text-slate-900">{t.name}</div>
-                                        <div className="text-xs text-slate-400 font-mono">{t.slug}</div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <PlanBadge plan={t.subscription_plan} />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1.5">
-                                            <StatusBadge status={t.subscription_status} />
-                                            {!t.enabled && (
-                                                <span className="text-xs text-slate-400">(disabled)</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <RenewalBadge date={t.subscription_renewal} />
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-700">
-                                        ${t.monthly_amount.toLocaleString()}/mo
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <HealthCheck slug={t.slug} />
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <Link
-                                                href={`/clients/${t.slug}`}
-                                                className="text-xs font-medium text-slate-600 hover:text-slate-900"
-                                            >
-                                                View
-                                            </Link>
-                                            <Link
-                                                href={`/clients/${t.slug}/edit`}
-                                                className="text-xs font-medium text-slate-600 hover:text-slate-900"
-                                            >
-                                                Edit
-                                            </Link>
-                                        </div>
-                                    </td>
+            {/* Table or empty */}
+            {filtered.length === 0 ? (
+                <div style={{
+                    background: '#fff', borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+                    padding: '64px 20px', textAlign: 'center',
+                }}>
+                    <div style={{
+                        display: 'inline-flex', width: 56, height: 56,
+                        borderRadius: 12, background: '#F1F5F9', color: '#94A3B8',
+                        alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+                    }}>
+                        <Building2 size={26} />
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: '#0F172A' }}>No clients found</div>
+                    <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
+                        Try adjusting your filters or clear them to see all tenants.
+                    </div>
+                </div>
+            ) : (
+                <div style={{
+                    background: '#fff', borderRadius: 12,
+                    border: '1px solid #E2E8F0', overflow: 'hidden',
+                    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+                }}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                            <thead>
+                                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                    <Th label="Company"     active={sortKey === 'name'}    dir={sortAsc ? 'asc' : 'desc'} onClick={() => toggleSort('name')} />
+                                    <Th label="Plan"        active={sortKey === 'plan'}    dir={sortAsc ? 'asc' : 'desc'} onClick={() => toggleSort('plan')} />
+                                    <Th label="Status"      active={sortKey === 'status'}  dir={sortAsc ? 'asc' : 'desc'} onClick={() => toggleSort('status')} />
+                                    <Th label="Renewal"     active={sortKey === 'renewal'} dir={sortAsc ? 'asc' : 'desc'} onClick={() => toggleSort('renewal')} />
+                                    <Th label="MRR"         active={sortKey === 'amount'}  dir={sortAsc ? 'asc' : 'desc'} onClick={() => toggleSort('amount')} align="right" />
+                                    <Th label="Odoo Health" />
+                                    <Th label="" align="right" />
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                            </thead>
+                            <tbody>
+                                {filtered.map((t) => (
+                                    <tr
+                                        key={t.slug}
+                                        className="row-hover"
+                                        style={{ borderTop: '1px solid #F1F5F9' }}
+                                    >
+                                        {/* Company */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <div style={{
+                                                    width: 32, height: 32, borderRadius: 8,
+                                                    background: '#F1F5F9', color: '#475569',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                    fontSize: 12, fontWeight: 600,
+                                                }}>
+                                                    {initials(t.name)}
+                                                </div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 500, color: '#0F172A' }}>{t.name}</div>
+                                                    <div style={{ marginTop: 2 }}><MonoChip size={12}>{t.slug}</MonoChip></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        {/* Plan */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <DSPlanBadge plan={t.subscription_plan} />
+                                        </td>
+                                        {/* Status */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <DSStatusBadge status={t.subscription_status} />
+                                                {!t.enabled && (
+                                                    <span style={{ fontSize: 11, color: '#94A3B8' }}>(disabled)</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        {/* Renewal */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <RenewalBadge date={t.subscription_renewal} />
+                                        </td>
+                                        {/* MRR */}
+                                        <td style={{ padding: '14px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#0F172A', fontWeight: 500 }}>
+                                            ${t.monthly_amount.toLocaleString()}/mo
+                                        </td>
+                                        {/* Health */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <HealthCheck slug={t.slug} />
+                                        </td>
+                                        {/* Actions */}
+                                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <ActionLink href={`/clients/${t.slug}`} icon={<Eye size={13} />} label="View" />
+                                                <ActionLink href={`/clients/${t.slug}/edit`} icon={<Pencil size={13} />} label="Edit" />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </>
+    );
+}
+
+function ActionLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+    const [hover, setHover] = useState(false);
+    return (
+        <Link
+            href={href}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 8px', borderRadius: 6,
+                fontSize: 12, fontWeight: 500, color: '#475569',
+                textDecoration: 'none',
+                background: hover ? '#F1F5F9' : 'transparent',
+                transition: 'background 100ms ease',
+            }}
+        >
+            {icon}{label}
+        </Link>
     );
 }

@@ -3,16 +3,21 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Tenant, TenantFormData } from '@/lib/types';
-import { Input, Label, Textarea } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    DSCard,
+    DSCardHeader,
+    DSCardContent,
+    DSField,
+    DSTextInput,
+    DSTextarea,
+    DSSelectInput,
+    Btn,
+} from '@/components/ui/primitives';
 import { createTenantAction, updateTenantAction } from '@/lib/actions';
+import { Hash, Globe, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface Props {
-    /** Editing an existing tenant — pre-filled */
     tenant?: Tenant;
-    /** Creating a new one */
     isNew?: boolean;
 }
 
@@ -30,9 +35,13 @@ const EMPTY: TenantFormData = {
     subscription_status: 'trial',
     subscription_start: new Date().toISOString().slice(0, 10),
     subscription_renewal: '',
-    monthly_amount: 0,
+    monthly_amount: 199,
     enabled: true,
     notes: '',
+};
+
+const PLAN_DEFAULTS: Record<string, number> = {
+    starter: 199, professional: 599, enterprise: 1499,
 };
 
 export function TenantForm({ tenant, isNew = false }: Props) {
@@ -41,30 +50,28 @@ export function TenantForm({ tenant, isNew = false }: Props) {
     const [slug, setSlug] = useState('');
     const [form, setForm] = useState<TenantFormData>({
         ...EMPTY,
-        ...(tenant
-            ? {
-                  name: tenant.name,
-                  hr_email: tenant.hr_email,
-                  odoo_url: tenant.odoo_url,
-                  odoo_db: tenant.odoo_db,
-                  odoo_username: tenant.odoo_username ?? '',
-                  odoo_password: '',
-                  contact_name: tenant.contact_name,
-                  contact_email: tenant.contact_email,
-                  contact_phone: tenant.contact_phone ?? '',
-                  subscription_plan: tenant.subscription_plan,
-                  subscription_status: tenant.subscription_status,
-                  subscription_start: tenant.subscription_start,
-                  subscription_renewal: tenant.subscription_renewal,
-                  monthly_amount: tenant.monthly_amount,
-                  enabled: tenant.enabled,
-                  notes: tenant.notes ?? '',
-              }
-            : {}),
+        ...(tenant ? {
+            name: tenant.name,
+            hr_email: tenant.hr_email,
+            odoo_url: tenant.odoo_url,
+            odoo_db: tenant.odoo_db,
+            odoo_username: tenant.odoo_username ?? '',
+            odoo_password: '',
+            contact_name: tenant.contact_name,
+            contact_email: tenant.contact_email,
+            contact_phone: tenant.contact_phone ?? '',
+            subscription_plan: tenant.subscription_plan,
+            subscription_status: tenant.subscription_status,
+            subscription_start: tenant.subscription_start,
+            subscription_renewal: tenant.subscription_renewal,
+            monthly_amount: tenant.monthly_amount,
+            enabled: tenant.enabled,
+            notes: tenant.notes ?? '',
+        } : {}),
     });
     const [error, setError] = useState('');
-    const [testResult, setTestResult] = useState<string>('');
     const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
     function set<K extends keyof TenantFormData>(key: K, value: TenantFormData[K]) {
         setForm((prev) => ({ ...prev, [key]: value }));
@@ -72,19 +79,19 @@ export function TenantForm({ tenant, isNew = false }: Props) {
 
     async function testConnection() {
         const targetSlug = isNew ? slug : tenant!.slug;
-        if (!targetSlug) { setTestResult('Enter a slug first'); return; }
+        if (!targetSlug) { setTestResult({ ok: false, text: 'Enter a slug first' }); return; }
         setTesting(true);
-        setTestResult('');
+        setTestResult(null);
         try {
             const res = await fetch(`/api/admin/health/${targetSlug}`);
             const data = await res.json();
             setTestResult(
                 data.ok
-                    ? `✅ Connected — Odoo v${data.odoo_version ?? '?'} (${data.latency_ms}ms)`
-                    : `❌ Failed: ${data.error ?? 'Unreachable'}`
+                    ? { ok: true, text: `Connected — Odoo v${data.odoo_version ?? '?'} (${data.latency_ms}ms)` }
+                    : { ok: false, text: `Failed: ${data.error ?? 'Unreachable'}` }
             );
         } catch {
-            setTestResult('❌ Request failed');
+            setTestResult({ ok: false, text: 'Request failed' });
         } finally {
             setTesting(false);
         }
@@ -93,12 +100,8 @@ export function TenantForm({ tenant, isNew = false }: Props) {
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setError('');
-
         const payload = { ...form };
-        // Don't send empty password on edit
-        if (!isNew && !payload.odoo_password) {
-            delete payload.odoo_password;
-        }
+        if (!isNew && !payload.odoo_password) delete payload.odoo_password;
 
         startTransition(async () => {
             try {
@@ -109,278 +112,283 @@ export function TenantForm({ tenant, isNew = false }: Props) {
                     await updateTenantAction(tenant!.slug, payload);
                     router.push(`/clients/${tenant!.slug}`);
                 }
-            } catch (err: any) {
-                setError(err.message ?? 'Something went wrong');
+            } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Something went wrong');
             }
         });
     }
 
-    const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-        <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{title}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {children}
-            </CardContent>
-        </Card>
-    );
-
-    const Field = ({
-        label,
-        id,
-        span,
-        children,
-    }: {
-        label: string;
-        id: string;
-        span?: boolean;
-        children: React.ReactNode;
-    }) => (
-        <div className={span ? 'md:col-span-2' : ''}>
-            <Label htmlFor={id}>{label}</Label>
-            {children}
-        </div>
-    );
+    const colSpan2: React.CSSProperties = { gridColumn: 'span 2' };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 880 }}>
+            {/* Identity (new only) */}
             {isNew && (
-                <Section title="Identity">
-                    <Field label="Tenant Slug *" id="slug">
-                        <Input
-                            id="slug"
-                            value={slug}
-                            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                            placeholder="e.g. acme-corp"
-                            required
-                        />
-                        <p className="text-xs text-slate-400 mt-1">Lowercase, letters/numbers/hyphens only</p>
-                    </Field>
-                    <Field label="Company Name *" id="name">
-                        <Input
-                            id="name"
-                            value={form.name}
-                            onChange={(e) => set('name', e.target.value)}
-                            placeholder="Acme Corporation"
-                            required
-                        />
-                    </Field>
-                </Section>
+                <DSCard>
+                    <DSCardHeader
+                        title="Identity"
+                        subtitle="Used in URLs and API tokens — cannot be changed later"
+                    />
+                    <DSCardContent>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <DSField label="Slug" required hint="Lowercase, hyphens — e.g. acme-industries">
+                                <DSTextInput
+                                    value={slug}
+                                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                    placeholder="acme-industries"
+                                    leftIcon={<Hash size={14} />}
+                                />
+                            </DSField>
+                            <DSField label="Company name" required>
+                                <DSTextInput
+                                    value={form.name}
+                                    onChange={(e) => set('name', e.target.value)}
+                                    placeholder="Acme Industries"
+                                />
+                            </DSField>
+                        </div>
+                    </DSCardContent>
+                </DSCard>
             )}
 
-            {!isNew && (
-                <div className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div>
-                        <p className="text-sm font-medium text-slate-900">{tenant!.name}</p>
-                        <p className="text-xs text-slate-400 font-mono">{tenant!.slug}</p>
+            {/* Enabled toggle (edit only) */}
+            {!isNew && tenant && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 16px', borderRadius: 12,
+                    border: '1px solid #E2E8F0', background: '#F8FAFC',
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: '#0F172A' }}>{tenant.name}</div>
+                        <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#94A3B8', marginTop: 2 }}>{tenant.slug}</div>
                     </div>
-                    <div className="ml-auto">
-                        <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={form.enabled}
-                                onChange={(e) => set('enabled', e.target.checked)}
-                                className="rounded"
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={form.enabled}
+                            onChange={(e) => set('enabled', e.target.checked)}
+                            style={{ width: 14, height: 14, cursor: 'pointer' }}
+                        />
+                        Enabled
+                    </label>
+                </div>
+            )}
+
+            {/* Odoo Connection */}
+            <DSCard>
+                <DSCardHeader
+                    title="Odoo Connection"
+                    action={
+                        <Btn
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Zap size={13} />}
+                            onClick={testConnection}
+                            disabled={testing}
+                        >
+                            {testing ? 'Testing…' : 'Test Connection'}
+                        </Btn>
+                    }
+                />
+                <DSCardContent>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <DSField label="Odoo URL" required>
+                            <DSTextInput
+                                type="url"
+                                value={form.odoo_url}
+                                onChange={(e) => set('odoo_url', e.target.value)}
+                                placeholder="https://acme.odoo.com"
+                                leftIcon={<Globe size={14} />}
+                                required
                             />
-                            Enabled
-                        </label>
+                        </DSField>
+                        <DSField label="Database" required>
+                            <DSTextInput
+                                value={form.odoo_db}
+                                onChange={(e) => set('odoo_db', e.target.value)}
+                                placeholder="acme_prod"
+                                required
+                            />
+                        </DSField>
+                        <DSField label="Username" required={isNew}>
+                            <DSTextInput
+                                value={form.odoo_username ?? ''}
+                                onChange={(e) => set('odoo_username', e.target.value)}
+                                placeholder="admin@acme.example"
+                                required={isNew}
+                            />
+                        </DSField>
+                        <DSField label={isNew ? 'Password' : 'Password (leave blank to keep)'} required={isNew}>
+                            <DSTextInput
+                                type="password"
+                                value={form.odoo_password ?? ''}
+                                onChange={(e) => set('odoo_password', e.target.value)}
+                                placeholder={isNew ? 'Odoo user password' : '••••••••'}
+                                required={isNew}
+                            />
+                        </DSField>
+                        <div style={colSpan2}>
+                            <DSField label="HR Email" hint="Where notification summaries are delivered">
+                                <DSTextInput
+                                    type="email"
+                                    value={form.hr_email}
+                                    onChange={(e) => set('hr_email', e.target.value)}
+                                    placeholder="hr@acme.example"
+                                />
+                            </DSField>
+                        </div>
                     </div>
-                </div>
-            )}
-
-            {/* Connection */}
-            <Section title="Odoo Connection">
-                <Field label="Odoo URL *" id="odoo_url">
-                    <Input
-                        id="odoo_url"
-                        type="url"
-                        value={form.odoo_url}
-                        onChange={(e) => set('odoo_url', e.target.value)}
-                        placeholder="https://mycompany.odoo.com"
-                        required
-                    />
-                </Field>
-                <Field label="Database *" id="odoo_db">
-                    <Input
-                        id="odoo_db"
-                        value={form.odoo_db}
-                        onChange={(e) => set('odoo_db', e.target.value)}
-                        placeholder="mycompany"
-                        required
-                    />
-                </Field>
-                <Field label="Username *" id="odoo_username">
-                    <Input
-                        id="odoo_username"
-                        value={form.odoo_username ?? ''}
-                        onChange={(e) => set('odoo_username', e.target.value)}
-                        placeholder="admin@mycompany.com"
-                        required={isNew}
-                    />
-                </Field>
-                <Field label={isNew ? 'Password *' : 'Password (leave blank to keep)'} id="odoo_password">
-                    <Input
-                        id="odoo_password"
-                        type="password"
-                        value={form.odoo_password ?? ''}
-                        onChange={(e) => set('odoo_password', e.target.value)}
-                        placeholder={isNew ? 'Odoo user password' : '••••••••'}
-                        required={isNew}
-                    />
-                </Field>
-                <Field label="HR Email *" id="hr_email">
-                    <Input
-                        id="hr_email"
-                        type="email"
-                        value={form.hr_email}
-                        onChange={(e) => set('hr_email', e.target.value)}
-                        placeholder="hr@mycompany.com"
-                        required
-                    />
-                </Field>
-                <div className="flex items-end">
-                    <button
-                        type="button"
-                        onClick={testConnection}
-                        disabled={testing}
-                        className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                    >
-                        {testing ? 'Testing…' : 'Test Connection'}
-                    </button>
                     {testResult && (
-                        <span className="ml-3 text-sm">{testResult}</span>
+                        <div style={{
+                            marginTop: 14, padding: '10px 12px',
+                            background: testResult.ok ? '#ECFDF5' : '#FEF2F2',
+                            border: `1px solid ${testResult.ok ? '#A7F3D0' : '#FECACA'}`,
+                            color: testResult.ok ? '#065F46' : '#991B1B',
+                            borderRadius: 8, fontSize: 13,
+                            display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                            {testResult.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                            {testResult.text}
+                        </div>
                     )}
-                </div>
-            </Section>
+                </DSCardContent>
+            </DSCard>
 
-            {/* Contact */}
-            <Section title="Contact Information">
-                <Field label="Contact Name *" id="contact_name">
-                    <Input
-                        id="contact_name"
-                        value={form.contact_name}
-                        onChange={(e) => set('contact_name', e.target.value)}
-                        placeholder="Jane Smith"
-                        required
-                    />
-                </Field>
-                <Field label="Contact Email *" id="contact_email">
-                    <Input
-                        id="contact_email"
-                        type="email"
-                        value={form.contact_email}
-                        onChange={(e) => set('contact_email', e.target.value)}
-                        placeholder="jane@mycompany.com"
-                        required
-                    />
-                </Field>
-                <Field label="Contact Phone" id="contact_phone">
-                    <Input
-                        id="contact_phone"
-                        type="tel"
-                        value={form.contact_phone ?? ''}
-                        onChange={(e) => set('contact_phone', e.target.value)}
-                        placeholder="+1 555 000 0000"
-                    />
-                </Field>
-            </Section>
+            {/* Contact Info */}
+            <DSCard>
+                <DSCardHeader title="Contact Info" />
+                <DSCardContent>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                        <DSField label="Contact name" required>
+                            <DSTextInput
+                                value={form.contact_name}
+                                onChange={(e) => set('contact_name', e.target.value)}
+                                placeholder="Sara Mendez"
+                                required
+                            />
+                        </DSField>
+                        <DSField label="Contact email" required>
+                            <DSTextInput
+                                type="email"
+                                value={form.contact_email}
+                                onChange={(e) => set('contact_email', e.target.value)}
+                                placeholder="sara@acme.example"
+                                required
+                            />
+                        </DSField>
+                        <DSField label="Phone">
+                            <DSTextInput
+                                type="tel"
+                                value={form.contact_phone ?? ''}
+                                onChange={(e) => set('contact_phone', e.target.value)}
+                                placeholder="+1 415 555 0102"
+                            />
+                        </DSField>
+                    </div>
+                </DSCardContent>
+            </DSCard>
 
-            {/* Billing */}
-            <Section title="Subscription & Billing">
-                <Field label="Plan *" id="subscription_plan">
-                    <Select
-                        id="subscription_plan"
-                        value={form.subscription_plan}
-                        onChange={(e) =>
-                            set('subscription_plan', e.target.value as TenantFormData['subscription_plan'])
-                        }
-                    >
-                        <option value="starter">Starter</option>
-                        <option value="professional">Professional</option>
-                        <option value="enterprise">Enterprise</option>
-                    </Select>
-                </Field>
-                <Field label="Status *" id="subscription_status">
-                    <Select
-                        id="subscription_status"
-                        value={form.subscription_status}
-                        onChange={(e) =>
-                            set('subscription_status', e.target.value as TenantFormData['subscription_status'])
-                        }
-                    >
-                        <option value="trial">Trial</option>
-                        <option value="active">Active</option>
-                        <option value="overdue">Overdue</option>
-                        <option value="suspended">Suspended</option>
-                        <option value="cancelled">Cancelled</option>
-                    </Select>
-                </Field>
-                <Field label="Start Date *" id="subscription_start">
-                    <Input
-                        id="subscription_start"
-                        type="date"
-                        value={form.subscription_start}
-                        onChange={(e) => set('subscription_start', e.target.value)}
-                        required
-                    />
-                </Field>
-                <Field label="Renewal Date *" id="subscription_renewal">
-                    <Input
-                        id="subscription_renewal"
-                        type="date"
-                        value={form.subscription_renewal}
-                        onChange={(e) => set('subscription_renewal', e.target.value)}
-                        required
-                    />
-                </Field>
-                <Field label="Monthly Amount (USD) *" id="monthly_amount">
-                    <Input
-                        id="monthly_amount"
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={form.monthly_amount}
-                        onChange={(e) => set('monthly_amount', Number(e.target.value))}
-                        required
-                    />
-                </Field>
-            </Section>
+            {/* Subscription & Billing */}
+            <DSCard>
+                <DSCardHeader title="Subscription & Billing" />
+                <DSCardContent>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                        <DSField label="Plan">
+                            <DSSelectInput
+                                value={form.subscription_plan}
+                                onChange={(e) => {
+                                    const plan = e.target.value;
+                                    set('subscription_plan', plan as TenantFormData['subscription_plan']);
+                                    set('monthly_amount', PLAN_DEFAULTS[plan] ?? form.monthly_amount);
+                                }}
+                                options={[
+                                    { value: 'starter', label: 'Starter — $199/mo' },
+                                    { value: 'professional', label: 'Professional — $599/mo' },
+                                    { value: 'enterprise', label: 'Enterprise — $1,499/mo' },
+                                ]}
+                            />
+                        </DSField>
+                        <DSField label="Status">
+                            <DSSelectInput
+                                value={form.subscription_status}
+                                onChange={(e) => set('subscription_status', e.target.value as TenantFormData['subscription_status'])}
+                                options={[
+                                    { value: 'trial', label: 'Trial' },
+                                    { value: 'active', label: 'Active' },
+                                    { value: 'overdue', label: 'Overdue' },
+                                    { value: 'suspended', label: 'Suspended' },
+                                    { value: 'cancelled', label: 'Cancelled' },
+                                ]}
+                            />
+                        </DSField>
+                        <DSField label="Monthly amount (USD)">
+                            <DSTextInput
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={form.monthly_amount}
+                                onChange={(e) => set('monthly_amount', Number(e.target.value))}
+                            />
+                        </DSField>
+                        <DSField label="Start date" required>
+                            <DSTextInput
+                                type="date"
+                                value={form.subscription_start}
+                                onChange={(e) => set('subscription_start', e.target.value)}
+                                required
+                            />
+                        </DSField>
+                        <DSField label="Renewal date" required>
+                            <DSTextInput
+                                type="date"
+                                value={form.subscription_renewal}
+                                onChange={(e) => set('subscription_renewal', e.target.value)}
+                                required
+                            />
+                        </DSField>
+                    </div>
+                </DSCardContent>
+            </DSCard>
 
             {/* Notes */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Internal Notes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Textarea
-                        id="notes"
+            <DSCard>
+                <DSCardHeader title="Internal Notes" subtitle="Visible only to platform admins" />
+                <DSCardContent>
+                    <DSTextarea
                         value={form.notes ?? ''}
                         onChange={(e) => set('notes', e.target.value)}
-                        placeholder="Any internal notes about this client…"
-                        className="min-h-[100px]"
+                        placeholder="Anything worth remembering — payment quirks, escalation contacts, contract terms…"
+                        style={{ minHeight: 100 }}
                     />
-                </CardContent>
-            </Card>
+                </DSCardContent>
+            </DSCard>
 
+            {/* Error */}
             {error && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                    {error}
-                </p>
+                <div style={{
+                    background: '#FEF2F2', border: '1px solid #FECACA',
+                    color: '#B91C1C', padding: '10px 14px',
+                    borderRadius: 8, fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                    <AlertCircle size={14} />{error}
+                </div>
             )}
 
-            <div className="flex items-center gap-3">
-                <Button type="submit" disabled={isPending}>
-                    {isPending ? 'Saving…' : isNew ? 'Create Client' : 'Save Changes'}
-                </Button>
-                <Button
+            {/* Submit / Cancel */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingBottom: 32 }}>
+                <Btn
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => router.back()}
                     disabled={isPending}
                 >
                     Cancel
-                </Button>
+                </Btn>
+                <Btn type="submit" disabled={isPending}>
+                    {isPending ? 'Saving…' : isNew ? 'Create client' : 'Save changes'}
+                </Btn>
             </div>
         </form>
     );

@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RenewalBadge } from '@/components/renewal-badge';
+import {
+    DSCard,
+    DSCardHeader,
+    DSCardContent,
+    DSStatCard,
+} from '@/components/ui/primitives';
 import {
     Building2,
     CheckCircle2,
@@ -11,193 +16,228 @@ import {
     Smartphone,
     Plus,
     CreditCard,
+    ChevronRight,
+    RefreshCw,
 } from 'lucide-react';
 
 export default async function DashboardPage() {
     const stats = await api.getPlatformStats().catch(() => null);
+    const upcoming = (stats?.upcoming_renewals ?? []).slice(0, 5);
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
+        <div className="page-fade" style={{ padding: 32, maxWidth: 1280, margin: '0 auto' }}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Platform overview</p>
+                    <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0F172A', letterSpacing: -0.4 }}>Dashboard</h1>
+                    <div style={{ marginTop: 4, fontSize: 14, color: '#64748B' }}>Platform overview</div>
                 </div>
-                <Link
-                    href="/clients/new"
-                    className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-slate-900 text-white text-sm font-medium px-4 hover:bg-slate-800 transition-colors"
-                >
+                <Link href="/clients/new" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    height: 36, padding: '0 16px',
+                    background: '#0F172A', color: '#fff',
+                    fontSize: 14, fontWeight: 500,
+                    borderRadius: 8, textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                }}>
                     <Plus size={15} />
                     Add New Client
                 </Link>
             </div>
 
-            {/* Row 1 — primary stats */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-                <StatCard
+            {/* Row 1 — 4 primary stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
+                <DSStatCard
                     label="Total Clients"
                     value={stats?.total ?? '—'}
-                    icon={<Building2 size={18} className="text-slate-600" />}
-                    iconBg="bg-slate-100"
+                    subtitle={stats ? `${stats.trial} on trial` : undefined}
+                    icon={<Building2 size={18} />}
+                    tint="slate"
                 />
-                <StatCard
+                <DSStatCard
                     label="Active"
                     value={stats?.active ?? '—'}
-                    icon={<CheckCircle2 size={18} className="text-emerald-600" />}
-                    iconBg="bg-emerald-50"
-                    valueColor="text-emerald-600"
+                    subtitle="paying customers"
+                    icon={<CheckCircle2 size={18} />}
+                    tint="emerald"
+                    valueColor="#059669"
                 />
-                <StatCard
+                <DSStatCard
                     label="Overdue"
                     value={stats?.overdue ?? '—'}
-                    icon={<AlertCircle size={18} className="text-red-500" />}
-                    iconBg="bg-red-50"
-                    valueColor={stats?.overdue ? 'text-red-600' : ''}
+                    subtitle={stats ? (stats.overdue > 0 ? 'needs attention' : 'all clear') : undefined}
+                    icon={<AlertCircle size={18} />}
+                    tint="red"
+                    valueColor={stats?.overdue ? '#DC2626' : undefined}
                 />
-                <StatCard
-                    label="Monthly Revenue"
+                <DSStatCard
+                    label="MRR"
                     value={stats ? `$${stats.monthly_revenue.toLocaleString()}` : '—'}
-                    icon={<DollarSign size={18} className="text-blue-600" />}
-                    iconBg="bg-blue-50"
-                    valueColor="text-blue-600"
+                    icon={<DollarSign size={18} />}
+                    tint="blue"
                 />
             </div>
 
-            {/* Row 2 — secondary stats */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
-                <StatCard
+            {/* Row 2 — 2 secondary stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
+                <DSStatCard
                     label="Suspended"
                     value={stats?.suspended ?? '—'}
-                    icon={<PauseCircle size={18} className="text-orange-500" />}
-                    iconBg="bg-orange-50"
-                    valueColor={stats?.suspended ? 'text-orange-600' : ''}
+                    subtitle="awaiting payment"
+                    icon={<PauseCircle size={18} />}
+                    tint="orange"
                 />
-                <StatCard
+                <DSStatCard
                     label="Active Devices"
                     value={stats?.total_push_tokens ?? '—'}
-                    icon={<Smartphone size={18} className="text-purple-600" />}
-                    iconBg="bg-purple-50"
-                    valueColor="text-purple-600"
+                    subtitle="push tokens registered"
+                    icon={<Smartphone size={18} />}
+                    tint="purple"
                 />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Two-column grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, marginBottom: 16 }}>
                 {/* Upcoming renewals */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Upcoming Renewals</CardTitle>
-                        <span className="text-xs text-slate-400">Next 30 days</span>
-                    </CardHeader>
-                    <CardContent>
-                        {stats?.upcoming_renewals?.length ? (
-                            <div className="divide-y divide-slate-100">
-                                {stats.upcoming_renewals.map((r) => (
-                                    <div key={r.slug} className="flex items-center justify-between py-2.5">
-                                        <Link
-                                            href={`/clients/${r.slug}`}
-                                            className="text-sm font-medium text-slate-900 hover:text-slate-600 hover:underline"
-                                        >
-                                            {r.name}
-                                        </Link>
-                                        <RenewalBadge date={r.renewal} />
+                <DSCard>
+                    <DSCardHeader
+                        title="Upcoming Renewals"
+                        subtitle={upcoming.length > 0 ? `${upcoming.length} of ${stats?.upcoming_renewals?.length ?? 0} accounts` : 'Next 30 days'}
+                        action={
+                            <Link href="/billing" style={{ fontSize: 13, color: '#3B82F6', fontWeight: 500 }}>
+                                View all →
+                            </Link>
+                        }
+                    />
+                    <div style={{ borderTop: '1px solid #F1F5F9' }}>
+                        {upcoming.length > 0 ? upcoming.map((r, i) => (
+                            <Link
+                                key={r.slug}
+                                href={`/clients/${r.slug}`}
+                                className="row-hover"
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '12px 20px',
+                                    borderBottom: i === upcoming.length - 1 ? 'none' : '1px solid #F1F5F9',
+                                    textDecoration: 'none',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                                    <div style={{
+                                        width: 32, height: 32, borderRadius: 8,
+                                        background: '#F1F5F9', color: '#64748B',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                    }}>
+                                        <Building2 size={15} />
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-slate-400 py-4 text-center">
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 500, color: '#0F172A' }}>{r.name}</div>
+                                    </div>
+                                </div>
+                                <RenewalBadge date={r.renewal} />
+                            </Link>
+                        )) : (
+                            <div style={{ padding: '24px 20px', textAlign: 'center', fontSize: 14, color: '#94A3B8' }}>
                                 No renewals in the next 30 days
-                            </p>
+                            </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </DSCard>
 
                 {/* Quick actions */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Quick Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        {[
-                            {
-                                href: '/clients/new',
-                                Icon: Plus,
-                                title: 'Add New Client',
-                                desc: 'Onboard a new tenant company',
-                            },
-                            {
-                                href: '/clients',
-                                Icon: Building2,
-                                title: 'View All Clients',
-                                desc: `${stats?.total ?? 0} tenant${(stats?.total ?? 0) !== 1 ? 's' : ''} configured`,
-                            },
-                            {
-                                href: '/billing',
-                                Icon: CreditCard,
-                                title: 'Billing Overview',
-                                desc: 'Track subscriptions & payments',
-                            },
-                        ].map(({ href, Icon, title, desc }) => (
-                            <Link key={href} href={href}>
-                                <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition-colors">
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-                                        <Icon size={15} className="text-slate-600" />
-                                    </span>
-                                    <div>
-                                        <p className="text-sm font-medium text-slate-900">{title}</p>
-                                        <p className="text-xs text-slate-500">{desc}</p>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-
-                        {/* Overdue alert */}
-                        {stats && stats.overdue > 0 && (
-                            <Link href="/billing">
-                                <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 hover:bg-red-100 transition-colors">
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100">
-                                        <AlertCircle size={15} className="text-red-600" />
-                                    </span>
-                                    <div>
-                                        <p className="text-sm font-medium text-red-700">
-                                            {stats.overdue} overdue account{stats.overdue > 1 ? 's' : ''}
-                                        </p>
-                                        <p className="text-xs text-red-600">View billing →</p>
-                                    </div>
-                                </div>
-                            </Link>
-                        )}
-                    </CardContent>
-                </Card>
+                <DSCard>
+                    <DSCardHeader title="Quick Actions" />
+                    <DSCardContent>
+                        <QuickLink
+                            href="/clients/new"
+                            icon={<Plus size={16} />}
+                            title="Add a new client"
+                            desc="Spin up a new tenant + Odoo connection"
+                        />
+                        <QuickLink
+                            href="/billing"
+                            icon={<CreditCard size={16} />}
+                            title="Review billing"
+                            desc="See overdue accounts and upcoming renewals"
+                        />
+                        <QuickLink
+                            href="/clients"
+                            icon={<RefreshCw size={16} />}
+                            title="All clients"
+                            desc={`${stats?.total ?? 0} tenant${(stats?.total ?? 0) !== 1 ? 's' : ''} configured`}
+                        />
+                    </DSCardContent>
+                </DSCard>
             </div>
+
+            {/* Overdue alert */}
+            {stats && stats.overdue > 0 && (
+                <DSCard style={{ borderColor: '#FECACA', background: '#FEF7F7' }}>
+                    <div style={{ padding: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{
+                            width: 36, height: 36, borderRadius: 8,
+                            background: '#FEE2E2', color: '#DC2626',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                            <AlertCircle size={18} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#7F1D1D' }}>
+                                {stats.overdue} {stats.overdue === 1 ? 'account is' : 'accounts are'} overdue
+                            </div>
+                            <div style={{ fontSize: 13, color: '#991B1B', marginTop: 2 }}>
+                                Review in Billing to suspend or follow up.
+                            </div>
+                        </div>
+                        <Link href="/billing" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            height: 32, padding: '0 12px',
+                            background: '#fff', border: '1px solid #FCA5A5',
+                            color: '#991B1B', borderRadius: 8,
+                            fontSize: 13, fontWeight: 500, textDecoration: 'none',
+                        }}>
+                            Open Billing →
+                        </Link>
+                    </div>
+                </DSCard>
+            )}
         </div>
     );
 }
 
-function StatCard({
-    label,
-    value,
+function QuickLink({
+    href,
     icon,
-    iconBg,
-    valueColor,
+    title,
+    desc,
 }: {
-    label: string;
-    value: string | number;
+    href: string;
     icon: React.ReactNode;
-    iconBg: string;
-    valueColor?: string;
+    title: string;
+    desc: string;
 }) {
     return (
-        <Card>
-            <CardContent className="pt-5 pb-5 flex items-center gap-4">
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
-                    {icon}
-                </span>
-                <div>
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-                    <p className={`text-2xl font-bold mt-0.5 ${valueColor || 'text-slate-900'}`}>{value}</p>
-                </div>
-            </CardContent>
-        </Card>
+        <Link
+            href={href}
+            className="row-hover"
+            style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: 12, borderRadius: 8, textDecoration: 'none',
+                marginBottom: 2,
+            }}
+        >
+            <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: '#F1F5F9', color: '#475569',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+                {icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#0F172A' }}>{title}</div>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 1 }}>{desc}</div>
+            </div>
+            <ChevronRight size={14} color="#94A3B8" />
+        </Link>
     );
 }

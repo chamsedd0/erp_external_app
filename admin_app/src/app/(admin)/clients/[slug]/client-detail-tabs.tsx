@@ -3,21 +3,21 @@
 import { useState, useTransition, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Tenant, TenantStats, DeviceEntry, NotificationEntry } from '@/lib/types';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatusBadge, PlanBadge, Badge } from '@/components/ui/badge';
-import { HealthCheck } from '@/components/health-check';
-import { Button } from '@/components/ui/button';
 import {
-    Dialog,
-    DialogTrigger,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-    DialogClose,
-} from '@/components/ui/dialog';
+    DSTabs,
+    DSCard,
+    DSCardHeader,
+    DSCardContent,
+    DSStatusBadge,
+    DSPlanBadge,
+    MonoChip,
+    Btn,
+    DSDialog,
+    Th,
+    DetailRow,
+    DSRenewalBadge,
+} from '@/components/ui/primitives';
+import { HealthCheck } from '@/components/health-check';
 import { deleteTenantAction, toggleEnabledAction, updateStatusAction } from '@/lib/actions';
 import {
     LayoutGrid,
@@ -25,12 +25,13 @@ import {
     Smartphone,
     Bell,
     ShieldAlert,
-    ExternalLink,
     CheckCircle2,
     XCircle,
     Info,
-    AlertTriangle,
+    PauseCircle,
     Trash2,
+    ExternalLink,
+    Hash,
 } from 'lucide-react';
 
 interface Props {
@@ -38,19 +39,21 @@ interface Props {
     stats: TenantStats | null;
 }
 
+const TAB_ITEMS = [
+    { value: 'overview',      label: 'Overview',      icon: <LayoutGrid size={14} /> },
+    { value: 'billing',       label: 'Billing',       icon: <CreditCard size={14} /> },
+    { value: 'devices',       label: 'Devices',       icon: <Smartphone size={14} /> },
+    { value: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
+    { value: 'danger',        label: 'Danger Zone',   icon: <ShieldAlert size={14} /> },
+];
+
 export function ClientDetailTabs({ tenant, stats }: Props) {
     const router = useRouter();
+    const [tab, setTab] = useState('overview');
     const [isPending, startTransition] = useTransition();
     const [statusMsg, setStatusMsg] = useState('');
-
-    function Row({ label, value }: { label: string; value: React.ReactNode }) {
-        return (
-            <div className="flex items-start py-2.5 border-b border-slate-100 last:border-0 gap-4">
-                <span className="w-40 shrink-0 text-sm text-slate-500">{label}</span>
-                <span className="text-sm text-slate-900 break-all">{value ?? '—'}</span>
-            </div>
-        );
-    }
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [confirmDisable, setConfirmDisable] = useState(false);
 
     function doAction(fn: () => Promise<void>) {
         startTransition(async () => {
@@ -58,244 +61,292 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                 await fn();
                 setStatusMsg('');
                 router.refresh();
-            } catch (err: any) {
-                setStatusMsg(err.message ?? 'Action failed');
+            } catch (err: unknown) {
+                setStatusMsg(err instanceof Error ? err.message : 'Action failed');
             }
         });
     }
 
+    const fmtDate = (d: string) =>
+        new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
     return (
-        <Tabs defaultValue="overview">
-            <TabsList>
-                <TabsTrigger value="overview">
-                    <LayoutGrid size={13} className="mr-1.5" />Overview
-                </TabsTrigger>
-                <TabsTrigger value="billing">
-                    <CreditCard size={13} className="mr-1.5" />Billing
-                </TabsTrigger>
-                <TabsTrigger value="devices">
-                    <Smartphone size={13} className="mr-1.5" />Devices
-                </TabsTrigger>
-                <TabsTrigger value="notifications">
-                    <Bell size={13} className="mr-1.5" />Notifications
-                </TabsTrigger>
-                <TabsTrigger value="danger">
-                    <ShieldAlert size={13} className="mr-1.5" />Danger Zone
-                </TabsTrigger>
-            </TabsList>
+        <>
+            <DSTabs value={tab} onChange={setTab} items={TAB_ITEMS} />
 
-            {/* ── Overview ─────────────────────────────────────────────────────── */}
-            <TabsContent value="overview">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <Card>
-                        <CardHeader><CardTitle>Connection</CardTitle></CardHeader>
-                        <CardContent>
-                            <Row label="Odoo URL" value={
-                                <a href={tenant.odoo_url} target="_blank" rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                                    {tenant.odoo_url}
-                                    <ExternalLink size={11} />
-                                </a>
-                            } />
-                            <Row label="Database" value={
-                                <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">{tenant.odoo_db}</code>
-                            } />
-                            <Row label="Username" value={tenant.odoo_username ?? '—'} />
-                            <Row label="HR Email" value={tenant.hr_email} />
-                            <div className="pt-3">
-                                <HealthCheck slug={tenant.slug} manual />
-                            </div>
-                        </CardContent>
-                    </Card>
+            <div style={{ marginTop: 16 }}>
+                {/* ── Overview ─────────────────────────────────────────────────── */}
+                {tab === 'overview' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                        {/* Connection */}
+                        <DSCard>
+                            <DSCardHeader
+                                title="Connection"
+                                subtitle="Odoo XML-RPC endpoint"
+                                action={<HealthCheck slug={tenant.slug} manual />}
+                            />
+                            <DSCardContent>
+                                <DetailRow label="URL" value={
+                                    <a href={tenant.odoo_url} target="_blank" rel="noopener noreferrer"
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#3B82F6' }}>
+                                        {tenant.odoo_url.replace(/^https?:\/\//, '').slice(0, 40)}
+                                        <ExternalLink size={11} />
+                                    </a>
+                                } />
+                                <DetailRow label="Database" value={<MonoChip size={12}>{tenant.odoo_db}</MonoChip>} />
+                                <DetailRow label="Username" value={<span style={{ fontSize: 13, color: '#475569' }}>{tenant.odoo_username ?? '—'}</span>} />
+                                <DetailRow label="HR Email"  value={<span style={{ fontSize: 13, color: '#475569' }}>{tenant.hr_email}</span>} last />
+                            </DSCardContent>
+                        </DSCard>
 
-                    <Card>
-                        <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
-                        <CardContent>
-                            <Row label="Name" value={tenant.contact_name} />
-                            <Row label="Email" value={
-                                <a href={`mailto:${tenant.contact_email}`} className="text-blue-600 hover:underline">
-                                    {tenant.contact_email}
-                                </a>
-                            } />
-                            <Row label="Phone" value={tenant.contact_phone} />
-                        </CardContent>
-                    </Card>
+                        {/* Contact */}
+                        <DSCard>
+                            <DSCardHeader title="Contact" />
+                            <DSCardContent>
+                                <DetailRow label="Name" value={<span style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{tenant.contact_name}</span>} />
+                                <DetailRow label="Email" value={
+                                    <a href={`mailto:${tenant.contact_email}`} style={{ fontSize: 13, color: '#3B82F6' }}>
+                                        {tenant.contact_email}
+                                    </a>
+                                } />
+                                <DetailRow label="Phone" value={<span style={{ fontSize: 13, color: '#475569' }}>{tenant.contact_phone ?? '—'}</span>} last />
+                            </DSCardContent>
+                        </DSCard>
 
-                    <Card>
-                        <CardHeader><CardTitle>Subscription</CardTitle></CardHeader>
-                        <CardContent>
-                            <Row label="Plan" value={<PlanBadge plan={tenant.subscription_plan} />} />
-                            <Row label="Status" value={<StatusBadge status={tenant.subscription_status} />} />
-                            <Row label="Start date" value={tenant.subscription_start} />
-                            <Row label="Renewal date" value={tenant.subscription_renewal} />
-                            <Row label="Monthly amount" value={`$${tenant.monthly_amount.toLocaleString()}/mo`} />
-                        </CardContent>
-                    </Card>
+                        {/* Subscription */}
+                        <DSCard>
+                            <DSCardHeader title="Subscription" />
+                            <DSCardContent>
+                                <DetailRow label="Plan"    value={<DSPlanBadge plan={tenant.subscription_plan} />} />
+                                <DetailRow label="Status"  value={<DSStatusBadge status={tenant.subscription_status} />} />
+                                <DetailRow label="Amount"  value={<span style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>${tenant.monthly_amount.toLocaleString()}/mo</span>} />
+                                <DetailRow label="Started" value={<span style={{ fontSize: 13, color: '#475569' }}>{fmtDate(tenant.subscription_start)}</span>} />
+                                <DetailRow label="Renewal" value={<DSRenewalBadge date={tenant.subscription_renewal} />} last />
+                            </DSCardContent>
+                        </DSCard>
 
-                    <Card>
-                        <CardHeader><CardTitle>Activity</CardTitle></CardHeader>
-                        <CardContent>
-                            <Row label="Active devices" value={stats?.active_devices ?? '—'} />
-                            <Row label="Total notifications" value={stats?.notifications_total ?? '—'} />
-                            <Row label="Unread" value={stats?.notifications_unread ?? '—'} />
-                            <Row label="Last sync" value={stats?.last_sync ? new Date(stats.last_sync).toLocaleString() : 'Never'} />
-                            <Row label="Created" value={new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
-                        </CardContent>
-                    </Card>
+                        {/* Activity */}
+                        <DSCard>
+                            <DSCardHeader title="Activity" />
+                            <DSCardContent>
+                                <DetailRow label="Active devices"       value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.active_devices ?? '—'}</span>} />
+                                <DetailRow label="Total notifications"  value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.notifications_total ?? '—'}</span>} />
+                                <DetailRow label="Unread"               value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.notifications_unread ?? '—'}</span>} />
+                                <DetailRow label="Last sync"            value={<span style={{ fontSize: 13, color: '#475569' }}>{stats?.last_sync ? new Date(stats.last_sync).toLocaleString() : 'Never'}</span>} />
+                                <DetailRow label="Created"              value={<span style={{ fontSize: 13, color: '#475569' }}>{fmtDate(tenant.created_at)}</span>} last />
+                            </DSCardContent>
+                        </DSCard>
 
-                    {tenant.notes && (
-                        <Card className="xl:col-span-2">
-                            <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-slate-700 whitespace-pre-wrap">{tenant.notes}</p>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-            </TabsContent>
+                        {tenant.notes && (
+                            <DSCard style={{ gridColumn: 'span 2' }}>
+                                <DSCardHeader title="Internal Notes" />
+                                <DSCardContent>
+                                    <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                        {tenant.notes}
+                                    </div>
+                                </DSCardContent>
+                            </DSCard>
+                        )}
+                    </div>
+                )}
 
-            {/* ── Billing ──────────────────────────────────────────────────────── */}
-            <TabsContent value="billing">
-                <Card>
-                    <CardHeader><CardTitle>Subscription Management</CardTitle></CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-200">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-900">Current Status</p>
-                                    <div className="mt-1"><StatusBadge status={tenant.subscription_status} /></div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold text-slate-900">${tenant.monthly_amount.toLocaleString()}</p>
-                                    <p className="text-xs text-slate-500">per month</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
-                                <p className="text-sm font-medium text-slate-700">Next renewal</p>
-                                <span className="font-mono text-sm text-slate-900">{tenant.subscription_renewal}</span>
-                            </div>
-
-                            <div>
-                                <p className="text-sm font-medium text-slate-700 mb-2">Quick status change</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {(['active', 'trial', 'overdue', 'suspended', 'cancelled'] as const).map((s) => (
-                                        <button
-                                            key={s}
-                                            disabled={isPending || tenant.subscription_status === s}
-                                            onClick={() => doAction(() => updateStatusAction(tenant.slug, s))}
-                                            className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed capitalize"
-                                        >
-                                            {tenant.subscription_status === s ? `✓ ${s}` : `→ ${s}`}
-                                        </button>
+                {/* ── Billing ──────────────────────────────────────────────────── */}
+                {tab === 'billing' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+                        <DSCard>
+                            <DSCardHeader title="Subscription" action={<DSStatusBadge status={tenant.subscription_status} />} />
+                            <DSCardContent>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 16 }}>
+                                    {[
+                                        { label: 'Monthly amount', value: `$${tenant.monthly_amount.toLocaleString()}` },
+                                        { label: 'Plan', value: tenant.subscription_plan },
+                                        { label: 'Started', value: fmtDate(tenant.subscription_start) },
+                                        { label: 'Next renewal', value: fmtDate(tenant.subscription_renewal) },
+                                    ].map(({ label, value }) => (
+                                        <div key={label} style={{ background: '#F8FAFC', borderRadius: 8, padding: 12 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 500, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+                                            <div style={{ fontSize: 16, fontWeight: 600, color: '#0F172A', textTransform: 'capitalize' }}>{value}</div>
+                                        </div>
                                     ))}
                                 </div>
-                                {statusMsg && <p className="text-xs text-red-600 mt-2">{statusMsg}</p>}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-            {/* ── Devices ──────────────────────────────────────────────────────── */}
-            <TabsContent value="devices">
-                <DevicesTab slug={tenant.slug} statCount={stats?.active_devices ?? 0} />
-            </TabsContent>
-
-            {/* ── Notifications ────────────────────────────────────────────────── */}
-            <TabsContent value="notifications">
-                <NotificationsTab slug={tenant.slug} statTotal={stats?.notifications_total ?? 0} />
-            </TabsContent>
-
-            {/* ── Danger Zone ──────────────────────────────────────────────────── */}
-            <TabsContent value="danger">
-                <div className="space-y-4">
-                    <Card className="border-amber-200">
-                        <CardHeader>
-                            <CardTitle className="text-amber-700">
-                                {tenant.enabled ? 'Disable Tenant' : 'Enable Tenant'}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-slate-600 mb-4">
-                                {tenant.enabled
-                                    ? 'Disabling prevents users from logging in. Existing data is preserved.'
-                                    : 'Re-enabling allows users to log in again.'}
-                            </p>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
-                                        <AlertTriangle size={14} />
-                                        {tenant.enabled ? 'Disable tenant' : 'Enable tenant'}
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>{tenant.enabled ? 'Disable' : 'Enable'} {tenant.name}?</DialogTitle>
-                                        <DialogDescription>
-                                            {tenant.enabled
-                                                ? 'Users will not be able to log in until re-enabled.'
-                                                : 'Users will be able to log in again.'}
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <DialogFooter>
-                                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                                        <DialogClose asChild>
-                                            <Button
-                                                variant={tenant.enabled ? 'destructive' : 'default'}
-                                                disabled={isPending}
-                                                onClick={() => doAction(() => toggleEnabledAction(tenant.slug, !tenant.enabled))}
-                                            >
-                                                Confirm
-                                            </Button>
-                                        </DialogClose>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-red-200">
-                        <CardHeader><CardTitle className="text-red-700">Delete Tenant</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-slate-600 mb-4">
-                                Permanently removes this tenant and all associated Redis keys. This cannot be undone.
-                            </p>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="destructive">
-                                        <Trash2 size={14} />
-                                        Delete tenant
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Delete {tenant.name}?</DialogTitle>
-                                        <DialogDescription>
-                                            This will permanently remove <strong>{tenant.slug}</strong> and all associated data. Cannot be undone.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="my-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                                        Slug: <strong>{tenant.slug}</strong> · {stats?.active_devices ?? 0} device(s) · {stats?.notifications_total ?? 0} notification(s)
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                                        Quick status change
                                     </div>
-                                    <DialogFooter>
-                                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                                        <Button variant="destructive" disabled={isPending}
-                                            onClick={() => doAction(() => deleteTenantAction(tenant.slug))}>
-                                            {isPending ? 'Deleting…' : 'Delete permanently'}
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </CardContent>
-                    </Card>
-                </div>
-            </TabsContent>
-        </Tabs>
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                        {(['active', 'trial', 'overdue', 'suspended', 'cancelled'] as const).map((s) => {
+                                            const isActive = tenant.subscription_status === s;
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    disabled={isPending || isActive}
+                                                    onClick={() => !isActive && doAction(() => updateStatusAction(tenant.slug, s))}
+                                                    style={{
+                                                        padding: '6px 12px', borderRadius: 6,
+                                                        fontSize: 12, fontWeight: 500, textTransform: 'capitalize',
+                                                        background: isActive ? '#0F172A' : '#fff',
+                                                        color: isActive ? '#fff' : '#475569',
+                                                        border: `1px solid ${isActive ? '#0F172A' : '#E2E8F0'}`,
+                                                        cursor: isActive ? 'default' : 'pointer',
+                                                        opacity: isPending && !isActive ? 0.5 : 1,
+                                                        fontFamily: 'inherit',
+                                                    }}
+                                                >
+                                                    {s}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {statusMsg && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8 }}>{statusMsg}</div>}
+                                </div>
+                            </DSCardContent>
+                        </DSCard>
+
+                        {/* Placeholder invoices card */}
+                        <DSCard>
+                            <DSCardHeader title="Recent Invoices" />
+                            <DSCardContent>
+                                {[0, 1, 2, 3].map((i) => {
+                                    const d = new Date(tenant.subscription_start);
+                                    d.setMonth(d.getMonth() + i);
+                                    return (
+                                        <div key={i} style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '10px 0',
+                                            borderBottom: i === 3 ? 'none' : '1px solid #F1F5F9',
+                                        }}>
+                                            <div>
+                                                <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>
+                                                    INV-{String(2024010 + i).padStart(7, '0')}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: '#94A3B8' }}>{fmtDate(d.toISOString())}</div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <span style={{ fontSize: 13, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                    ${tenant.monthly_amount.toLocaleString()}
+                                                </span>
+                                                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 7px', background: '#D1FAE5', color: '#065F46', borderRadius: 999 }}>
+                                                    PAID
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </DSCardContent>
+                        </DSCard>
+                    </div>
+                )}
+
+                {/* ── Devices ──────────────────────────────────────────────────── */}
+                {tab === 'devices' && (
+                    <DevicesTab slug={tenant.slug} statCount={stats?.active_devices ?? 0} />
+                )}
+
+                {/* ── Notifications ────────────────────────────────────────────── */}
+                {tab === 'notifications' && (
+                    <NotificationsTab slug={tenant.slug} />
+                )}
+
+                {/* ── Danger Zone ──────────────────────────────────────────────── */}
+                {tab === 'danger' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {/* Disable/enable card */}
+                        <DSCard style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}>
+                            <div style={{ padding: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#FEF3C7', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <PauseCircle size={18} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>
+                                        {tenant.enabled ? 'Disable tenant' : 'Re-enable tenant'}
+                                    </div>
+                                    <div style={{ fontSize: 13, color: '#92400E', marginTop: 2, lineHeight: 1.5 }}>
+                                        {tenant.enabled
+                                            ? 'Pauses mobile sync and push notifications. Billing continues unchanged. Data is retained.'
+                                            : 'Resume mobile sync and push notifications for this tenant.'}
+                                    </div>
+                                </div>
+                                <Btn variant="outline" onClick={() => setConfirmDisable(true)}>
+                                    {tenant.enabled ? 'Disable' : 'Re-enable'}
+                                </Btn>
+                            </div>
+                        </DSCard>
+
+                        {/* Delete card */}
+                        <DSCard style={{ borderColor: '#FECACA', background: '#FEF7F7' }}>
+                            <div style={{ padding: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#FEE2E2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Trash2 size={18} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: '#7F1D1D' }}>Delete tenant</div>
+                                    <div style={{ fontSize: 13, color: '#991B1B', marginTop: 2, lineHeight: 1.5 }}>
+                                        Permanently remove all tenant data — devices, notifications, billing history. This cannot be undone.
+                                    </div>
+                                </div>
+                                <Btn variant="danger" leftIcon={<Trash2 size={14} />} onClick={() => setConfirmDelete(true)}>
+                                    Delete
+                                </Btn>
+                            </div>
+                        </DSCard>
+                    </div>
+                )}
+            </div>
+
+            {/* Disable/enable dialog */}
+            <DSDialog
+                open={confirmDisable}
+                onClose={() => setConfirmDisable(false)}
+                title={tenant.enabled ? 'Disable this tenant?' : 'Re-enable this tenant?'}
+                description={
+                    tenant.enabled
+                        ? 'Mobile sync and push notifications will stop immediately. Billing remains unchanged.'
+                        : 'Mobile sync resumes for all registered devices.'
+                }
+                footer={
+                    <>
+                        <Btn variant="secondary" onClick={() => setConfirmDisable(false)}>Cancel</Btn>
+                        <Btn
+                            disabled={isPending}
+                            onClick={() => {
+                                doAction(() => toggleEnabledAction(tenant.slug, !tenant.enabled));
+                                setConfirmDisable(false);
+                            }}
+                        >
+                            {tenant.enabled ? 'Disable' : 'Re-enable'}
+                        </Btn>
+                    </>
+                }
+            />
+
+            {/* Delete dialog */}
+            <DSDialog
+                open={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                title={`Delete ${tenant.name}?`}
+                description={`This will permanently remove ${tenant.slug} and all associated data. Cannot be undone.`}
+                danger={`${stats?.active_devices ?? 0} device(s) · ${stats?.notifications_total ?? 0} notification(s) will be erased.`}
+                footer={
+                    <>
+                        <Btn variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Btn>
+                        <Btn
+                            variant="danger"
+                            disabled={isPending}
+                            onClick={() => {
+                                doAction(() => deleteTenantAction(tenant.slug));
+                                setConfirmDelete(false);
+                            }}
+                        >
+                            {isPending ? 'Deleting…' : 'Delete permanently'}
+                        </Btn>
+                    </>
+                }
+            />
+        </>
     );
 }
 
-// ─── Devices tab (client component with lazy fetch) ───────────────────────────
+// ─── Devices tab ──────────────────────────────────────────────────────────────
 
 function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
     const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
@@ -310,65 +361,79 @@ function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
             .finally(() => setLoading(false));
     }, [slug]);
 
+    const fmtTime = (s: string) =>
+        new Date(s).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Registered Devices</CardTitle>
-                <span className="text-xs text-slate-400">{statCount} push token{statCount !== 1 ? 's' : ''}</span>
-            </CardHeader>
-            <CardContent className="p-0">
-                {loading ? (
-                    <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>
-                ) : error ? (
-                    <div className="px-5 py-8 text-center text-sm text-red-500">{error}</div>
-                ) : !devices || devices.length === 0 ? (
-                    <div className="px-5 py-8 text-center">
-                        <Smartphone size={28} className="mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm text-slate-400">No devices registered yet</p>
-                        <p className="text-xs text-slate-400 mt-1">Devices appear here when employees enable push notifications</p>
+        <DSCard>
+            <DSCardHeader
+                title="Registered Devices"
+                subtitle={`${statCount} push token${statCount !== 1 ? 's' : ''}`}
+            />
+            {loading ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', fontSize: 13, color: '#94A3B8' }}>Loading…</div>
+            ) : error ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', fontSize: 13, color: '#DC2626' }}>{error}</div>
+            ) : !devices || devices.length === 0 ? (
+                <div style={{ padding: '64px 20px', textAlign: 'center' }}>
+                    <div style={{ display: 'inline-flex', width: 48, height: 48, borderRadius: 12, background: '#F1F5F9', color: '#94A3B8', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                        <Smartphone size={22} />
                     </div>
-                ) : (
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-slate-200 bg-slate-50">
-                            <tr>
-                                {['Employee ID', 'Token (preview)', 'Registered'].map((h) => (
-                                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
-                                ))}
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0F172A' }}>No devices registered</div>
+                    <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
+                        Devices appear here when employees enable push notifications.
+                    </div>
+                </div>
+            ) : (
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <thead>
+                            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                <Th label="Employee ID" />
+                                <Th label="Token Preview" />
+                                <Th label="Registered" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody>
                             {devices.map((d) => (
-                                <tr key={d.employeeId} className="hover:bg-slate-50">
-                                    <td className="px-4 py-3 font-medium text-slate-900">#{d.employeeId}</td>
-                                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{d.token_preview}</td>
-                                    <td className="px-4 py-3 text-slate-600 text-xs">
-                                        {new Date(d.registered_at).toLocaleString()}
+                                <tr key={d.employeeId} className="row-hover" style={{ borderTop: '1px solid #F1F5F9' }}>
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, color: '#0F172A' }}>
+                                            <Hash size={12} color="#94A3B8" />{d.employeeId}
+                                        </span>
                                     </td>
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <code className="mono" style={{ fontSize: 12, color: '#475569', background: '#F1F5F9', padding: '2px 6px', borderRadius: 4 }}>
+                                            {d.token_preview}
+                                        </code>
+                                    </td>
+                                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{fmtTime(d.registered_at)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                )}
-            </CardContent>
-        </Card>
+                </div>
+            )}
+        </DSCard>
     );
 }
 
-// ─── Notifications tab (client component with lazy fetch + pagination) ─────────
+// ─── Notifications tab ────────────────────────────────────────────────────────
 
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-    request_approved: <CheckCircle2 size={13} className="text-emerald-500" />,
-    request_rejected: <XCircle size={13} className="text-red-500" />,
-    system: <Info size={13} className="text-blue-500" />,
+const TYPE_META: Record<string, { icon: React.ReactNode; label: string; bg: string; color: string }> = {
+    request_approved: { icon: <CheckCircle2 size={13} />, label: 'Approved', bg: '#D1FAE5', color: '#059669' },
+    request_rejected: { icon: <XCircle size={13} />,     label: 'Rejected', bg: '#FEE2E2', color: '#DC2626' },
+    system:           { icon: <Info size={13} />,         label: 'System',   bg: '#DBEAFE', color: '#2563EB' },
 };
 
-function NotificationsTab({ slug, statTotal }: { slug: string; statTotal: number }) {
+const LIMIT = 30;
+
+function NotificationsTab({ slug }: { slug: string }) {
     const [items, setItems] = useState<NotificationEntry[]>([]);
     const [total, setTotal] = useState(0);
     const [offset, setOffset] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const LIMIT = 30;
 
     const load = useCallback(
         (off: number) => {
@@ -388,70 +453,95 @@ function NotificationsTab({ slug, statTotal }: { slug: string; statTotal: number
 
     useEffect(() => { load(0); }, [load]);
 
+    const fmtTime = (s: string) => {
+        const ms = Date.now() - new Date(s).getTime();
+        const min = Math.round(ms / 60000);
+        if (min < 60) return `${min}m ago`;
+        const h = Math.round(min / 60);
+        if (h < 24) return `${h}h ago`;
+        return `${Math.round(h / 24)}d ago`;
+    };
+
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Notification History</CardTitle>
-                <span className="text-xs text-slate-400">{total} total</span>
-            </CardHeader>
-            <CardContent className="p-0">
-                {loading && items.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>
-                ) : error ? (
-                    <div className="px-5 py-8 text-center text-sm text-red-500">{error}</div>
-                ) : items.length === 0 ? (
-                    <div className="px-5 py-8 text-center">
-                        <Bell size={28} className="mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm text-slate-400">No notifications sent yet</p>
+        <DSCard>
+            <DSCardHeader title="Notification History" subtitle={`${total} total`} />
+            {loading && items.length === 0 ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', fontSize: 13, color: '#94A3B8' }}>Loading…</div>
+            ) : error ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', fontSize: 13, color: '#DC2626' }}>{error}</div>
+            ) : items.length === 0 ? (
+                <div style={{ padding: '64px 20px', textAlign: 'center' }}>
+                    <div style={{ display: 'inline-flex', width: 48, height: 48, borderRadius: 12, background: '#F1F5F9', color: '#94A3B8', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                        <Bell size={22} />
                     </div>
-                ) : (
-                    <>
-                        <table className="w-full text-sm">
-                            <thead className="border-b border-slate-200 bg-slate-50">
-                                <tr>
-                                    {['Type', 'Employee', 'Message', 'Status', 'Time'].map((h) => (
-                                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
-                                    ))}
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0F172A' }}>No notifications sent yet</div>
+                </div>
+            ) : (
+                <>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                            <thead>
+                                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                    <Th label="Type" />
+                                    <Th label="Message" />
+                                    <Th label="Employee" />
+                                    <Th label="" />
+                                    <Th label="When" align="right" />
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {items.map((n) => (
-                                    <tr key={n.id} className="hover:bg-slate-50">
-                                        <td className="px-4 py-3">
-                                            <span className="inline-flex items-center gap-1.5">
-                                                {TYPE_ICONS[n.type] ?? <Info size={13} className="text-slate-400" />}
-                                                <span className="text-xs text-slate-600 capitalize">{n.type.replace(/_/g, ' ')}</span>
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-slate-600 text-xs">#{n.employeeId}</td>
-                                        <td className="px-4 py-3 text-slate-700 max-w-xs truncate">{n.message}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`inline-flex items-center gap-1 text-xs font-medium ${n.read ? 'text-slate-400' : 'text-blue-600'}`}>
-                                                <span className={`h-1.5 w-1.5 rounded-full ${n.read ? 'bg-slate-300' : 'bg-blue-500'}`} />
-                                                {n.read ? 'Read' : 'Unread'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                                            {new Date(n.timestamp).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
+                            <tbody>
+                                {items.map((n) => {
+                                    const m = TYPE_META[n.type] ?? TYPE_META.system;
+                                    return (
+                                        <tr key={n.id} className="row-hover" style={{ borderTop: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                    padding: '3px 8px', borderRadius: 999,
+                                                    background: m.bg, color: m.color,
+                                                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4,
+                                                }}>
+                                                    {m.icon}{m.label}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', maxWidth: 320 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{n.title}</div>
+                                                <div style={{ fontSize: 12, color: '#64748B', marginTop: 1 }}>{n.message}</div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <code className="mono" style={{ fontSize: 12, color: '#475569' }}>#{n.employeeId}</code>
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{
+                                                    display: 'inline-block', width: 8, height: 8, borderRadius: 999,
+                                                    background: n.read ? '#CBD5E1' : '#3B82F6',
+                                                }} title={n.read ? 'Read' : 'Unread'} />
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, color: '#94A3B8' }}>
+                                                {fmtTime(n.timestamp)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
-                        {items.length < total && (
-                            <div className="px-5 py-3 border-t border-slate-100 text-center">
-                                <button
-                                    onClick={() => load(offset)}
-                                    disabled={loading}
-                                    className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
-                                >
-                                    {loading ? 'Loading…' : `Load more (${total - items.length} remaining)`}
-                                </button>
-                            </div>
-                        )}
-                    </>
-                )}
-            </CardContent>
-        </Card>
+                    </div>
+                    {items.length < total && (
+                        <div style={{ padding: '12px 16px', borderTop: '1px solid #F1F5F9', textAlign: 'center' }}>
+                            <button
+                                onClick={() => load(offset)}
+                                disabled={loading}
+                                style={{
+                                    background: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                                    fontSize: 13, color: '#475569', opacity: loading ? 0.5 : 1, fontFamily: 'inherit',
+                                }}
+                            >
+                                {loading ? 'Loading…' : `Load more (${total - items.length} remaining)`}
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </DSCard>
     );
 }

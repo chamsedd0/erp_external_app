@@ -5,7 +5,6 @@ import { HealthDot } from './health-dot';
 
 interface Props {
     slug: string;
-    /** pass true to skip auto-fetch on mount (manual trigger only) */
     manual?: boolean;
 }
 
@@ -38,26 +37,31 @@ export function HealthCheck({ slug, manual = false }: Props) {
             <button
                 onClick={fetchHealth}
                 disabled={loading}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'transparent', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                    fontSize: 12, color: '#475569', opacity: loading ? 0.5 : 1,
+                    fontFamily: 'inherit', padding: 0,
+                }}
             >
                 {loading ? (
-                    <span className="h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
+                    <>
+                        <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: 999, background: '#94A3B8', flexShrink: 0 }} />
+                        <span>Checking…</span>
+                    </>
                 ) : (
                     <HealthDot status={status} latency={latency} />
                 )}
-                {loading ? 'Checking…' : 'Test connection'}
             </button>
         );
     }
 
-    if (loading) {
-        return (
-            <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-slate-200 animate-pulse" />
-                <span className="text-xs text-slate-400">Checking…</span>
-            </span>
-        );
-    }
-
-    return <HealthDot status={status} latency={latency} />;
+    return loading ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: 999, background: '#94A3B8', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: '#94A3B8' }}>Checking…</span>
+        </span>
+    ) : (
+        <HealthDot status={status} latency={latency} />
+    );
 }

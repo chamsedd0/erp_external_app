@@ -2,9 +2,9 @@ import { Sidebar } from '@/components/nav';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex h-full">
+        <div style={{ display: 'flex', height: '100%' }}>
             <Sidebar />
-            <main className="flex-1 overflow-auto">
+            <main style={{ flex: 1, overflowY: 'auto' }}>
                 {children}
             </main>
         </div>

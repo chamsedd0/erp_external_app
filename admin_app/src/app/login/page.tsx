@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Shield } from 'lucide-react';
+import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
     const [password, setPassword] = useState('');
+    const [show, setShow] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
@@ -28,53 +29,148 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="flex min-h-full items-center justify-center">
-            <div className="w-full max-w-sm px-4">
-                <div className="text-center mb-8">
-                    <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 mb-4">
-                        <Shield size={26} className="text-white" />
+        <div style={{
+            minHeight: '100vh',
+            background: '#F8FAFC',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+        }}>
+            <div style={{ width: '100%', maxWidth: 360 }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: 28 }}>
+                    <div style={{
+                        width: 48, height: 48,
+                        borderRadius: 14,
+                        background: '#0F172A',
+                        color: '#fff',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16,
+                        boxShadow: '0 8px 24px rgba(15,23,42,0.18)',
+                    }}>
+                        <Shield size={22} />
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900">Shadow Portal</h1>
-                    <p className="text-sm text-slate-500 mt-1">Admin Dashboard</p>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', letterSpacing: -0.4 }}>
+                        Shadow Portal
+                    </div>
+                    <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
+                        Admin Dashboard
+                    </div>
                 </div>
 
-                <form
-                    onSubmit={handleSubmit}
-                    className="bg-white shadow-sm rounded-xl border border-slate-200 p-8 space-y-5"
-                >
-                    <div>
-                        <label
-                            htmlFor="password"
-                            className="block text-sm font-medium text-slate-700 mb-1.5"
+                {/* Card */}
+                <div style={{
+                    background: '#fff',
+                    borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                    padding: 32,
+                }}>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {/* Password field */}
+                        <div>
+                            <label
+                                htmlFor="password"
+                                style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#334155', marginBottom: 6 }}
+                            >
+                                Password
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    id="password"
+                                    type={show ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    autoFocus
+                                    placeholder="Enter admin password"
+                                    style={{
+                                        height: 36,
+                                        width: '100%',
+                                        border: '1px solid #CBD5E1',
+                                        borderRadius: 8,
+                                        paddingLeft: 12,
+                                        paddingRight: 40,
+                                        fontSize: 14,
+                                        color: '#0F172A',
+                                        background: '#fff',
+                                        outline: 'none',
+                                        boxSizing: 'border-box',
+                                    }}
+                                    onFocus={e => {
+                                        e.currentTarget.style.borderColor = '#60A5FA';
+                                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.12)';
+                                    }}
+                                    onBlur={e => {
+                                        e.currentTarget.style.borderColor = '#CBD5E1';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShow(s => !s)}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 0, top: 0, bottom: 0,
+                                        width: 36,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#94A3B8',
+                                    }}
+                                >
+                                    {show ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Error */}
+                        {error && (
+                            <div style={{
+                                background: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                color: '#B91C1C',
+                                fontSize: 13,
+                                padding: '8px 12px',
+                                borderRadius: 8,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                            }}>
+                                <AlertCircle size={14} />
+                                {error}
+                            </div>
+                        )}
+
+                        {/* Submit */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="btn-press"
+                            style={{
+                                height: 36,
+                                width: '100%',
+                                borderRadius: 8,
+                                background: loading ? '#475569' : '#0F172A',
+                                color: '#fff',
+                                fontSize: 14,
+                                fontWeight: 500,
+                                border: 'none',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                opacity: loading ? 0.7 : 1,
+                                transition: 'background 150ms ease',
+                            }}
                         >
-                            Admin Password
-                        </label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            autoFocus
-                            placeholder="Enter admin password"
-                            className="flex h-9 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
-                        />
-                    </div>
-
-                    {error && (
-                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                            {error}
-                        </p>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full h-9 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Signing in…' : 'Sign in'}
-                    </button>
-                </form>
+                            {loading ? 'Signing in…' : 'Sign in'}
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     );

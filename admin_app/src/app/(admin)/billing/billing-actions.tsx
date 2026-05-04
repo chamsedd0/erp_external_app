@@ -1,11 +1,13 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateStatusAction } from '@/lib/actions';
+import { Check, PauseCircle } from 'lucide-react';
 
 export function BillingActions({ slug }: { slug: string }) {
     const [isPending, startTransition] = useTransition();
+    const [hover, setHover] = useState('');
     const router = useRouter();
 
     function doStatus(status: 'active' | 'suspended') {
@@ -16,20 +18,44 @@ export function BillingActions({ slug }: { slug: string }) {
     }
 
     return (
-        <div className="flex items-center gap-2 mt-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
             <button
                 onClick={() => doStatus('active')}
                 disabled={isPending}
-                className="h-7 rounded px-2.5 text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors disabled:opacity-50"
+                onMouseEnter={() => setHover('paid')}
+                onMouseLeave={() => setHover('')}
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    height: 28, padding: '0 10px', borderRadius: 6,
+                    fontSize: 12, fontWeight: 500,
+                    background: hover === 'paid' ? '#6EE7B7' : '#D1FAE5',
+                    color: '#065F46',
+                    border: 'none', cursor: isPending ? 'not-allowed' : 'pointer',
+                    opacity: isPending ? 0.5 : 1,
+                    transition: 'background 100ms ease',
+                    fontFamily: 'inherit',
+                }}
             >
-                ✓ Mark paid
+                <Check size={12} />Mark Paid
             </button>
             <button
                 onClick={() => doStatus('suspended')}
                 disabled={isPending}
-                className="h-7 rounded px-2.5 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                onMouseEnter={() => setHover('suspend')}
+                onMouseLeave={() => setHover('')}
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    height: 28, padding: '0 10px', borderRadius: 6,
+                    fontSize: 12, fontWeight: 500,
+                    background: hover === 'suspend' ? '#E2E8F0' : '#F1F5F9',
+                    color: '#475569',
+                    border: '1px solid #E2E8F0', cursor: isPending ? 'not-allowed' : 'pointer',
+                    opacity: isPending ? 0.5 : 1,
+                    transition: 'background 100ms ease',
+                    fontFamily: 'inherit',
+                }}
             >
-                Suspend
+                <PauseCircle size={12} />Suspend
             </button>
         </div>
     );
