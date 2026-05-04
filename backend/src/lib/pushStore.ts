@@ -53,6 +53,32 @@ export const pushStore = {
             return [];
         }
     },
+
+    /**
+     * List all registered devices for a specific tenant.
+     * Returns partial token previews (first 12 chars + "…") for display.
+     */
+    listDevicesForTenant: async (tenantId: string): Promise<{ employeeId: number; token_preview: string; registered_at: string }[]> => {
+        try {
+            const keys = await redisScan(`shadow:t:${tenantId}:push_token:*`);
+            const results: { employeeId: number; token_preview: string; registered_at: string }[] = [];
+            for (const key of keys) {
+                try {
+                    const raw = await redisGet(key);
+                    if (!raw) continue;
+                    const entry: PushTokenEntry = JSON.parse(raw);
+                    results.push({
+                        employeeId: entry.employeeId,
+                        token_preview: entry.token.slice(0, 20) + '…',
+                        registered_at: entry.updatedAt,
+                    });
+                } catch { /* skip malformed */ }
+            }
+            return results.sort((a, b) => a.employeeId - b.employeeId);
+        } catch {
+            return [];
+        }
+    },
 };
 
 // ── Push send helper ──────────────────────────────────────────────────────────

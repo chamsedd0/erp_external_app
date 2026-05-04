@@ -445,3 +445,67 @@ describe('GET /helpdesk/agents', () => {
         expect(res.status).toBe(401);
     });
 });
+
+// ─── Resilience: unknown/custom Odoo fields ────────────────────────────────────
+
+describe('GET /helpdesk — resilience: unknown Odoo fields', () => {
+    // GET /helpdesk needs 4 mocked searchRead calls:
+    // 1. availability probe  2. hr.employee  3. res.users  4. helpdesk.ticket
+
+    it('succeeds when Odoo returns extra unknown custom fields on tickets', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])                                                       // availability probe
+            .mockResolvedValueOnce([{ id: 42, name: 'Alice', user_id: [10, 'alice'] }])     // hr.employee
+            .mockResolvedValueOnce([{ id: 10, partner_id: [99, 'Alice Partner'] }])          // res.users
+            .mockResolvedValueOnce([
+                {
+                    id: 1, name: 'Printer broken', stage_id: [3, 'New'],
+                    partner_id: [99, 'Alice Partner'], create_date: '2025-01-10 10:00:00',
+                    x_custom_priority: 'critical',    // unknown custom field
+                    x_studio_sla_deadline: null,       // another custom field
+                },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.tickets).toHaveLength(1);
+        expect(res.body.tickets[0].name).toBe('Printer broken');
+    });
+
+    it('handles stage_id as null without crashing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ id: 42, name: 'Alice', user_id: [10, 'alice'] }])
+            .mockResolvedValueOnce([{ id: 10, partner_id: [99, 'Alice Partner'] }])
+            .mockResolvedValueOnce([
+                { id: 2, name: 'Issue', stage_id: null, partner_id: [99, 'Alice Partner'], create_date: '2025-01-10 10:00:00' },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.tickets).toHaveLength(1);
+    });
+
+    it('handles partner_id as null (not false) without crashing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ id: 42, name: 'Alice', user_id: [10, 'alice'] }])
+            .mockResolvedValueOnce([{ id: 10, partner_id: [99, 'Alice Partner'] }])
+            .mockResolvedValueOnce([
+                { id: 3, name: 'Null partner', stage_id: [1, 'Open'], partner_id: null, create_date: '2025-01-10 10:00:00' },
+            ]);
+
+        const res = await request(app)
+            .get('/helpdesk?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.tickets).toHaveLength(1);
+    });
+});

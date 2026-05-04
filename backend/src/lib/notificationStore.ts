@@ -59,4 +59,23 @@ export const notificationStore = {
         const all = await readAll(tenantId);
         await writeAll(tenantId, all.map(n => n.employeeId === employeeId ? { ...n, read: true } : n));
     },
+
+    /**
+     * List all notifications for a tenant (admin view).
+     * Returns newest-first, supports pagination.
+     */
+    listAllForTenant: async (
+        tenantId: string,
+        limit = 50,
+        offset = 0
+    ): Promise<{ total: number; items: Notification[] }> => {
+        const all = await readAll(tenantId);
+        const sorted = [...all].sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        return {
+            total: sorted.length,
+            items: sorted.slice(offset, offset + limit),
+        };
+    },
 };

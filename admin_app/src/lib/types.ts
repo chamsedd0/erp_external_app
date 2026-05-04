@@ -55,3 +55,30 @@ export interface HealthResult {
 export type TenantFormData = Omit<Tenant, 'slug' | 'created_at'> & {
     odoo_password?: string;
 };
+
+// ── Devices ───────────────────────────────────────────────────────────────────
+
+export interface DeviceEntry {
+    employeeId: number;
+    token_preview: string;
+    registered_at: string;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export interface NotificationEntry {
+    id: string;
+    employeeId: number;
+    title: string;
+    message: string;
+    type: 'request_approved' | 'request_rejected' | 'system';
+    read: boolean;
+    timestamp: string;
+    targetId?: string;
+    targetType?: string;
+}
+
+export interface NotificationPage {
+    total: number;
+    items: NotificationEntry[];
+}

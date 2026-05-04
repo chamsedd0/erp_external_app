@@ -50,7 +50,7 @@ app.use('/admin', (req: express.Request, res: express.Response, next: express.Ne
 // ── JWT Middleware ─────────────────────────────────────────────────────────────
 // All routes except /auth/* and /admin/* require a valid JWT.
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/auth/') || req.path.startsWith('/admin/')) {
+    if (req.path.startsWith('/auth/') || req.path.startsWith('/admin/') || req.path.startsWith('/cron/')) {
         return next();
     }
     const token = (req.headers.authorization ?? '').split(' ')[1];

@@ -310,6 +310,32 @@ adminRouter.get('/tenants/:slug/stats', async (req, res) => {
     }
 });
 
+// ── GET /admin/tenants/:slug/devices — list registered push token devices ─────
+adminRouter.get('/tenants/:slug/devices', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const devices = await pushStore.listDevicesForTenant(req.params.slug);
+        res.json(devices);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── GET /admin/tenants/:slug/notifications — paginated notification history ───
+adminRouter.get('/tenants/:slug/notifications', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10), 200);
+        const offset = parseInt(String(req.query.offset ?? '0'), 10);
+        const result = await notificationStore.listAllForTenant(req.params.slug, limit, offset);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── GET /admin/stats — platform-wide metrics ──────────────────────────────────
 adminRouter.get('/stats', async (_req, res) => {
     try {

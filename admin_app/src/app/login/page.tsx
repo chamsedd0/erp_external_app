@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { Shield } from 'lucide-react';
 
 export default function LoginPage() {
     const [password, setPassword] = useState('');
@@ -30,8 +31,8 @@ export default function LoginPage() {
         <div className="flex min-h-full items-center justify-center">
             <div className="w-full max-w-sm px-4">
                 <div className="text-center mb-8">
-                    <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-2xl mb-4">
-                        🛡️
+                    <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 mb-4">
+                        <Shield size={26} className="text-white" />
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900">Shadow Portal</h1>
                     <p className="text-sm text-slate-500 mt-1">Admin Dashboard</p>

@@ -215,3 +215,70 @@ describe('POST /time-off', () => {
         expect(Object.keys(createArgs[2])).toContain('holiday_status_id');
     });
 });
+
+// ─── Resilience: leave type field probe edge cases ────────────────────────────
+
+describe('time-off — resilience: leave type field probe', () => {
+    // Use a unique tenantId per test so the module-level _leaveTypeField cache
+    // is always cold — jest.clearAllMocks() does NOT clear module-level state.
+    let probeTenant: string;
+
+    beforeEach(() => {
+        probeTenant = 'resilience-' + Math.random().toString(36).slice(2, 8);
+    });
+
+    it('succeeds when Odoo returns extra custom fields in leave response', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])  // probe (cold cache — always runs)
+            .mockResolvedValueOnce([
+                {
+                    id: 10,
+                    name: 'Annual Leave',
+                    state: 'validate',
+                    employee_id: [42, 'Alice'],
+                    work_entry_type_id: [5, 'Annual'],
+                    x_custom_approval_level: 'manager',  // unknown custom field
+                    custom_notes: 'Need this approved',  // another custom field
+                },
+            ]);
+
+        const res = await request(app)
+            .get('/time-off?employee_id=42')
+            .set('Authorization', authHeader({ tenantId: probeTenant }));
+
+        expect(res.status).toBe(200);
+        expect(res.body.leaves).toHaveLength(1);
+    });
+
+    it('handles state as null without crashing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                { id: 11, name: 'Sick Leave', state: null, employee_id: [42, 'Alice'], work_entry_type_id: [3, 'Sick'] },
+            ]);
+
+        const res = await request(app)
+            .get('/time-off?employee_id=42')
+            .set('Authorization', authHeader({ tenantId: probeTenant }));
+
+        expect(res.status).toBe(200);
+        expect(res.body.leaves[0].state).toBeNull();
+    });
+
+    it('falls back to reading without leave type field when field is rejected at runtime', async () => {
+        // probe succeeds with work_entry_type_id, then runtime rejects it, then retries without field
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockRejectedValueOnce(new Error('Invalid field: work_entry_type_id'))  // runtime rejection
+            .mockResolvedValueOnce([                                                  // retry without field
+                { id: 12, name: 'Leave', state: 'validate', employee_id: [42, 'Alice'] },
+            ]);
+
+        const res = await request(app)
+            .get('/time-off?employee_id=42')
+            .set('Authorization', authHeader({ tenantId: probeTenant }));
+
+        expect(res.status).toBe(200);
+        expect(res.body.leaves).toHaveLength(1);
+    });
+});

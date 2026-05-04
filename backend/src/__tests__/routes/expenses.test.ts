@@ -436,3 +436,137 @@ describe('GET /expenses/taxes', () => {
         expect(res.status).toBe(401);
     });
 });
+
+// ─── Resilience: unknown/custom Odoo fields ────────────────────────────────────
+
+describe('GET /expenses — resilience: unknown Odoo fields', () => {
+    it('succeeds when Odoo returns extra unknown custom fields in the response', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            {
+                id: 1,
+                name: 'Conference ticket',
+                product_id: [5, 'Travel'],
+                price_unit: 200,
+                state: 'draft',
+                custom_approval_field: 'level_2',     // unknown custom field
+                x_studio_internal_code: 'CONF-2026',  // studio custom field
+                extra_meta: { some: 'object' },
+            },
+        ]);
+
+        const res = await request(app)
+            .get('/expenses?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.expenses).toHaveLength(1);
+        expect(res.body.expenses[0].name).toBe('Conference ticket');
+    });
+
+    it('handles product_id as null (not false) without crashing', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 2, name: 'Unknown product', product_id: null, price_unit: 50, state: 'draft' },
+        ]);
+
+        const res = await request(app)
+            .get('/expenses?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.expenses[0].product_name).toBeFalsy();
+    });
+
+    it('handles product_id as empty array without crashing', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 3, name: 'Edge case', product_id: [], price_unit: 100, state: 'draft' },
+        ]);
+
+        const res = await request(app)
+            .get('/expenses?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.expenses).toHaveLength(1);
+    });
+
+    it('handles product_id as [id] tuple missing the name part', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 4, name: 'Single tuple', product_id: [7], price_unit: 75, state: 'draft' },
+        ]);
+
+        const res = await request(app)
+            .get('/expenses?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.expenses).toHaveLength(1);
+    });
+});
+
+// ─── Resilience: Odoo version detection edge cases ─────────────────────────────
+
+describe('POST /expenses — resilience: Odoo version detection edge cases', () => {
+    const BASE_BODY = {
+        employee_id: 42,
+        name: 'Business flight',
+        product_id: 5,
+        unit_amount: 800,
+        date: '2026-05-01',
+        payment_mode: 'own_account',
+    };
+
+    it('uses total_amount when getVersion() returns 17', async () => {
+        mockClient.getVersion.mockResolvedValueOnce(17);
+        // POST /expenses calls searchRead twice: employee lookup, then company lookup
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])  // hr.employee
+            .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);        // res.company
+        mockClient.createRecord.mockResolvedValueOnce(55);
+
+        const res = await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send(BASE_BODY);
+
+        expect(res.status).toBe(200);
+        const callArgs = mockClient.createRecord.mock.calls[0];
+        expect(callArgs[2]).toHaveProperty('total_amount');
+    });
+
+    it('uses price_unit when getVersion() returns 16', async () => {
+        mockClient.getVersion.mockResolvedValueOnce(16);
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
+            .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);
+        mockClient.createRecord.mockResolvedValueOnce(56);
+
+        const res = await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send(BASE_BODY);
+
+        expect(res.status).toBe(200);
+        const callArgs = mockClient.createRecord.mock.calls[0];
+        expect(callArgs[2]).toHaveProperty('price_unit');
+    });
+
+    it('falls back to total_amount when price_unit is rejected with "Invalid field"', async () => {
+        mockClient.getVersion.mockResolvedValueOnce(16); // v16 path → primary uses price_unit
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
+            .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);
+        mockClient.createRecord
+            .mockRejectedValueOnce(new Error('Invalid field price_unit'))  // first attempt fails
+            .mockResolvedValueOnce(57);                                     // retry with total_amount succeeds
+
+        const res = await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send(BASE_BODY);
+
+        expect(res.status).toBe(200);
+        // second call should use total_amount
+        const secondCallArgs = mockClient.createRecord.mock.calls[1];
+        expect(secondCallArgs[2]).toHaveProperty('total_amount');
+    });
+});

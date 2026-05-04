@@ -395,3 +395,58 @@ describe('GET /maintenance/teams', () => {
         expect(res.status).toBe(401);
     });
 });
+
+// ─── Resilience: unknown/custom Odoo fields ────────────────────────────────────
+
+describe('GET /maintenance — resilience: unknown Odoo fields', () => {
+    it('succeeds when Odoo returns extra unknown custom fields on requests', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 0 }]) // availability probe
+            .mockResolvedValueOnce([
+                {
+                    id: 1, name: 'AC unit broken', stage_id: [2, 'New'],
+                    maintenance_team_id: [1, 'Facilities'],
+                    x_custom_asset_tag: 'AC-017',
+                    x_studio_priority_override: null,
+                },
+            ]);
+
+        const res = await request(app)
+            .get('/maintenance?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.requests).toHaveLength(1);
+        expect(res.body.requests[0].name).toBe('AC unit broken');
+    });
+
+    it('handles maintenance_team_id as null without crashing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 0 }])
+            .mockResolvedValueOnce([
+                { id: 2, name: 'No team', stage_id: [1, 'New'], maintenance_team_id: null },
+            ]);
+
+        const res = await request(app)
+            .get('/maintenance?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.requests).toHaveLength(1);
+    });
+
+    it('handles stage_id as null without crashing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 0 }])
+            .mockResolvedValueOnce([
+                { id: 3, name: 'No stage', stage_id: null, maintenance_team_id: false },
+            ]);
+
+        const res = await request(app)
+            .get('/maintenance?employee_id=42')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.requests).toHaveLength(1);
+    });
+});

@@ -6,6 +6,8 @@ import { pushStore } from '../../lib/pushStore';
 import { getOdooClient } from '../../odoo/client';
 import { SAMPLE_TENANT } from './helpers';
 
+import { notificationStore } from '../../lib/notificationStore';
+
 // Preserve applyTenantDefaults (pure function) while mocking tenantStore methods
 jest.mock('../../lib/tenantStore', () => {
     const actual = jest.requireActual('../../lib/tenantStore');
@@ -20,10 +22,12 @@ jest.mock('../../lib/tenantStore', () => {
     };
 });
 jest.mock('../../lib/pushStore');
+jest.mock('../../lib/notificationStore');
 jest.mock('../../odoo/client');
 
 const mockTenantStore = tenantStore as jest.Mocked<typeof tenantStore>;
 const mockPushStore = pushStore as jest.Mocked<typeof pushStore>;
+const mockNotificationStore = notificationStore as jest.Mocked<typeof notificationStore>;
 const mockGetOdooClient = getOdooClient as jest.MockedFunction<typeof getOdooClient>;
 
 const TEST_JWT_SECRET = process.env.JWT_SECRET!;
@@ -551,5 +555,126 @@ describe('JWT protection — edge cases', () => {
             .get('/time-off?employee_id=1')
             .set('Authorization', `Basic ${token}`);
         expect(res.status).toBe(401);
+    });
+});
+
+// ─── GET /admin/tenants/:slug/devices ─────────────────────────────────────────
+
+describe('GET /admin/tenants/:slug/devices', () => {
+    it('returns device list for a known tenant', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockPushStore.listDevicesForTenant.mockResolvedValue([
+            { employeeId: 1, token_preview: 'ExponentPushToken[abc…', registered_at: '2026-01-01T00:00:00.000Z' },
+            { employeeId: 2, token_preview: 'ExponentPushToken[xyz…', registered_at: '2026-01-02T00:00:00.000Z' },
+        ]);
+
+        const res = await request(app)
+            .get('/admin/tenants/testcorp/devices')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
+        expect(res.body).toHaveLength(2);
+        expect(res.body[0]).toMatchObject({ employeeId: 1, token_preview: expect.stringContaining('…') });
+    });
+
+    it('returns empty array when no devices registered', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockPushStore.listDevicesForTenant.mockResolvedValue([]);
+
+        const res = await request(app)
+            .get('/admin/tenants/testcorp/devices')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual([]);
+    });
+
+    it('returns 404 when tenant slug not found', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(null);
+
+        const res = await request(app)
+            .get('/admin/tenants/ghost/devices')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(404);
+    });
+
+    it('returns 403 without admin secret', async () => {
+        const res = await request(app).get('/admin/tenants/testcorp/devices');
+        expect(res.status).toBe(403);
+    });
+});
+
+// ─── GET /admin/tenants/:slug/notifications ───────────────────────────────────
+
+describe('GET /admin/tenants/:slug/notifications', () => {
+    const MOCK_NOTIFICATIONS = [
+        { id: 'n1', employeeId: 42, title: 'Leave approved', message: 'Your leave was approved', type: 'request_approved' as const, read: false, timestamp: '2026-05-01T10:00:00.000Z' },
+        { id: 'n2', employeeId: 42, title: 'Expense rejected', message: 'Expense #5 was rejected', type: 'request_rejected' as const, read: true, timestamp: '2026-05-02T09:00:00.000Z' },
+    ];
+
+    it('returns paginated notification history for a tenant', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockNotificationStore.listAllForTenant.mockResolvedValue({ total: 2, items: MOCK_NOTIFICATIONS });
+
+        const res = await request(app)
+            .get('/admin/tenants/testcorp/notifications')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(res.body.total).toBe(2);
+        expect(res.body.items).toHaveLength(2);
+        expect(res.body.items[0].id).toBe('n1');
+    });
+
+    it('passes limit and offset query params to store', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockNotificationStore.listAllForTenant.mockResolvedValue({ total: 100, items: [] });
+
+        await request(app)
+            .get('/admin/tenants/testcorp/notifications?limit=10&offset=20')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(mockNotificationStore.listAllForTenant).toHaveBeenCalledWith('testcorp', 10, 20);
+    });
+
+    it('caps limit at 200 (rejects absurdly large values)', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockNotificationStore.listAllForTenant.mockResolvedValue({ total: 0, items: [] });
+
+        await request(app)
+            .get('/admin/tenants/testcorp/notifications?limit=9999')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(mockNotificationStore.listAllForTenant).toHaveBeenCalledWith('testcorp', 200, 0);
+    });
+
+    it('returns empty items when no notifications exist', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockNotificationStore.listAllForTenant.mockResolvedValue({ total: 0, items: [] });
+
+        const res = await request(app)
+            .get('/admin/tenants/testcorp/notifications')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(res.body.total).toBe(0);
+        expect(res.body.items).toEqual([]);
+    });
+
+    it('returns 404 when tenant slug not found', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(null);
+
+        const res = await request(app)
+            .get('/admin/tenants/ghost/notifications')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(404);
+    });
+
+    it('returns 403 without admin secret', async () => {
+        const res = await request(app).get('/admin/tenants/testcorp/notifications');
+        expect(res.status).toBe(403);
     });
 });

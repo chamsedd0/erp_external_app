@@ -376,3 +376,85 @@ describe('requestMonitor — cache preservation on partial failure', () => {
         expect(writtenCache).toHaveProperty('time_off_80');
     });
 });
+
+// ─── Resilience: cache corruption & unexpected data shapes ────────────────────
+
+describe('requestMonitor — resilience: unexpected data', () => {
+    it('treats corrupt Redis JSON as empty cache and does not throw', async () => {
+        const client = makeMockClient();
+        mockGetOdooClient.mockReturnValue(client as any);
+        mockRedisGet.mockResolvedValue('{this-is-not-valid-json}'); // corrupt cache
+
+        client.searchRead
+            .mockResolvedValueOnce([{ id: 1, name: 'Leave', state: 'validate', date_from: '2026-05-01', date_to: '2026-05-02' }])
+            .mockResolvedValueOnce([])
+            .mockRejectedValue(new Error('skip'));
+
+        await expect(requestMonitor.checkUpdates(EMPLOYEE_ID, TENANT_ID)).resolves.toBeUndefined();
+        // Should still save a new cache without crashing
+        expect(mockRedisSet).toHaveBeenCalled();
+    });
+
+    it('handles a brand-new record not previously in cache as first-seen (no notification)', async () => {
+        const client = makeMockClient();
+        mockGetOdooClient.mockReturnValue(client as any);
+        mockRedisGet.mockResolvedValue(null); // no cache at all
+
+        client.searchRead
+            .mockResolvedValueOnce([
+                { id: 999, name: 'Brand new leave', state: 'validate', date_from: '2026-06-01', date_to: '2026-06-02' },
+            ])
+            .mockResolvedValueOnce([])
+            .mockRejectedValue(new Error('skip'));
+
+        await requestMonitor.checkUpdates(EMPLOYEE_ID, TENANT_ID);
+
+        // First run — no notifications should be emitted
+        expect(mockNotificationStore.add).not.toHaveBeenCalled();
+        expect(mockSendPush).not.toHaveBeenCalled();
+    });
+
+    it('fires notification for BOTH records when two requests change state simultaneously', async () => {
+        const client = makeMockClient();
+        mockGetOdooClient.mockReturnValue(client as any);
+
+        const oldCache = {
+            time_off_1: { id: 1, type: 'timeoff', state: 'confirm', updated_at: new Date().toISOString() },
+            time_off_2: { id: 2, type: 'timeoff', state: 'confirm', updated_at: new Date().toISOString() },
+        };
+        mockRedisGet.mockResolvedValue(JSON.stringify(oldCache));
+
+        client.searchRead
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Leave 1', state: 'validate', date_from: '2026-05-01', date_to: '2026-05-02' },
+                { id: 2, name: 'Leave 2', state: 'refuse', date_from: '2026-05-03', date_to: '2026-05-04' },
+            ])
+            .mockResolvedValueOnce([])
+            .mockRejectedValue(new Error('skip'));
+
+        await requestMonitor.checkUpdates(EMPLOYEE_ID, TENANT_ID);
+
+        expect(mockNotificationStore.add).toHaveBeenCalledTimes(2);
+        const types = (mockNotificationStore.add as jest.Mock).mock.calls.map((c: any) => c[1].type);
+        expect(types).toContain('request_approved');
+        expect(types).toContain('request_rejected');
+    });
+
+    it('handles stage_id as null on helpdesk record without crashing', async () => {
+        const client = makeMockClient();
+        mockGetOdooClient.mockReturnValue(client as any);
+        mockRedisGet.mockResolvedValue(null);
+
+        client.searchRead
+            .mockResolvedValueOnce([]) // time_off empty
+            .mockResolvedValueOnce([]) // expense empty
+            .mockResolvedValueOnce([   // helpdesk with null stage_id
+                { id: 10, name: 'Ticket', stage_id: null },
+            ])
+            .mockResolvedValueOnce([]); // maintenance
+
+        await expect(requestMonitor.checkUpdates(EMPLOYEE_ID, TENANT_ID)).resolves.toBeUndefined();
+        // Should cache without crashing
+        expect(mockRedisSet).toHaveBeenCalled();
+    });
+});

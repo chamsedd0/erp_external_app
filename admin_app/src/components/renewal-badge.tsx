@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { AlertCircle, Clock } from 'lucide-react';
 
 export function RenewalBadge({ date }: { date: string }) {
     if (!date) return <span className="text-sm text-slate-400">—</span>;
@@ -11,14 +11,16 @@ export function RenewalBadge({ date }: { date: string }) {
     if (daysUntil < 0) {
         return (
             <span className="inline-flex items-center gap-1 text-sm font-medium text-red-600">
-                <span>🔴</span> {formatted} ({Math.abs(daysUntil)}d overdue)
+                <AlertCircle size={13} />
+                {formatted} ({Math.abs(daysUntil)}d overdue)
             </span>
         );
     }
     if (daysUntil <= 7) {
         return (
             <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-600">
-                <span>🟡</span> {formatted} ({daysUntil}d)
+                <Clock size={13} />
+                {formatted} ({daysUntil}d)
             </span>
         );
     }

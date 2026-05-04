@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
+import { LayoutDashboard, Building2, CreditCard, LogOut, Shield } from 'lucide-react';
 
 const navLinks = [
-    { href: '/', label: 'Dashboard', icon: '📊' },
-    { href: '/clients', label: 'Clients', icon: '🏢' },
-    { href: '/billing', label: 'Billing', icon: '💳' },
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/clients', label: 'Clients', icon: Building2 },
+    { href: '/billing', label: 'Billing', icon: CreditCard },
 ];
 
 export function Sidebar() {
@@ -19,8 +20,8 @@ export function Sidebar() {
             {/* Brand */}
             <div className="px-5 py-4 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm">
-                        🛡️
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
+                        <Shield size={16} className="text-white" />
                     </span>
                     <div>
                         <p className="text-sm font-bold text-slate-900 leading-none">Shadow Portal</p>
@@ -31,7 +32,7 @@ export function Sidebar() {
 
             {/* Nav */}
             <nav className="flex-1 px-3 py-4 space-y-0.5">
-                {navLinks.map(({ href, label, icon }) => {
+                {navLinks.map(({ href, label, icon: Icon }) => {
                     const active =
                         href === '/' ? pathname === '/' : pathname.startsWith(href);
                     return (
@@ -45,7 +46,7 @@ export function Sidebar() {
                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                             )}
                         >
-                            <span className="text-base leading-none">{icon}</span>
+                            <Icon size={16} />
                             {label}
                         </Link>
                     );
@@ -58,7 +59,7 @@ export function Sidebar() {
                     onClick={() => signOut({ callbackUrl: '/login' })}
                     className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
                 >
-                    <span className="text-base leading-none">🚪</span>
+                    <LogOut size={16} />
                     Sign out
                 </button>
             </div>

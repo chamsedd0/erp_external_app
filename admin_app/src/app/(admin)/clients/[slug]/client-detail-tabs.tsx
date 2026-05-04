@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Tenant, TenantStats } from '@/lib/types';
+import type { Tenant, TenantStats, DeviceEntry, NotificationEntry } from '@/lib/types';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge, PlanBadge, Badge } from '@/components/ui/badge';
@@ -19,6 +19,19 @@ import {
     DialogClose,
 } from '@/components/ui/dialog';
 import { deleteTenantAction, toggleEnabledAction, updateStatusAction } from '@/lib/actions';
+import {
+    LayoutGrid,
+    CreditCard,
+    Smartphone,
+    Bell,
+    ShieldAlert,
+    ExternalLink,
+    CheckCircle2,
+    XCircle,
+    Info,
+    AlertTriangle,
+    Trash2,
+} from 'lucide-react';
 
 interface Props {
     tenant: Tenant;
@@ -54,22 +67,39 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
     return (
         <Tabs defaultValue="overview">
             <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="billing">Billing</TabsTrigger>
-                <TabsTrigger value="devices">Devices</TabsTrigger>
-                <TabsTrigger value="danger">Danger Zone</TabsTrigger>
+                <TabsTrigger value="overview">
+                    <LayoutGrid size={13} className="mr-1.5" />Overview
+                </TabsTrigger>
+                <TabsTrigger value="billing">
+                    <CreditCard size={13} className="mr-1.5" />Billing
+                </TabsTrigger>
+                <TabsTrigger value="devices">
+                    <Smartphone size={13} className="mr-1.5" />Devices
+                </TabsTrigger>
+                <TabsTrigger value="notifications">
+                    <Bell size={13} className="mr-1.5" />Notifications
+                </TabsTrigger>
+                <TabsTrigger value="danger">
+                    <ShieldAlert size={13} className="mr-1.5" />Danger Zone
+                </TabsTrigger>
             </TabsList>
 
             {/* ── Overview ─────────────────────────────────────────────────────── */}
             <TabsContent value="overview">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Connection</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Connection</CardTitle></CardHeader>
                         <CardContent>
-                            <Row label="Odoo URL" value={<a href={tenant.odoo_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{tenant.odoo_url}</a>} />
-                            <Row label="Database" value={<code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{tenant.odoo_db}</code>} />
+                            <Row label="Odoo URL" value={
+                                <a href={tenant.odoo_url} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                                    {tenant.odoo_url}
+                                    <ExternalLink size={11} />
+                                </a>
+                            } />
+                            <Row label="Database" value={
+                                <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">{tenant.odoo_db}</code>
+                            } />
                             <Row label="Username" value={tenant.odoo_username ?? '—'} />
                             <Row label="HR Email" value={tenant.hr_email} />
                             <div className="pt-3">
@@ -79,20 +109,20 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                     </Card>
 
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Contact</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
                         <CardContent>
                             <Row label="Name" value={tenant.contact_name} />
-                            <Row label="Email" value={<a href={`mailto:${tenant.contact_email}`} className="text-blue-600 hover:underline">{tenant.contact_email}</a>} />
+                            <Row label="Email" value={
+                                <a href={`mailto:${tenant.contact_email}`} className="text-blue-600 hover:underline">
+                                    {tenant.contact_email}
+                                </a>
+                            } />
                             <Row label="Phone" value={tenant.contact_phone} />
                         </CardContent>
                     </Card>
 
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Subscription</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Subscription</CardTitle></CardHeader>
                         <CardContent>
                             <Row label="Plan" value={<PlanBadge plan={tenant.subscription_plan} />} />
                             <Row label="Status" value={<StatusBadge status={tenant.subscription_status} />} />
@@ -103,13 +133,11 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                     </Card>
 
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Activity</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Activity</CardTitle></CardHeader>
                         <CardContent>
                             <Row label="Active devices" value={stats?.active_devices ?? '—'} />
                             <Row label="Total notifications" value={stats?.notifications_total ?? '—'} />
-                            <Row label="Unread notifications" value={stats?.notifications_unread ?? '—'} />
+                            <Row label="Unread" value={stats?.notifications_unread ?? '—'} />
                             <Row label="Last sync" value={stats?.last_sync ? new Date(stats.last_sync).toLocaleString() : 'Never'} />
                             <Row label="Created" value={new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
                         </CardContent>
@@ -117,9 +145,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 
                     {tenant.notes && (
                         <Card className="xl:col-span-2">
-                            <CardHeader>
-                                <CardTitle>Notes</CardTitle>
-                            </CardHeader>
+                            <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
                             <CardContent>
                                 <p className="text-sm text-slate-700 whitespace-pre-wrap">{tenant.notes}</p>
                             </CardContent>
@@ -131,33 +157,23 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
             {/* ── Billing ──────────────────────────────────────────────────────── */}
             <TabsContent value="billing">
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Subscription Management</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle>Subscription Management</CardTitle></CardHeader>
                     <CardContent>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-200">
                                 <div>
                                     <p className="text-sm font-medium text-slate-900">Current Status</p>
-                                    <div className="mt-1">
-                                        <StatusBadge status={tenant.subscription_status} />
-                                    </div>
+                                    <div className="mt-1"><StatusBadge status={tenant.subscription_status} /></div>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-2xl font-bold text-slate-900">
-                                        ${tenant.monthly_amount.toLocaleString()}
-                                    </p>
+                                    <p className="text-2xl font-bold text-slate-900">${tenant.monthly_amount.toLocaleString()}</p>
                                     <p className="text-xs text-slate-500">per month</p>
                                 </div>
                             </div>
 
                             <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-700">Next renewal</p>
-                                    <div className="mt-1">
-                                        <span className="font-mono text-sm text-slate-900">{tenant.subscription_renewal}</span>
-                                    </div>
-                                </div>
+                                <p className="text-sm font-medium text-slate-700">Next renewal</p>
+                                <span className="font-mono text-sm text-slate-900">{tenant.subscription_renewal}</span>
                             </div>
 
                             <div>
@@ -183,32 +199,17 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 
             {/* ── Devices ──────────────────────────────────────────────────────── */}
             <TabsContent value="devices">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Active Devices</CardTitle>
-                        <span className="text-xs text-slate-400">
-                            {stats?.active_devices ?? 0} push token{(stats?.active_devices ?? 0) !== 1 ? 's' : ''} registered
-                        </span>
-                    </CardHeader>
-                    <CardContent>
-                        {(stats?.active_devices ?? 0) === 0 ? (
-                            <p className="text-sm text-slate-400 py-4 text-center">
-                                No devices registered yet
-                            </p>
-                        ) : (
-                            <p className="text-sm text-slate-500 py-2">
-                                {stats!.active_devices} device{stats!.active_devices !== 1 ? 's' : ''} have active push notification tokens.
-                                Detailed device listing is available via the backend API.
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
+                <DevicesTab slug={tenant.slug} statCount={stats?.active_devices ?? 0} />
+            </TabsContent>
+
+            {/* ── Notifications ────────────────────────────────────────────────── */}
+            <TabsContent value="notifications">
+                <NotificationsTab slug={tenant.slug} statTotal={stats?.notifications_total ?? 0} />
             </TabsContent>
 
             {/* ── Danger Zone ──────────────────────────────────────────────────── */}
             <TabsContent value="danger">
                 <div className="space-y-4">
-                    {/* Toggle enabled */}
                     <Card className="border-amber-200">
                         <CardHeader>
                             <CardTitle className="text-amber-700">
@@ -224,14 +225,13 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                             <Dialog>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
-                                        {tenant.enabled ? '⚠️ Disable tenant' : '✅ Enable tenant'}
+                                        <AlertTriangle size={14} />
+                                        {tenant.enabled ? 'Disable tenant' : 'Enable tenant'}
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader>
-                                        <DialogTitle>
-                                            {tenant.enabled ? 'Disable' : 'Enable'} {tenant.name}?
-                                        </DialogTitle>
+                                        <DialogTitle>{tenant.enabled ? 'Disable' : 'Enable'} {tenant.name}?</DialogTitle>
                                         <DialogDescription>
                                             {tenant.enabled
                                                 ? 'Users will not be able to log in until re-enabled.'
@@ -239,18 +239,12 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                                         </DialogDescription>
                                     </DialogHeader>
                                     <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Cancel</Button>
-                                        </DialogClose>
+                                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
                                         <DialogClose asChild>
                                             <Button
                                                 variant={tenant.enabled ? 'destructive' : 'default'}
                                                 disabled={isPending}
-                                                onClick={() =>
-                                                    doAction(() =>
-                                                        toggleEnabledAction(tenant.slug, !tenant.enabled)
-                                                    )
-                                                }
+                                                onClick={() => doAction(() => toggleEnabledAction(tenant.slug, !tenant.enabled))}
                                             >
                                                 Confirm
                                             </Button>
@@ -261,39 +255,33 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                         </CardContent>
                     </Card>
 
-                    {/* Delete */}
                     <Card className="border-red-200">
-                        <CardHeader>
-                            <CardTitle className="text-red-700">Delete Tenant</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="text-red-700">Delete Tenant</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-sm text-slate-600 mb-4">
                                 Permanently removes this tenant and all associated Redis keys. This cannot be undone.
                             </p>
                             <Dialog>
                                 <DialogTrigger asChild>
-                                    <Button variant="destructive">🗑️ Delete tenant</Button>
+                                    <Button variant="destructive">
+                                        <Trash2 size={14} />
+                                        Delete tenant
+                                    </Button>
                                 </DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader>
                                         <DialogTitle>Delete {tenant.name}?</DialogTitle>
                                         <DialogDescription>
-                                            This will permanently remove the tenant <strong>{tenant.slug}</strong> and all
-                                            associated data from Redis. This action cannot be undone.
+                                            This will permanently remove <strong>{tenant.slug}</strong> and all associated data. Cannot be undone.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="my-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                                        Type the slug <strong>{tenant.slug}</strong> to confirm — or just click delete.
+                                        Slug: <strong>{tenant.slug}</strong> · {stats?.active_devices ?? 0} device(s) · {stats?.notifications_total ?? 0} notification(s)
                                     </div>
                                     <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Cancel</Button>
-                                        </DialogClose>
-                                        <Button
-                                            variant="destructive"
-                                            disabled={isPending}
-                                            onClick={() => doAction(() => deleteTenantAction(tenant.slug))}
-                                        >
+                                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                                        <Button variant="destructive" disabled={isPending}
+                                            onClick={() => doAction(() => deleteTenantAction(tenant.slug))}>
                                             {isPending ? 'Deleting…' : 'Delete permanently'}
                                         </Button>
                                     </DialogFooter>
@@ -304,5 +292,166 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                 </div>
             </TabsContent>
         </Tabs>
+    );
+}
+
+// ─── Devices tab (client component with lazy fetch) ───────────────────────────
+
+function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
+    const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        fetch(`/api/admin/devices/${slug}`)
+            .then((r) => r.json())
+            .then(setDevices)
+            .catch(() => setError('Failed to load devices'))
+            .finally(() => setLoading(false));
+    }, [slug]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Registered Devices</CardTitle>
+                <span className="text-xs text-slate-400">{statCount} push token{statCount !== 1 ? 's' : ''}</span>
+            </CardHeader>
+            <CardContent className="p-0">
+                {loading ? (
+                    <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>
+                ) : error ? (
+                    <div className="px-5 py-8 text-center text-sm text-red-500">{error}</div>
+                ) : !devices || devices.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                        <Smartphone size={28} className="mx-auto text-slate-300 mb-2" />
+                        <p className="text-sm text-slate-400">No devices registered yet</p>
+                        <p className="text-xs text-slate-400 mt-1">Devices appear here when employees enable push notifications</p>
+                    </div>
+                ) : (
+                    <table className="w-full text-sm">
+                        <thead className="border-b border-slate-200 bg-slate-50">
+                            <tr>
+                                {['Employee ID', 'Token (preview)', 'Registered'].map((h) => (
+                                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {devices.map((d) => (
+                                <tr key={d.employeeId} className="hover:bg-slate-50">
+                                    <td className="px-4 py-3 font-medium text-slate-900">#{d.employeeId}</td>
+                                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{d.token_preview}</td>
+                                    <td className="px-4 py-3 text-slate-600 text-xs">
+                                        {new Date(d.registered_at).toLocaleString()}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+// ─── Notifications tab (client component with lazy fetch + pagination) ─────────
+
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+    request_approved: <CheckCircle2 size={13} className="text-emerald-500" />,
+    request_rejected: <XCircle size={13} className="text-red-500" />,
+    system: <Info size={13} className="text-blue-500" />,
+};
+
+function NotificationsTab({ slug, statTotal }: { slug: string; statTotal: number }) {
+    const [items, setItems] = useState<NotificationEntry[]>([]);
+    const [total, setTotal] = useState(0);
+    const [offset, setOffset] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const LIMIT = 30;
+
+    const load = useCallback(
+        (off: number) => {
+            setLoading(true);
+            fetch(`/api/admin/notifications/${slug}?limit=${LIMIT}&offset=${off}`)
+                .then((r) => r.json())
+                .then((data) => {
+                    setTotal(data.total ?? 0);
+                    setItems((prev) => (off === 0 ? data.items ?? [] : [...prev, ...(data.items ?? [])]));
+                    setOffset(off + LIMIT);
+                })
+                .catch(() => setError('Failed to load notifications'))
+                .finally(() => setLoading(false));
+        },
+        [slug]
+    );
+
+    useEffect(() => { load(0); }, [load]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Notification History</CardTitle>
+                <span className="text-xs text-slate-400">{total} total</span>
+            </CardHeader>
+            <CardContent className="p-0">
+                {loading && items.length === 0 ? (
+                    <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>
+                ) : error ? (
+                    <div className="px-5 py-8 text-center text-sm text-red-500">{error}</div>
+                ) : items.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                        <Bell size={28} className="mx-auto text-slate-300 mb-2" />
+                        <p className="text-sm text-slate-400">No notifications sent yet</p>
+                    </div>
+                ) : (
+                    <>
+                        <table className="w-full text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50">
+                                <tr>
+                                    {['Type', 'Employee', 'Message', 'Status', 'Time'].map((h) => (
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {items.map((n) => (
+                                    <tr key={n.id} className="hover:bg-slate-50">
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex items-center gap-1.5">
+                                                {TYPE_ICONS[n.type] ?? <Info size={13} className="text-slate-400" />}
+                                                <span className="text-xs text-slate-600 capitalize">{n.type.replace(/_/g, ' ')}</span>
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600 text-xs">#{n.employeeId}</td>
+                                        <td className="px-4 py-3 text-slate-700 max-w-xs truncate">{n.message}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`inline-flex items-center gap-1 text-xs font-medium ${n.read ? 'text-slate-400' : 'text-blue-600'}`}>
+                                                <span className={`h-1.5 w-1.5 rounded-full ${n.read ? 'bg-slate-300' : 'bg-blue-500'}`} />
+                                                {n.read ? 'Read' : 'Unread'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+                                            {new Date(n.timestamp).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {items.length < total && (
+                            <div className="px-5 py-3 border-t border-slate-100 text-center">
+                                <button
+                                    onClick={() => load(offset)}
+                                    disabled={loading}
+                                    className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                                >
+                                    {loading ? 'Loading…' : `Load more (${total - items.length} remaining)`}
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
     );
 }

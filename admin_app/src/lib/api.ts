@@ -1,4 +1,4 @@
-import type { Tenant, PlatformStats, TenantStats, HealthResult, TenantFormData } from './types';
+import type { Tenant, PlatformStats, TenantStats, HealthResult, TenantFormData, DeviceEntry, NotificationPage } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET ?? '';
@@ -56,4 +56,10 @@ export const api = {
 
     getTenantHealth: (slug: string): Promise<HealthResult> =>
         adminFetch(`/admin/tenants/${slug}/health`),
+
+    getDevices: (slug: string): Promise<DeviceEntry[]> =>
+        adminFetch(`/admin/tenants/${slug}/devices`),
+
+    getNotifications: (slug: string, limit = 50, offset = 0): Promise<NotificationPage> =>
+        adminFetch(`/admin/tenants/${slug}/notifications?limit=${limit}&offset=${offset}`),
 };
