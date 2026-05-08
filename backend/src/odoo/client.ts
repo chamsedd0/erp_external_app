@@ -13,14 +13,23 @@ interface TenantClientCache {
 }
 
 const UID_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CONNECT_TIMEOUT_MS = 10_000;  // 10s — fail fast on bad URLs
 const _cache = new Map<string, TenantClientCache>();
+
+function validateConfig(tenantId: string, cfg: TenantConfig) {
+    const missing = (['odoo_url', 'odoo_db', 'odoo_username', 'odoo_password'] as const)
+        .filter(k => !cfg[k]);
+    if (missing.length) {
+        throw new Error(`[${tenantId}] Invalid tenant config — missing fields: ${missing.join(', ')}`);
+    }
+}
 
 function getCache(tenantId: string, cfg: TenantConfig): TenantClientCache {
     let entry = _cache.get(tenantId);
     if (!entry) {
         entry = {
-            commonClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/common` }),
-            objectClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/object` }),
+            commonClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/common`, timeout: CONNECT_TIMEOUT_MS } as any),
+            objectClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/object`, timeout: CONNECT_TIMEOUT_MS } as any),
             cachedUid: null,
             uidCachedAt: 0,
             odooMajorVersion: 0,
@@ -34,6 +43,7 @@ function getCache(tenantId: string, cfg: TenantConfig): TenantClientCache {
 // Factory — returns a per-tenant client instance
 // ──────────────────────────────────────────────────────────────────────────────
 export function getOdooClient(tenantId: string, cfg: TenantConfig) {
+    validateConfig(tenantId, cfg);
     const cache = getCache(tenantId, cfg);
     const { commonClient, objectClient } = cache;
     const { odoo_db, odoo_username, odoo_password } = cfg;
@@ -71,8 +81,10 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
                     (error, uid) => {
                         if (error) {
                             console.error(`[${tenantId}] Odoo Auth Error:`, error);
+                            cache.cachedUid = null;
                             reject(error);
                         } else if (!uid) {
+                            cache.cachedUid = null;
                             reject(new Error('Authentication failed (uid is false)'));
                         } else {
                             cache.cachedUid = uid as number;
