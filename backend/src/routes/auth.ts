@@ -282,13 +282,20 @@ adminRouter.put('/tenants/:slug', async (req, res) => {
 
         const updates = tenantUpdateSchema.parse(req.body);
 
+        // Zod .partial() returns undefined for absent optional fields.
+        // Spreading those undefined values would overwrite existing credentials with undefined,
+        // which applyTenantDefaults then converts to ''. Strip them first.
+        const cleanUpdates = Object.fromEntries(
+            Object.entries(updates).filter(([, v]) => v !== undefined)
+        ) as typeof updates;
+
         // Auto-generate subscription_number if the tenant doesn't have one yet
-        let subscriptionNumber = updates.subscription_number ?? existing.subscription_number;
+        let subscriptionNumber = cleanUpdates.subscription_number ?? existing.subscription_number;
         if (!subscriptionNumber) {
             subscriptionNumber = await generateSubscriptionNumber();
         }
 
-        const merged = applyTenantDefaults({ ...existing, ...updates, subscription_number: subscriptionNumber });
+        const merged = applyTenantDefaults({ ...existing, ...cleanUpdates, subscription_number: subscriptionNumber });
         await tenantStore.saveTenant(req.params.slug, merged);
         res.json({ success: true, tenant: safeTenant(req.params.slug, merged) });
     } catch (error: any) {
