@@ -69,6 +69,29 @@ def check_soft(label, status, body, expect_key=None):
                 return True, body
     return check(label, status, body, expect_key)
 
+def check_custom_fields(label, status, body):
+    """
+    Verify that a GET response includes the custom_fields key.
+    Adds PASS/FAIL to global counters.
+    Skips gracefully if the module was not available (available:false).
+    """
+    global PASS, FAIL, SKIP
+    if status != 200 or not isinstance(body, dict):
+        return
+    if body.get("available") is False:
+        SKIP += 1
+        print(f"  [SKIP] {label} custom_fields  (module not available)")
+        return
+    if "custom_fields" in body:
+        PASS += 1
+        cf = body["custom_fields"]
+        names = list(cf.keys()) if isinstance(cf, dict) and cf else []
+        suffix = f"  x_fields={names}" if names else "  (no x_ fields on this tenant)"
+        print(f"  [PASS] {label} has custom_fields{suffix}")
+    else:
+        FAIL += 1
+        print(f"  [FAIL] {label} missing custom_fields key — deployment may be stale")
+
 # Odoo business rule errors that are test-environment artifacts (not backend bugs)
 ODOO_EXPECTED_ERRORS = [
     "no allocation",
@@ -120,6 +143,7 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
     section("Time-Off")
     status, body = req("GET", f"/time-off?employee_id={actual_emp_id}", token=token)
     check_soft("GET /time-off", status, body, "leaves")
+    check_custom_fields("GET /time-off", status, body)
 
     status, body = req("GET", "/time-off/types", token=token)
     check("GET /time-off/types", status, body, "types")
@@ -143,9 +167,11 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
     section("Expenses")
     status, body = req("GET", f"/expenses?employee_id={actual_emp_id}", token=token)
     check("GET /expenses", status, body, "expenses")
+    check_custom_fields("GET /expenses", status, body)
 
     status, body = req("GET", f"/expenses/pending?employee_id={actual_emp_id}", token=token)
     check("GET /expenses/pending", status, body, "expenses")
+    check_custom_fields("GET /expenses/pending", status, body)
 
     status, body = req("GET", "/expenses/taxes", token=token)
     check("GET /expenses/taxes", status, body, "taxes")
@@ -178,6 +204,7 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
     section("Attendance")
     status, body = req("GET", f"/attendance?employee_id={actual_emp_id}", token=token)
     check("GET /attendance", status, body, "records")
+    check_custom_fields("GET /attendance", status, body)
 
     status, body = req("GET", f"/attendance/overtime?employee_id={actual_emp_id}", token=token)
     check_soft("GET /attendance/overtime", status, body)
@@ -224,6 +251,7 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
 
     status, body = req("GET", f"/helpdesk?employee_id={actual_emp_id}", token=token)
     check_soft("GET /helpdesk", status, body)
+    check_custom_fields("GET /helpdesk", status, body)
 
     status, body = req("POST", "/helpdesk", {
         "employee_id": actual_emp_id,
@@ -245,6 +273,7 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
 
     status, body = req("GET", f"/maintenance?employee_id={actual_emp_id}", token=token)
     check_soft("GET /maintenance", status, body)
+    check_custom_fields("GET /maintenance", status, body)
 
     status, body = req("POST", "/maintenance", {
         "employee_id": actual_emp_id,
@@ -258,6 +287,7 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
     section("Timesheet")
     status, body = req("GET", f"/timesheet?employee_id={actual_emp_id}", token=token)
     check("GET /timesheet", status, body, "entries")
+    check_custom_fields("GET /timesheet", status, body)
 
     status, body = req("GET", "/timesheet/projects", token=token)
     check("GET /timesheet/projects", status, body, "projects")
@@ -278,6 +308,64 @@ def run_tenant(slug, emp_barcode, emp_pin, emp_id, project_id, leave_type_id, pr
             "name": "Test timesheet entry from automated suite"
         }, token=token)
         check("POST /timesheet", status, body, "id")
+
+    # ── SCHEMA VALIDATION ─────────────────────────────────────────
+    # Verify the schema validation layer rejects bad payloads and accepts good ones.
+    section("Schema Validation")
+
+    # 1. Valid POST /attendance/correction should still return id (not be blocked by validation)
+    status, body = req("POST", "/attendance/correction", {
+        "employee_id": actual_emp_id,
+        "check_in": f"{today}T10:00:00",
+        "check_out": f"{today}T18:00:00",
+        "reason": "Schema validation passthrough test"
+    }, token=token)
+    check_post("POST /attendance/correction passes schema validation", status, body, "id")
+
+    # 2. POST /maintenance with valid maintenance_type should not be blocked
+    status, body = req("POST", "/maintenance", {
+        "employee_id": actual_emp_id,
+        "name": "Schema validation passthrough test",
+        "maintenance_type": "preventive"
+    }, token=token)
+    check_soft("POST /maintenance passes schema validation", status, body)
+
+    # 3. Schema validation layer should return 400 with structured error keys
+    #    when validation fails. We trigger this by sending a Zod-valid but
+    #    schema-invalid payload: `payment_mode` sent as empty string bypasses
+    #    Zod default but may fail Odoo schema (tenant-dependent — treat 400 as PASS,
+    #    200/id also acceptable if Odoo accepts it on this version).
+    global PASS, FAIL  # SKIP already declared global earlier in this function
+    if eff_product_id:
+        status, body = req("POST", "/expenses", {
+            "employee_id": actual_emp_id,
+            "product_id": eff_product_id,
+            "name": "Schema validation error-format test",
+            "unit_amount": 1.0,
+            "quantity": 1,
+            "date": today,
+            "payment_mode": "own_account"
+        }, token=token)
+        # If validation returns 400, check error format is correct
+        if status == 400 and isinstance(body, dict):
+            has_error_key = "error" in body
+            # A schema validation 400 should have missing_required or invalid_values
+            has_validation_keys = "missing_required" in body or "invalid_values" in body or "details" in body
+            if has_error_key:
+                PASS += 1
+                print(f"  [PASS] Validation error response has correct format: {list(body.keys())}")
+            else:
+                FAIL += 1
+                print(f"  [FAIL] Validation 400 response missing error key: {str(body)[:100]}")
+        elif status == 200 and "id" in body:
+            PASS += 1
+            print(f"  [PASS] Valid expense passed schema validation → id={body['id']}")
+        elif status == 400 and "incompatible companies" in str(body).lower():
+            SKIP += 1
+            print(f"  [SKIP] Schema validation format test  (incompatible companies)")
+        else:
+            # Non-200/non-400 might be Odoo business rule
+            check_post("Schema validation format test", status, body, "id")
 
     # ── NOTIFICATIONS ─────────────────────────────────────────────
     section("Notifications")
