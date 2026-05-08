@@ -30,10 +30,10 @@ app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
 });
 
-// ── Rate Limiter: Max 200 requests per 15 mins ────────────────────────────────
+// ── Rate Limiter: Max 600 requests per 15 mins ────────────────────────────────
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: 600,
     standardHeaders: true,
     legacyHeaders: false,
 });
