@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -85,6 +86,9 @@ router.get('/', async (req, res) => {
         const uid = await client.authenticate();
         let leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
 
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.leave');
+        const customFieldNames = Object.keys(customFields);
+
         const safeFields = [
             'id', 'name',
             'date_from', 'date_to',
@@ -96,7 +100,7 @@ router.get('/', async (req, res) => {
         let leaves: any;
         try {
             leaves = await client.searchRead(
-                uid, 'hr.leave', domain, [...safeFields, leaveTypeField]
+                uid, 'hr.leave', domain, [...safeFields, leaveTypeField, ...customFieldNames]
             );
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '');
@@ -104,7 +108,7 @@ router.get('/', async (req, res) => {
                 console.warn(`[${tenantId}] [time_off] Field "${leaveTypeField}" rejected, resetting cache and retrying without it.`);
                 _leaveTypeField.delete(tenantId);
                 leaveTypeField = '';
-                leaves = await client.searchRead(uid, 'hr.leave', domain, safeFields);
+                leaves = await client.searchRead(uid, 'hr.leave', domain, [...safeFields, ...customFieldNames]);
             } else if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('Object')) {
                 return res.json({ leaves: [], available: false, message: 'Time-off module not available on this Odoo instance.' });
             } else {
@@ -119,7 +123,7 @@ router.get('/', async (req, res) => {
             }))
             : leaves;
 
-        res.json({ leaves: normalised });
+        res.json({ leaves: normalised, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Leaves Error:', error);
         res.status(500).json({ error: error.message });
@@ -236,6 +240,16 @@ router.post('/', async (req, res) => {
             request_date_from: body.date_from.split('T')[0],
             request_date_to: body.date_to.split('T')[0],
         });
+
+        // Pre-validate payload against live Odoo schema
+        const validation = await validatePayload(tenantId, client, uid, 'hr.leave', leavePayload(leaveTypeField));
+        if (!validation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: validation.missing,
+                invalid_values: validation.invalid,
+            });
+        }
 
         let newLeaveId: any;
         try {

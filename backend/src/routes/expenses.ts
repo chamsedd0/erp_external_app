@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -29,11 +30,13 @@ const createExpenseSchema = z.object({
 const EXPENSE_READ_FIELDS_FULL = ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
 const EXPENSE_READ_FIELDS_FALLBACK = ['id', 'name', 'product_id', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
 
-async function fetchExpenses(uid: number, client: any, domain: any[]): Promise<any[]> {
+async function fetchExpenses(uid: number, client: any, domain: any[], customFieldNames: string[] = []): Promise<any[]> {
+    const fullFields = [...EXPENSE_READ_FIELDS_FULL, ...customFieldNames];
+    const fallbackFields = [...EXPENSE_READ_FIELDS_FALLBACK, ...customFieldNames];
     try {
-        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FULL);
+        return await client.searchRead(uid, 'hr.expense', domain, fullFields);
     } catch {
-        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FALLBACK);
+        return await client.searchRead(uid, 'hr.expense', domain, fallbackFields);
     }
 }
 
@@ -55,8 +58,10 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await client.authenticate();
-        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', parsedEmployeeId]]);
-        res.json({ expenses });
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.expense');
+        const customFieldNames = Object.keys(customFields);
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', parsedEmployeeId]], customFieldNames);
+        res.json({ expenses, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Expenses Error:', error);
         res.status(500).json({ error: error.message });
@@ -81,8 +86,10 @@ router.get('/pending', async (req, res) => {
         }
 
         const uid = await client.authenticate();
-        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]]);
-        res.json({ expenses });
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.expense');
+        const customFieldNames = Object.keys(customFields);
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]], customFieldNames);
+        res.json({ expenses, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Pending Expenses Error:', error);
         res.status(500).json({ error: error.message });
@@ -219,6 +226,16 @@ router.post('/', async (req, res) => {
 
         if (body.tax_ids && body.tax_ids.length > 0) {
             baseExpenseData.tax_ids = [[6, 0, body.tax_ids]];
+        }
+
+        // Pre-validate payload against live Odoo schema (selection values + required fields)
+        const validation = await validatePayload(tenantId, client, uid, 'hr.expense', baseExpenseData);
+        if (!validation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: validation.missing,
+                invalid_values: validation.invalid,
+            });
         }
 
         // Build the amount field based on version, with layered retry fallback

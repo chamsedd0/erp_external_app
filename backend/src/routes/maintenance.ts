@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { attachmentSchema } from './helpdesk';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -126,18 +127,21 @@ router.get('/', async (req, res) => {
             return res.json({ available: false, requests: [] });
         }
 
+        const customFields = await getCustomFields(tenantId, client, uid, 'maintenance.request');
+        const customFieldNames = Object.keys(customFields);
+
         let requests: any = [];
         try {
             requests = await client.searchRead(
                 uid, 'maintenance.request',
                 [['employee_id', '=', parsedEmployeeId]],
-                ['id', 'name', 'description', 'stage_id', 'category_id', 'maintenance_type', 'create_date', 'request_date']
+                ['id', 'name', 'description', 'stage_id', 'category_id', 'maintenance_type', 'create_date', 'request_date', ...customFieldNames]
             );
         } catch {
             requests = await client.searchRead(
                 uid, 'maintenance.request',
                 [['employee_id', '=', parsedEmployeeId]],
-                ['id', 'name', 'stage_id', 'category_id', 'maintenance_type', 'create_date']
+                ['id', 'name', 'stage_id', 'category_id', 'maintenance_type', 'create_date', ...customFieldNames]
             );
         }
 
@@ -147,7 +151,7 @@ router.get('/', async (req, res) => {
                 .slice(0, 30)
             : [];
 
-        res.json({ requests: sorted });
+        res.json({ requests: sorted, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Maintenance Requests Error:', error);
         res.status(500).json({ error: error.message });
@@ -188,6 +192,16 @@ router.post('/', async (req, res) => {
             extendedFields.schedule_date = d.toISOString().replace('T', ' ').substring(0, 19);
         }
         if (body.duration !== undefined) extendedFields.duration = body.duration;
+
+        // Pre-validate base payload against live Odoo schema
+        const maintenanceValidation = await validatePayload(tenantId, client, uid, 'maintenance.request', recordData);
+        if (!maintenanceValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: maintenanceValidation.missing,
+                invalid_values: maintenanceValidation.invalid,
+            });
+        }
 
         let newId: number;
         try {

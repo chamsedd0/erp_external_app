@@ -4,6 +4,7 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { attachmentSchema } from './helpdesk';
 import { getLeaveTypeField } from './time_off';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -64,13 +65,15 @@ router.get('/', async (req, res) => {
         if (isNaN(parsedId)) return res.status(400).json({ error: 'Invalid employee_id' });
 
         const uid = await client.authenticate();
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.attendance');
+        const customFieldNames = Object.keys(customFields);
 
         let records: any[] = [];
         try {
             const raw = await client.searchRead(
                 uid, 'hr.attendance',
                 [['employee_id', '=', parsedId]],
-                ['id', 'employee_id', 'check_in', 'check_out', 'worked_hours']
+                ['id', 'employee_id', 'check_in', 'check_out', 'worked_hours', ...customFieldNames]
             );
             records = Array.isArray(raw) ? raw : [];
         } catch (e: any) {
@@ -90,7 +93,7 @@ router.get('/', async (req, res) => {
                 .slice(0, 30)
             : [];
 
-        res.json({ records: sorted });
+        res.json({ records: sorted, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Attendance Records Error:', error);
         res.status(500).json({ error: error.message });
@@ -167,6 +170,16 @@ router.post('/correction', async (req, res) => {
             recordData.check_out = toOdooDatetime(body.check_out);
         }
 
+        // Pre-validate payload against live Odoo schema
+        const correctionValidation = await validatePayload(tenantId, client, uid, 'hr.attendance', recordData);
+        if (!correctionValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: correctionValidation.missing,
+                invalid_values: correctionValidation.invalid,
+            });
+        }
+
         let newId: number;
         try {
             newId = await client.createRecord(uid, 'hr.attendance', recordData) as number;
@@ -231,6 +244,16 @@ router.post('/overtime', async (req, res) => {
             employee_id: body.employee_id,
             date: body.date,
         };
+
+        // Pre-validate base payload against live Odoo schema
+        const overtimeValidation = await validatePayload(tenantId, client, uid, 'hr.attendance.overtime', recordData);
+        if (!overtimeValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: overtimeValidation.missing,
+                invalid_values: overtimeValidation.invalid,
+            });
+        }
 
         // Try 'duration' first; some versions use 'adjusted_cost' or similar
         let newId: number;
@@ -301,6 +324,16 @@ router.post('/justification', async (req, res) => {
             request_date_from: formatDate(body.date_from),
             request_date_to: formatDate(body.date_to),
         };
+
+        // Pre-validate payload against live Odoo schema
+        const justificationValidation = await validatePayload(tenantId, client, uid, 'hr.leave', payload);
+        if (!justificationValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: justificationValidation.missing,
+                invalid_values: justificationValidation.invalid,
+            });
+        }
 
         let newId: number;
         try {

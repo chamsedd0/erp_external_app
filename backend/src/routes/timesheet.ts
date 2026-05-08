@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -35,6 +36,8 @@ router.get('/', async (req, res) => {
         }
 
         const uid = await client.authenticate();
+        const customFields = await getCustomFields(tenantId, client, uid, 'account.analytic.line');
+        const customFieldNames = Object.keys(customFields);
 
         let entries: any;
         try {
@@ -45,7 +48,7 @@ router.get('/', async (req, res) => {
                     ['employee_id', '=', parsedEmployeeId],
                     ['project_id', '!=', false],
                 ],
-                ['id', 'name', 'project_id', 'task_id', 'date', 'unit_amount', 'create_date']
+                ['id', 'name', 'project_id', 'task_id', 'date', 'unit_amount', 'create_date', ...customFieldNames]
             );
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '').toLowerCase();
@@ -61,7 +64,7 @@ router.get('/', async (req, res) => {
                 .slice(0, 50)
             : [];
 
-        res.json({ entries: sorted });
+        res.json({ entries: sorted, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Timesheet Error:', error);
         res.status(500).json({ error: error.message });
@@ -166,6 +169,16 @@ router.post('/', async (req, res) => {
 
         if (analyticAccountId) recordData.account_id = analyticAccountId;
         if (body.task_id) recordData.task_id = body.task_id;
+
+        // Pre-validate payload against live Odoo schema
+        const validation = await validatePayload(tenantId, client, uid, 'account.analytic.line', recordData);
+        if (!validation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: validation.missing,
+                invalid_values: validation.invalid,
+            });
+        }
 
         let newId: number;
         try {

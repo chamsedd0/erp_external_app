@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
+import { getCustomFields, validatePayload } from '../lib/schemaCache';
 
 const router = Router();
 
@@ -160,6 +161,9 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
+        const customFields = await getCustomFields(tenantId, client, uid, 'helpdesk.ticket');
+        const customFieldNames = Object.keys(customFields);
+
         const employees: any = await client.searchRead(
             uid, 'hr.employee', [['id', '=', parsedEmployeeId]], ['id', 'name', 'user_id']
         );
@@ -181,12 +185,12 @@ router.get('/', async (req, res) => {
         }
 
         if (domain.length === 0) {
-            return res.json({ available: true, tickets: [] });
+            return res.json({ available: true, tickets: [], custom_fields: customFields });
         }
 
         const tickets: any = await client.searchRead(
             uid, 'helpdesk.ticket', domain,
-            ['id', 'name', 'description', 'stage_id', 'team_id', 'create_date', 'partner_id']
+            ['id', 'name', 'description', 'stage_id', 'team_id', 'create_date', 'partner_id', ...customFieldNames]
         );
 
         const sorted = Array.isArray(tickets)
@@ -195,7 +199,7 @@ router.get('/', async (req, res) => {
                 .slice(0, 30)
             : [];
 
-        res.json({ available: true, tickets: sorted });
+        res.json({ available: true, tickets: sorted, custom_fields: customFields });
     } catch (error: any) {
         console.error('Fetch Helpdesk Tickets Error:', error);
         res.status(500).json({ error: error.message });
@@ -253,6 +257,16 @@ router.post('/', async (req, res) => {
         const optionalFields: Record<string, any> = {};
         if (body.ticket_type_id) optionalFields.ticket_type_id = body.ticket_type_id;
         if (body.tag_ids && body.tag_ids.length > 0) optionalFields.tag_ids = [[6, 0, body.tag_ids]];
+
+        // Pre-validate base ticket data against live Odoo schema
+        const ticketValidation = await validatePayload(tenantId, client, uid, 'helpdesk.ticket', ticketData);
+        if (!ticketValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: ticketValidation.missing,
+                invalid_values: ticketValidation.invalid,
+            });
+        }
 
         let newId: number;
         try {

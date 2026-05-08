@@ -29,9 +29,13 @@ export async function redisGet(key: string): Promise<string | null> {
     return redisCommand<string | null>('GET', key);
 }
 
-/** Set a string value by key. Overwrites any existing value. */
-export async function redisSet(key: string, value: string): Promise<void> {
-    await redisCommand('SET', key, value);
+/** Set a string value by key. Overwrites any existing value. Optional TTL in seconds. */
+export async function redisSet(key: string, value: string, expirySeconds?: number): Promise<void> {
+    if (expirySeconds) {
+        await redisCommand('SET', key, value, 'EX', expirySeconds);
+    } else {
+        await redisCommand('SET', key, value);
+    }
 }
 
 /** Delete a key. No-op if the key does not exist. */
