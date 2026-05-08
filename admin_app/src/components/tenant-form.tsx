@@ -102,6 +102,7 @@ export function TenantForm({ tenant, isNew = false }: Props) {
         setError('');
         const payload = { ...form };
         if (!isNew && !payload.odoo_password) delete payload.odoo_password;
+        if (!isNew && !payload.odoo_username) delete (payload as any).odoo_username;
 
         startTransition(async () => {
             try {
