@@ -11,17 +11,18 @@ exports.notificationsRouter = express_1.default.Router();
 // Get notifications (triggers a sync check first)
 exports.notificationsRouter.get('/', async (req, res) => {
     try {
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
+        const jwtPayload = req.jwtPayload;
+        const tenantId = jwtPayload?.tenantId;
+        const jwtId = jwtPayload?.id;
+        const id = jwtId ?? parseInt(req.query.employee_id);
+        if (!id || isNaN(id)) {
             res.status(400).json({ error: 'employee_id is required' });
             return;
         }
-        const id = parseInt(employeeId);
         // 1. Trigger the monitor to check for new updates from Odoo
-        // We await this so the user gets the latest notifications immediately on pull-to-refresh
-        await requestMonitor_1.requestMonitor.checkUpdates(id);
+        await requestMonitor_1.requestMonitor.checkUpdates(id, tenantId);
         // 2. Fetch from store
-        const notifications = notificationStore_1.notificationStore.getAll(id);
+        const notifications = await notificationStore_1.notificationStore.getAll(tenantId, id);
         // Sort by newest first
         notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         res.json({ notifications });
@@ -32,13 +33,32 @@ exports.notificationsRouter.get('/', async (req, res) => {
     }
 });
 // Mark as read
-exports.notificationsRouter.put('/:id/read', (req, res) => {
+exports.notificationsRouter.put('/:id/read', async (req, res) => {
     try {
+        const tenantId = req.jwtPayload?.tenantId;
         const { id } = req.params;
-        notificationStore_1.notificationStore.markRead(id);
+        await notificationStore_1.notificationStore.markRead(tenantId, id);
         res.json({ success: true });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to mark as read' });
+    }
+});
+// Mark ALL as read for the authenticated employee
+exports.notificationsRouter.put('/read-all', async (req, res) => {
+    try {
+        const jwtPayload = req.jwtPayload;
+        const tenantId = jwtPayload?.tenantId;
+        const jwtId = jwtPayload?.id;
+        const employeeId = jwtId ?? parseInt(req.query.employee_id);
+        if (!employeeId || isNaN(employeeId)) {
+            res.status(400).json({ error: 'employee_id is required' });
+            return;
+        }
+        await notificationStore_1.notificationStore.markAllRead(tenantId, employeeId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to mark all notifications as read' });
     }
 });

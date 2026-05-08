@@ -9,11 +9,10 @@ const zod_1 = require("zod");
 dotenv_1.default.config();
 const envSchema = zod_1.z.object({
     PORT: zod_1.z.string().default('3000'),
-    ODOO_URL: zod_1.z.string(),
-    ODOO_DB: zod_1.z.string(),
-    ODOO_USERNAME: zod_1.z.string(),
-    ODOO_PASSWORD: zod_1.z.string(),
     JWT_SECRET: zod_1.z.string(),
+    ADMIN_SECRET: zod_1.z.string(),
+    UPSTASH_REDIS_REST_URL: zod_1.z.string(),
+    UPSTASH_REDIS_REST_TOKEN: zod_1.z.string(),
 });
 const envVars = envSchema.safeParse(process.env);
 if (!envVars.success) {
@@ -22,11 +21,10 @@ if (!envVars.success) {
 }
 exports.config = {
     port: parseInt(envVars.data.PORT, 10),
-    odoo: {
-        url: envVars.data.ODOO_URL,
-        db: envVars.data.ODOO_DB,
-        username: envVars.data.ODOO_USERNAME,
-        password: envVars.data.ODOO_PASSWORD,
-    },
     jwtSecret: envVars.data.JWT_SECRET,
+    adminSecret: envVars.data.ADMIN_SECRET,
+    upstash: {
+        url: envVars.data.UPSTASH_REDIS_REST_URL,
+        token: envVars.data.UPSTASH_REDIS_REST_TOKEN,
+    },
 };
