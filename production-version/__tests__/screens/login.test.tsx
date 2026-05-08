@@ -27,22 +27,24 @@ beforeEach(() => {
 // ─── Company Code Step (getTenantInfo) ────────────────────────────────────────
 
 describe('Company code step — getTenantInfo', () => {
-    it('fetches tenant info for a valid company code', async () => {
-        mockFetch(true, { name: 'Test Corp', hr_email: 'hr@testcorp.com' });
+    it('fetches tenant info for a valid company code and returns subscription_number', async () => {
+        mockFetch(true, { name: 'Test Corp', hr_email: 'hr@testcorp.com', subscription_number: 'SP-00001' });
 
-        const result = await apiClient.getTenantInfo('testcorp');
+        const result = await apiClient.getTenantInfo('SP-00001');
 
         expect(fetch).toHaveBeenCalledWith(
-            `${API_URL}/auth/tenant/testcorp`,
+            `${API_URL}/auth/tenant/SP-00001`,
             expect.objectContaining({ headers: expect.any(Object) })
         );
-        expect(result).toEqual({ name: 'Test Corp', hr_email: 'hr@testcorp.com' });
+        expect(result).toEqual({ name: 'Test Corp', hr_email: 'hr@testcorp.com', subscription_number: 'SP-00001' });
+        // Must not expose internal slug
+        expect((result as any).slug).toBeUndefined();
     });
 
     it('throws when company code is not found (404)', async () => {
         mockFetch(false, { error: 'Tenant not found' }, 404);
 
-        await expect(apiClient.getTenantInfo('unknown')).rejects.toThrow('Tenant not found');
+        await expect(apiClient.getTenantInfo('SP-99999')).rejects.toThrow('Tenant not found');
     });
 
     it('throws generic error when response body has no error field', async () => {
@@ -61,13 +63,13 @@ describe('Login step — apiClient.login', () => {
             user: { id: 42, name: 'Alice', role: 'employee', tenantId: 'testcorp' },
         });
 
-        const result = await apiClient.login('42', '1234', 'testcorp');
+        const result = await apiClient.login('42', '1234', 'SP-00001');
 
         expect(fetch).toHaveBeenCalledWith(
             `${API_URL}/auth/login`,
             expect.objectContaining({
                 method: 'POST',
-                body: JSON.stringify({ employee_id: '42', pin: '1234', tenant_slug: 'testcorp' }),
+                body: JSON.stringify({ employee_id: '42', pin: '1234', tenant_subscription_number: 'SP-00001' }),
             })
         );
         expect(result.token).toBe('jwt-abc-123');
@@ -78,20 +80,21 @@ describe('Login step — apiClient.login', () => {
         mockFetch(false, { error: 'Invalid credentials' }, 401);
 
         // Note: 401 triggers _onUnauthorized then throws 'Session expired'
-        await expect(apiClient.login('42', '0000', 'testcorp')).rejects.toThrow();
+        await expect(apiClient.login('42', '0000', 'SP-00001')).rejects.toThrow();
     });
 
     it('throws on network failure', async () => {
         (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network request failed'));
 
-        await expect(apiClient.login('42', '1234', 'testcorp')).rejects.toThrow('Network request failed');
+        await expect(apiClient.login('42', '1234', 'SP-00001')).rejects.toThrow('Network request failed');
     });
 
-    it('sends tenant_slug in body', async () => {
+    it('sends tenant_subscription_number (not tenant_slug) in body', async () => {
         mockFetch(true, { token: 'tok', user: {} });
-        await apiClient.login('99', '5678', 'acmecorp');
+        await apiClient.login('99', '5678', 'SP-00002');
         const body = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
-        expect(body.tenant_slug).toBe('acmecorp');
+        expect(body.tenant_subscription_number).toBe('SP-00002');
+        expect(body.tenant_slug).toBeUndefined();
     });
 });
 
@@ -121,16 +124,16 @@ describe('Login validation (client-side logic)', () => {
 // ─── Company code preprocessing logic ────────────────────────────────────────
 
 describe('Company code preprocessing', () => {
-    it('lowercases and trims the company code before API call', async () => {
-        mockFetch(true, { name: 'Test Corp', hr_email: 'hr@test.com' });
+    it('uppercases and trims the company code before API call', async () => {
+        mockFetch(true, { name: 'Test Corp', hr_email: 'hr@test.com', subscription_number: 'SP-00001' });
 
-        // Mimic the handleCompanyContinue preprocessing:
-        const raw = '  TestCorp  ';
-        const slug = raw.trim().toLowerCase();
+        // Mimic the handleCompanyContinue preprocessing (login.tsx):
+        const raw = '  sp-00001  ';
+        const code = raw.trim().toUpperCase();
 
-        await apiClient.getTenantInfo(slug);
+        await apiClient.getTenantInfo(code);
 
         const calledUrl = (fetch as jest.Mock).mock.calls[0][0] as string;
-        expect(calledUrl).toContain('/auth/tenant/testcorp');
+        expect(calledUrl).toContain('/auth/tenant/SP-00001');
     });
 });

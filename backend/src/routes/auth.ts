@@ -3,7 +3,7 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { getOdooClient } from '../odoo/client';
-import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber } from '../lib/tenantStore';
+import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber, resolveToSlug } from '../lib/tenantStore';
 import { pushStore } from '../lib/pushStore';
 import { notificationStore } from '../lib/notificationStore';
 import { planStore, SubscriptionPlan } from '../lib/planStore';
@@ -28,20 +28,10 @@ authRouter.post('/login', async (req, res) => {
     try {
         const body = loginSchema.parse(req.body);
 
-        // 1. Resolve tenant by slug or subscription number
-        let tenantId: string;
-        if (body.tenant_slug) {
-            tenantId = body.tenant_slug;
-        } else {
-            const all = await tenantStore.listTenants();
-            const match = Object.entries(all).find(
-                ([, cfg]) => cfg.subscription_number === body.tenant_subscription_number
-            );
-            if (!match) {
-                return res.status(401).json({ error: 'Unknown company code' });
-            }
-            tenantId = match[0];
-        }
+        // 1. Resolve tenant — accepts SP number (SP-XXXXX) or slug for backward compat
+        const rawCode = body.tenant_slug ?? body.tenant_subscription_number!;
+        const tenantId = await resolveToSlug(rawCode);
+        if (!tenantId) return res.status(401).json({ error: 'Unknown company code' });
 
         const tenantConfig = await tenantStore.getTenant(tenantId);
         if (!tenantConfig) {
@@ -121,29 +111,34 @@ authRouter.post('/login', async (req, res) => {
     }
 });
 
-/** GET /auth/tenant/:slug — public, returns display info only (no credentials) */
-authRouter.get('/tenant/:slug', async (req, res) => {
-    // Support lookup by subscription number OR slug
-    let cfg = await tenantStore.getTenant(req.params.slug);
-    let resolvedSlug = req.params.slug;
-    if (!cfg) {
-        // Try subscription number lookup (e.g. 'SP-00001')
-        const all = await tenantStore.listTenants();
-        const match = Object.entries(all).find(([, t]) => t.subscription_number === req.params.slug.toUpperCase());
-        if (!match) return res.status(404).json({ error: 'Company not found' });
-        [resolvedSlug, cfg] = match;
-    }
-    // Return the actual slug so the mobile app stores the real key, not what the user typed
-    res.json({ name: cfg.name, hr_email: cfg.hr_email, slug: resolvedSlug });
+/** GET /auth/tenant/:code — public, returns display info only (no credentials).
+ *  Accepts SP number (SP-XXXXX) or slug. Returns subscription_number — never the slug. */
+authRouter.get('/tenant/:code', async (req, res) => {
+    const slug = await resolveToSlug(req.params.code);
+    if (!slug) return res.status(404).json({ error: 'Company not found' });
+    const cfg = await tenantStore.getTenant(slug);
+    if (!cfg) return res.status(404).json({ error: 'Company not found' });
+    res.json({
+        name: cfg.name,
+        hr_email: cfg.hr_email,
+        // Return the SP number so the mobile app stores it — never expose the internal slug
+        subscription_number: cfg.subscription_number || req.params.code.toUpperCase(),
+    });
 });
 
 // ── Push Notification Token Management ───────────────────────────────────────
 
+// Accepts SP number (tenant_code) or legacy tenant_slug for backward compat
 const pushTokenSchema = z.object({
     employee_id: z.number(),
     token: z.string().min(1),
-    tenant_slug: z.string(),
-});
+    tenant_code: z.string().optional(),                // preferred: SP number
+    tenant_subscription_number: z.string().optional(), // alias
+    tenant_slug: z.string().optional(),                // backward compat (old app versions)
+}).refine(
+    d => d.tenant_code || d.tenant_subscription_number || d.tenant_slug,
+    { message: 'tenant_code, tenant_subscription_number, or tenant_slug is required' }
+);
 
 /**
  * POST /auth/push-token
@@ -152,8 +147,11 @@ const pushTokenSchema = z.object({
  */
 authRouter.post('/push-token', async (req, res) => {
     try {
-        const { employee_id, token, tenant_slug } = pushTokenSchema.parse(req.body);
-        await pushStore.saveToken(tenant_slug, employee_id, token);
+        const body = pushTokenSchema.parse(req.body);
+        const rawCode = body.tenant_code ?? body.tenant_subscription_number ?? body.tenant_slug!;
+        const slug = await resolveToSlug(rawCode);
+        if (!slug) return res.status(400).json({ error: 'Unknown company code' });
+        await pushStore.saveToken(slug, body.employee_id, body.token);
         res.json({ success: true });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -172,11 +170,15 @@ authRouter.post('/push-token', async (req, res) => {
 authRouter.delete('/push-token', async (req, res) => {
     try {
         const employeeId = req.body?.employee_id ?? req.query?.employee_id;
-        const tenantSlug = req.body?.tenant_slug ?? req.query?.tenant_slug;
-        if (!employeeId || !tenantSlug) {
-            return res.status(400).json({ error: 'employee_id and tenant_slug are required' });
+        const rawCode =
+            req.body?.tenant_code ?? req.body?.tenant_subscription_number ?? req.body?.tenant_slug ??
+            req.query?.tenant_code ?? req.query?.tenant_slug;
+        if (!employeeId || !rawCode) {
+            return res.status(400).json({ error: 'employee_id and tenant identifier are required' });
         }
-        await pushStore.removeToken(String(tenantSlug), parseInt(String(employeeId)));
+        const slug = await resolveToSlug(String(rawCode));
+        if (!slug) return res.status(400).json({ error: 'Unknown company code' });
+        await pushStore.removeToken(slug, parseInt(String(employeeId)));
         res.json({ success: true });
     } catch (error: any) {
         console.error('Delete Push Token Error:', error);

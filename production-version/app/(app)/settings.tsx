@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Settings() {
     const toast = useToast();
-    const { user, tenantName, tenantSlug, hrEmail, clearTenant, signOut } = useSession();
+    const { user, tenantName, tenantCode, hrEmail, clearTenant, signOut } = useSession();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [markingAllRead, setMarkingAllRead] = useState(false);
     const [clearingCache, setClearingCache] = useState(false);
@@ -36,7 +36,7 @@ export default function Settings() {
     const handlePushToggle = (val: boolean) => {
         setNotificationsEnabled(val);
         AsyncStorage.setItem('setting_push_notifications', String(val)).catch(() => {});
-        if (!val && user?.id) apiClient.deletePushToken(user.id).catch(() => {});
+        if (!val && user?.id && tenantCode) apiClient.deletePushToken(user.id, tenantCode).catch(() => {});
         toast.success(`Push notifications ${val ? 'enabled' : 'disabled'}`);
     };
 
@@ -270,7 +270,7 @@ export default function Settings() {
                     <TouchableOpacity
                         onPress={() => Alert.alert(
                             'Change Company',
-                            `You are currently signed into ${tenantName ?? tenantSlug}. Changing company will sign you out.`,
+                            `You are currently signed into ${tenantName ?? tenantCode}. Changing company will sign you out.`,
                             [
                                 { text: 'Cancel', style: 'cancel' },
                                 {
@@ -298,7 +298,7 @@ export default function Settings() {
                                 Change Company
                             </Text>
                             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
-                                {tenantName ?? tenantSlug ?? 'No company set'}
+                                {tenantName ?? tenantCode ?? 'No company set'}
                             </Text>
                         </View>
                         <ChevronRight size={18} color={muted} />

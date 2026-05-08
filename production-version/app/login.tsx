@@ -18,7 +18,7 @@ export default function Login() {
     const [companyCode, setCompanyCode] = useState('');
     const [companyLoading, setCompanyLoading] = useState(false);
 
-    const { signIn, tenantSlug, tenantName, hrEmail, setTenant, clearTenant } = useSession();
+    const { signIn, tenantCode, tenantName, hrEmail, setTenant, clearTenant } = useSession();
     const toast = useToast();
     const router = useRouter();
 
@@ -39,8 +39,8 @@ export default function Login() {
         setCompanyLoading(true);
         try {
             const data = await apiClient.getTenantInfo(slug);
-            // Use the slug returned by the server (resolves SP-XXXXX to the real slug)
-            await setTenant(data.slug || slug, data.name, data.hr_email);
+            // Store the SP number returned by the server — never the internal slug
+            await setTenant(data.subscription_number ?? slug, data.name, data.hr_email);
             setCompanyCode('');
         } catch {
             toast.error('Company code not found. Please check with your HR department.');
@@ -49,7 +49,7 @@ export default function Login() {
         }
     };
 
-    if (!tenantSlug) {
+    if (!tenantCode) {
         return (
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -131,7 +131,7 @@ export default function Login() {
 
         setLoading(true);
         try {
-            const data = await apiClient.login(employeeId, pin, tenantSlug);
+            const data = await apiClient.login(employeeId, pin, tenantCode);
             await signIn(data.token, data.user);
             router.replace('/(app)/dashboard');
         } catch (error: any) {
@@ -162,7 +162,7 @@ export default function Login() {
                 }}>
                     <Building2 size={16} color={primary} />
                     <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: text }}>
-                        {tenantName ?? tenantSlug}
+                        {tenantName ?? tenantCode}
                     </Text>
                     <TouchableOpacity onPress={clearTenant} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <X size={14} color={muted} />

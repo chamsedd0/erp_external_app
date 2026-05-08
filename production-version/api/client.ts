@@ -124,25 +124,25 @@ export const apiClient = {
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
-    login: (employee_id: string, pin: string, tenant_slug: string) =>
+    login: (employee_id: string, pin: string, tenant_code: string) =>
         apiFetch('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ employee_id, pin, tenant_slug }),
+            body: JSON.stringify({ employee_id, pin, tenant_subscription_number: tenant_code }),
         }),
 
-    getTenantInfo: (slug: string) =>
-        apiFetch(`/auth/tenant/${slug}`),
+    getTenantInfo: (code: string) =>
+        apiFetch(`/auth/tenant/${code}`),
 
-    savePushToken: (employee_id: number, token: string, tenant_slug: string) =>
+    savePushToken: (employee_id: number, token: string, tenant_code: string) =>
         apiFetch('/auth/push-token', {
             method: 'POST',
-            body: JSON.stringify({ employee_id, token, tenant_slug }),
+            body: JSON.stringify({ employee_id, token, tenant_code }),
         }),
 
-    deletePushToken: (employee_id: number, tenant_slug: string) =>
+    deletePushToken: (employee_id: number, tenant_code: string) =>
         apiFetch('/auth/push-token', {
             method: 'DELETE',
-            body: JSON.stringify({ employee_id, tenant_slug }),
+            body: JSON.stringify({ employee_id, tenant_code }),
         }),
 
     // ── Time Off ──────────────────────────────────────────────────────────────

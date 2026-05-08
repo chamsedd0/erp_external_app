@@ -80,6 +80,27 @@ export async function generateSubscriptionNumber(): Promise<string> {
     return `SP-${String(next).padStart(5, '0')}`;
 }
 
+/**
+ * Resolve any external tenant code (SP-XXXXX or raw slug) to the internal slug.
+ * Returns null if nothing matches.
+ *
+ * Resolution order:
+ *   1. Direct slug match — fast path, keeps backward compat for old clients sending slugs
+ *   2. subscription_number scan — for new clients sending SP-XXXXX codes
+ */
+export async function resolveToSlug(code: string): Promise<string | null> {
+    const all = await readAll();
+    // Fast path: exact slug match (old clients, admin tooling)
+    if (all[code]) return code;
+    if (all[code.trim().toLowerCase()]) return code.trim().toLowerCase();
+    // SP number path: case-insensitive scan
+    const normalised = code.trim().toUpperCase();
+    const match = Object.entries(all).find(
+        ([, cfg]) => cfg.subscription_number?.toUpperCase() === normalised
+    );
+    return match ? match[0] : null;
+}
+
 async function readAll(): Promise<Record<string, TenantConfig>> {
     try {
         const raw = await redisGet(TENANTS_KEY);
