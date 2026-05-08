@@ -125,14 +125,16 @@ authRouter.post('/login', async (req, res) => {
 authRouter.get('/tenant/:slug', async (req, res) => {
     // Support lookup by subscription number OR slug
     let cfg = await tenantStore.getTenant(req.params.slug);
+    let resolvedSlug = req.params.slug;
     if (!cfg) {
-        // Try subscription number lookup
+        // Try subscription number lookup (e.g. 'SP-00001')
         const all = await tenantStore.listTenants();
-        const match = Object.values(all).find(t => t.subscription_number === req.params.slug);
+        const match = Object.entries(all).find(([, t]) => t.subscription_number === req.params.slug.toUpperCase());
         if (!match) return res.status(404).json({ error: 'Company not found' });
-        cfg = match;
+        [resolvedSlug, cfg] = match;
     }
-    res.json({ name: cfg.name, hr_email: cfg.hr_email });
+    // Return the actual slug so the mobile app stores the real key, not what the user typed
+    res.json({ name: cfg.name, hr_email: cfg.hr_email, slug: resolvedSlug });
 });
 
 // ── Push Notification Token Management ───────────────────────────────────────
@@ -279,7 +281,14 @@ adminRouter.put('/tenants/:slug', async (req, res) => {
         if (!existing) return res.status(404).json({ error: 'Tenant not found' });
 
         const updates = tenantUpdateSchema.parse(req.body);
-        const merged = applyTenantDefaults({ ...existing, ...updates });
+
+        // Auto-generate subscription_number if the tenant doesn't have one yet
+        let subscriptionNumber = updates.subscription_number ?? existing.subscription_number;
+        if (!subscriptionNumber) {
+            subscriptionNumber = await generateSubscriptionNumber();
+        }
+
+        const merged = applyTenantDefaults({ ...existing, ...updates, subscription_number: subscriptionNumber });
         await tenantStore.saveTenant(req.params.slug, merged);
         res.json({ success: true, tenant: safeTenant(req.params.slug, merged) });
     } catch (error: any) {

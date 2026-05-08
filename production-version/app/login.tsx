@@ -31,7 +31,7 @@ export default function Login() {
     // ── Company Setup Step ────────────────────────────────────────────────────
 
     const handleCompanyContinue = async () => {
-        const slug = companyCode.trim().toLowerCase();
+        const slug = companyCode.trim().toUpperCase();
         if (!slug) {
             toast.warning('Please enter your company code');
             return;
@@ -39,7 +39,8 @@ export default function Login() {
         setCompanyLoading(true);
         try {
             const data = await apiClient.getTenantInfo(slug);
-            await setTenant(slug, data.name, data.hr_email);
+            // Use the slug returned by the server (resolves SP-XXXXX to the real slug)
+            await setTenant(data.slug || slug, data.name, data.hr_email);
             setCompanyCode('');
         } catch {
             toast.error('Company code not found. Please check with your HR department.');
@@ -81,7 +82,7 @@ export default function Login() {
                             <TextInput
                                 value={companyCode}
                                 onChangeText={setCompanyCode}
-                                placeholder="e.g. acmecorp"
+                                placeholder="e.g. SP-00001"
                                 placeholderTextColor={muted}
                                 autoCapitalize="none"
                                 autoCorrect={false}
