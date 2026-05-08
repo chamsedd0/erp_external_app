@@ -74,7 +74,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
+    "width": 200,
     "collapsed": true
   },
   "right": {
@@ -179,6 +179,8 @@
   },
   "active": "2d6934c4f7f781a2",
   "lastOpenFiles": [
+    "pt().md",
+    "_COMMUNITY_Community 3.md",
     "_COMMUNITY_Community 2.md",
     "graph.canvas"
   ]
