@@ -1,0 +1,17 @@
+---
+source_file: "production-version/app/(app)/request-details.tsx"
+type: "code"
+community: "Community 0"
+location: "L91"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Community_0
+---
+
+# accentColorForType()
+
+## Connections
+- [[request-details.tsx]] - `contains` [EXTRACTED]
+
+#graphify/code #graphify/EXTRACTED #community/Community_0

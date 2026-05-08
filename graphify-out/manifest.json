@@ -1,0 +1,670 @@
+{
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\generate-assets.js": {
+    "mtime": 1778226716.9243236,
+    "hash": "22709c7ac1786e655fc2520ab7183978"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\generate-docs.js": {
+    "mtime": 1778226716.9253235,
+    "hash": "470fb1cc763f6b4c814646eccd933da1"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\generate-shadow-docs.js": {
+    "mtime": 1778226716.9253235,
+    "hash": "d3491e8de30e1ff1614cd2fa1c0b0013"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\generate-shadow-pdf.js": {
+    "mtime": 1778226716.9262319,
+    "hash": "7f0e02a61da6c8ca7b110968ccf28830"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\next.config.ts": {
+    "mtime": 1778226711.476596,
+    "hash": "025f4fcb6024b3524d19492cf7ce54a2"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\postcss.config.mjs": {
+    "mtime": 1778226711.476596,
+    "hash": "481fac0fdecd70e1821cc30b86030c1a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\middleware.ts": {
+    "mtime": 1778226711.5064013,
+    "hash": "0bd848a43dccb848b092df0adc2b3d09"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\layout.tsx": {
+    "mtime": 1778226711.4964921,
+    "hash": "05e64951ab5a20828dbde6f3f1ae5ab2"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\layout.tsx": {
+    "mtime": 1778226711.4902923,
+    "hash": "7c2aec39bfd014837d9a6f500b16e133"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\page.tsx": {
+    "mtime": 1778226711.4912918,
+    "hash": "c78f32ac318bcd77b6356118c4dfff4d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\billing\\billing-actions.tsx": {
+    "mtime": 1778226711.4848459,
+    "hash": "fd3395024ea02f722ccdd727ee009d85"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\billing\\page.tsx": {
+    "mtime": 1778226711.4848459,
+    "hash": "a76efabb1c574b3de363abc2de837262"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\clients-table-client.tsx": {
+    "mtime": 1778226711.4892871,
+    "hash": "237037ac7bfc8c1aeb8204930715ee4a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\page.tsx": {
+    "mtime": 1778226711.4902923,
+    "hash": "1e754ac6a5e7331bbb4b6a9a6aad72e2"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\new\\page.tsx": {
+    "mtime": 1778226711.4902923,
+    "hash": "13e9a3b7205579ac2c4c75ddb1a72b2e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\[slug]\\client-detail-tabs.tsx": {
+    "mtime": 1778226711.4848459,
+    "hash": "9be30f787256e20b0d424d96ebc365d8"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\[slug]\\page.tsx": {
+    "mtime": 1778226711.4892871,
+    "hash": "11dd1f48efed99ba2c0d7dad5dbfb0a7"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\(admin)\\clients\\[slug]\\edit\\page.tsx": {
+    "mtime": 1778226711.4848459,
+    "hash": "f9eef56cb9112dcb48ebb75e290f84f5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\api\\admin\\devices\\[slug]\\route.ts": {
+    "mtime": 1778226711.491683,
+    "hash": "607c980dc25faf66d83fca9ba17ade0a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\api\\admin\\health\\[slug]\\route.ts": {
+    "mtime": 1778226711.491683,
+    "hash": "4bc9ae2089bb02a9d403fa5064192358"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\api\\admin\\notifications\\[slug]\\route.ts": {
+    "mtime": 1778226711.491683,
+    "hash": "ecc43363978fe8e32424155e1887d865"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\api\\auth\\[...nextauth]\\route.ts": {
+    "mtime": 1778226711.4940975,
+    "hash": "6e26edc2a6802e945f965afbd39185b5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\app\\login\\page.tsx": {
+    "mtime": 1778226711.497495,
+    "hash": "b681a356603fe0885a3f977be16a7853"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\health-check.tsx": {
+    "mtime": 1778226711.497495,
+    "hash": "dfedb2fb1e88aae4469db86d05c0dca4"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\health-dot.tsx": {
+    "mtime": 1778226711.497495,
+    "hash": "4da4c475858f7774a83b752c6f5b2129"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\nav.tsx": {
+    "mtime": 1778226711.498495,
+    "hash": "99e0878d94073deac4b962ff5cf9e770"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\renewal-badge.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "7bd4519bd898a8a870e6924fcfc9a855"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\tenant-form.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "c7a2af6025031798598488fc9bb46a6d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\badge.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "58985d0e62507773b81a3fc9a5d97e70"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\button.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "fb6e3b15257b510db88f2ee749f90b77"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\card.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "f9ecf08603a2905489e7a59805271d00"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\dialog.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "196e8d1296cfcd300547dffa2572e888"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\input.tsx": {
+    "mtime": 1778226711.499082,
+    "hash": "ef21e3d983ee885ec2469d31b6e09fbf"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\primitives.tsx": {
+    "mtime": 1778226711.5042555,
+    "hash": "41729a1f0c439c2682933d9305f46e25"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\select.tsx": {
+    "mtime": 1778226711.5042555,
+    "hash": "6db912070c824745bcd26fca70155b5f"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\components\\ui\\tabs.tsx": {
+    "mtime": 1778226711.5042555,
+    "hash": "acbd2f2ee9bc1039c26df061158d3425"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\lib\\actions.ts": {
+    "mtime": 1778226711.5042555,
+    "hash": "3c4a534680f1e2afffb51177eb06dbb9"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\lib\\api.ts": {
+    "mtime": 1778226711.5042555,
+    "hash": "fc306d99aa1115b72c1c6f6a5e512b56"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\lib\\auth.ts": {
+    "mtime": 1778226711.5064013,
+    "hash": "f82eca6189ffc4db7e7c2f41f96afe22"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\lib\\types.ts": {
+    "mtime": 1778226711.5064013,
+    "hash": "77c333a4b54cad54808e5ee942c7a5ac"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\src\\lib\\utils.ts": {
+    "mtime": 1778226711.5064013,
+    "hash": "efd9995738a8e5c52ea19b06e6313f7a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\jest.config.js": {
+    "mtime": 1778226711.5309258,
+    "hash": "f0ab52618fb99da0ade989329973082d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\test-api.mjs": {
+    "mtime": 1778226716.9243236,
+    "hash": "cd8cafaa5768baff10c866352ae69ffd"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\config.ts": {
+    "mtime": 1778226716.9184265,
+    "hash": "375fc86c221e915d0c91f06941e82b32"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\index.ts": {
+    "mtime": 1778226716.9184265,
+    "hash": "167c08dc277ff7ed9f870815cbbf4fbd"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\lib\\notificationStore.ts": {
+    "mtime": 1778226716.919249,
+    "hash": "88816e21ff8980dd11c93590abc0c47b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\lib\\pushStore.ts": {
+    "mtime": 1778226716.919249,
+    "hash": "d77962c5207bb1039babf5012365bfbf"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\lib\\redis.ts": {
+    "mtime": 1778226716.919249,
+    "hash": "10fd7ce5730817c25ad7074406f05d7b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\lib\\requestMonitor.ts": {
+    "mtime": 1778226716.9203234,
+    "hash": "707c9d7df02332789c9b4e142037c6bf"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\lib\\tenantStore.ts": {
+    "mtime": 1778226716.9203234,
+    "hash": "4f503c05537a13d162cf28e5c30d6820"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\odoo\\client.ts": {
+    "mtime": 1778226716.9203234,
+    "hash": "09ab4280d5d738a0b352461a817da10b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\attendance.ts": {
+    "mtime": 1778226716.9213233,
+    "hash": "5325f57ce5a86d403eff7d27f52f5987"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\auth.ts": {
+    "mtime": 1778226716.9213233,
+    "hash": "be8d6fa174aab5e27d0f849f9f52d5d6"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\cron.ts": {
+    "mtime": 1778226716.9223232,
+    "hash": "7a510a14dfca64cd13c5238817e1b4f8"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\expenses.ts": {
+    "mtime": 1778226716.9223232,
+    "hash": "b80a7e15338b609c4a5e0b679c1282fd"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\helpdesk.ts": {
+    "mtime": 1778226716.9223232,
+    "hash": "ff64616757fd0c7c0afc80cf2b3fd7cb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\maintenance.ts": {
+    "mtime": 1778226716.9233222,
+    "hash": "d4b1605dc3c484a61041e1e520cb2aa4"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\notifications.ts": {
+    "mtime": 1778226716.9233222,
+    "hash": "9ae3b3e5d330d69b51a80dec02ba066f"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\timesheet.ts": {
+    "mtime": 1778226716.9233222,
+    "hash": "14257399f2965fc0b007f606ae27ea75"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\routes\\time_off.ts": {
+    "mtime": 1778226716.9233222,
+    "hash": "ff373ebdafc5984bf7f8a7bcf95e7ff6"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\setup.ts": {
+    "mtime": 1778226716.9158235,
+    "hash": "f33ff4c7682caa64f0db1928052ce9a5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\integration\\tenantIsolation.test.ts": {
+    "mtime": 1778226716.9123073,
+    "hash": "7bb6be6ed929c72315fa692d42c16c6f"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\attendance.test.ts": {
+    "mtime": 1778226716.913588,
+    "hash": "785d155309f8980986d5aa9c4d3544ff"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\auth.test.ts": {
+    "mtime": 1778226716.9140694,
+    "hash": "ab9b4e87b80827789a42bc734015bfc6"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\cron.test.ts": {
+    "mtime": 1778226716.9140694,
+    "hash": "5c4e90edfeacf1a9ee9b6ff9025e9c0c"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\expenses.test.ts": {
+    "mtime": 1778226716.914821,
+    "hash": "27773993829640e5205fa58099bc772c"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\helpdesk.test.ts": {
+    "mtime": 1778226716.914821,
+    "hash": "43335f4dde620f191e337812b1dacc2a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\helpers.ts": {
+    "mtime": 1778226716.914821,
+    "hash": "6dff8dec27d18fc264c55e49962b6e01"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\maintenance.test.ts": {
+    "mtime": 1778226716.914821,
+    "hash": "9537b861ad7892b5fffc3a44b5b58f43"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\notifications.test.ts": {
+    "mtime": 1778226716.9158235,
+    "hash": "f7f9f73f054140e72ee2918c17f8259f"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\timeOff.test.ts": {
+    "mtime": 1778226716.9158235,
+    "hash": "a7b3d2b0845c2121fac949131bc5b7f1"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\routes\\timesheet.test.ts": {
+    "mtime": 1778226716.9158235,
+    "hash": "31cc4b2ca4d2e64fe0abffedb69b9ad5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\smoke\\run.ts": {
+    "mtime": 1778226716.9168396,
+    "hash": "6cbcc17bdb7b2a4d55f70b888a1340a5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\unit\\notificationStore.test.ts": {
+    "mtime": 1778226716.917421,
+    "hash": "99756053655a5d3826786d039914ac9e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\unit\\pushStore.test.ts": {
+    "mtime": 1778226716.917421,
+    "hash": "cfba9d6dc521612a9cb87509d7ed70fb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\unit\\requestMonitor.test.ts": {
+    "mtime": 1778226716.917421,
+    "hash": "c2634c231851a1ea81d6cea8dd102bf4"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\backend\\src\\__tests__\\unit\\tenantStore.test.ts": {
+    "mtime": 1778226716.9184265,
+    "hash": "f22abf3cb227fa63076acca82424b31f"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\babel.config.js": {
+    "mtime": 1778226718.4398227,
+    "hash": "86ba44b0342281f5830fd94c06b0adce"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\constants.ts": {
+    "mtime": 1778226718.4465818,
+    "hash": "a0a2201d8fb298af0813ae448a728b42"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\eslint.config.js": {
+    "mtime": 1778226718.4465818,
+    "hash": "863383b08e7ec37e0b09ebacf6c03216"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\jest.config.js": {
+    "mtime": 1778226718.4485867,
+    "hash": "4d513d0f049788af555cbd4838e45f03"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\metro.config.js": {
+    "mtime": 1778226718.4485867,
+    "hash": "1af6ee7976397d00a5b3f40b1a97c8a1"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\nativewind-env.d.ts": {
+    "mtime": 1778226718.4485867,
+    "hash": "c73fa5ab0d5495070ace374bd3f994a1"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\tailwind.config.js": {
+    "mtime": 1778226735.5341103,
+    "hash": "6e9bef3d652fea661739a802a2e39e11"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\api\\client.ts": {
+    "mtime": 1778226718.428827,
+    "hash": "eae83db3550fc16dfa14937490b1dd02"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\+not-found.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "e12e38ab7e6061d02e0d3340fa73b566"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\login.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "a479421b56a5383565705b25a1d7ce31"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\onboarding.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "66b7ba1eef467bf182f130a0075a03ee"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\sheet.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "42948d917b9acdafdf654b31527643f9"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\_layout.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "0705bcacc612a849730643cc1bc31f2e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\dashboard.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "2cf9ebdc6f6920bb618674fe27cc1f36"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\help.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "fd7b733ba3de09e310a30a2cdef18140"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\new-request.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "f36aadf12da134ab116b0caa0c4bf1d9"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\notifications.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "74dcbb2d18c013769f5b35f504240eeb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\profile.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "1d2261148a6c0ba2990f57c8dc8ac11d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\request-details.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "a41d1b0667039dff496740c8501831d9"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\search.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "c057003445bd1610dd107e81134fb84a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\settings.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "3383f5de3cb17969ebb9b503b8c55444"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\timesheet.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "659f858210088ee05c5b50c0acd7a62e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(app)\\_layout.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "49006216690687a0789df4cf6f526623"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\_layout.web.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "29fc66279b082a745730ebea3fdcf222"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\(home)\\index.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "d261efd56b2ecd7e4fe53763ef02fd5d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\(home)\\_layout.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "20b2ebd496af8659c6a9e4da65a92cfb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\search\\index.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "c44ad6c00547d6465ccea89c3820e4fb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\search\\_layout.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "e7d0f325749c856f1f17672d89b27326"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\settings\\index.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "23cdf7d169d071d9387d6f251e175f4e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\app\\(tabs)\\settings\\_layout.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "c3303d81c26a7bea5a237ba6b2201499"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\AttachmentPicker.tsx": {
+    "mtime": 1778226718.4398227,
+    "hash": "980e5e198ef09b9124f88065fd0d3223"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\sheet.tsx": {
+    "mtime": 1778226718.4398227,
+    "hash": "8590e75854a30bd045aa6c87bbce2c16"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\animated-card.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "c676efbe1236f327e9ad8da76aa869d5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\avatar.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "eb04edce8e3d7546e0a5d2d4604432ce"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\avoid-keyboard.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "db02eead2d9628647605a176f7f0af20"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\badge.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "846d89ffba5422e08855065f26edf57a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\button.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "8abcedd98656bf7ddb6970d7738253c0"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\card.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "91b01694f71d05335f34398fe096dd3d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\carousel.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "ee4bba5a9151ac73a67785531822c30d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\date-picker.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "a98400193b0a31ac0ac5ebfabe27802b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\icon.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "26ab00478f7e52dd7e57efa689988dc9"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\image.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "87f920f2130b0b3e646a0935f5ce6a26"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\input-otp.tsx": {
+    "mtime": 1778226718.4418275,
+    "hash": "d65152df7c5efc6153a157f464619496"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\input.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "3f6152837ee5283f0dd7a160cff6b51a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\link.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "765ed5ca98f57611783bfc8f0b84a252"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\mode-toggle.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "8eed297630755cc121ed0f78fc6e1979"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\progress.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "01b8901cba3b19012e43ec29b15edcfb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\scroll-view.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "688d06a2ef157f1a61a43aff8d5e1b63"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\sheet.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "6d21780cf8f9dc259b209ad49b819fa3"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\spinner.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "76c3c5c0bc0333bc058237b92ab85dc1"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\tabs.tsx": {
+    "mtime": 1778226718.4445772,
+    "hash": "39c1e140adeae4c4609b75391ece1add"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\text.tsx": {
+    "mtime": 1778226718.4465818,
+    "hash": "7d0f23eb2701ffc5913acd20951e511b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\components\\ui\\view.tsx": {
+    "mtime": 1778226718.4465818,
+    "hash": "6645070525fd4c69d19090530ce3f49d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\hooks\\useColor.ts": {
+    "mtime": 1778226718.4465818,
+    "hash": "8c28ba23fe6817723fea2fa2761f4055"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\hooks\\useColorScheme.ts": {
+    "mtime": 1778226718.4465818,
+    "hash": "5e75b3d5ace0289cfc1bab951ca625bb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\hooks\\useColorScheme.web.ts": {
+    "mtime": 1778226718.4465818,
+    "hash": "bcd7b96a68e8a00dd1de95aac4953eb6"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\hooks\\useKeyboardHeight.ts": {
+    "mtime": 1778226718.4485867,
+    "hash": "ea711b2a6ba52a46335183be872ef17a"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\hooks\\useModeToggle.tsx": {
+    "mtime": 1778226718.4485867,
+    "hash": "e8e95af69ae361f9b3dadef67e86bce2"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\lib\\cache.ts": {
+    "mtime": 1778226718.4485867,
+    "hash": "64f8f8c38163c230d05faddaa0906f5c"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\providers\\auth-context.tsx": {
+    "mtime": 1778226735.5341103,
+    "hash": "bebe0e19fa59535d1567039c853c58b5"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\providers\\search-context.tsx": {
+    "mtime": 1778226735.5341103,
+    "hash": "43c6ca5e9cffaba457922143a40759fe"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\providers\\toast-context.tsx": {
+    "mtime": 1778226735.5341103,
+    "hash": "0b9474700ed16c4cdea1961a764fba77"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\theme\\colors.ts": {
+    "mtime": 1778226735.5341103,
+    "hash": "b44980c89f7a39d6011dc45cc06bf9f7"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\theme\\globals.ts": {
+    "mtime": 1778226735.5341103,
+    "hash": "9c4eee9022819f170ca49e4b92c7ea1b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\theme\\theme-provider.tsx": {
+    "mtime": 1778226735.5341103,
+    "hash": "a7e61c3c94aded6733c987221eda9176"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__mocks__\\async-storage.js": {
+    "mtime": 1778226718.4268239,
+    "hash": "9756a43d8b687f07647e4f31b67da33e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__mocks__\\expo-module.js": {
+    "mtime": 1778226718.4268239,
+    "hash": "50d98413641619c05df1e761ca5fdfd0"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__mocks__\\expo-router.js": {
+    "mtime": 1778226718.4268239,
+    "hash": "504b31ba504a845c9f23fcdc78983b45"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__mocks__\\react-native.js": {
+    "mtime": 1778226718.4278245,
+    "hash": "969ab165ca6758dd45bc23db824101ef"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\setup.ts": {
+    "mtime": 1778226718.428827,
+    "hash": "5e9f93c9f3ac413db97e822d3e7ba249"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\login.test.tsx": {
+    "mtime": 1778226718.4278245,
+    "hash": "8d9dca3fa2d2fb5f2744d57148788084"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\newRequest.test.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "159a15e47d939081abcf5ad71cce6c87"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\notifications.test.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "b4ab7c094df29d2d0f6b088f7bb5f16b"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\requestDetails.test.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "41e7a1e8165224a68d3998893dbbaf52"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\settings.test.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "90cf871c4a0c90c83e0099995d033d13"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\__tests__\\screens\\timesheet.test.tsx": {
+    "mtime": 1778226718.428827,
+    "hash": "977fc4af774aeb6843c4374235eaad65"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\AGENTS.md": {
+    "mtime": 1778226711.4739373,
+    "hash": "9346a4897ff955555ddedb7bebf77adb"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\CLAUDE.md": {
+    "mtime": 1778226711.476596,
+    "hash": "771faa62feb60b7de901a397aebb29b0"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\README.md": {
+    "mtime": 1778226711.476596,
+    "hash": "9162add00befbcdb432430f405c4ad8d"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\README.md": {
+    "mtime": 1778226718.4258187,
+    "hash": "1a253ca58ad1bf54ba478c261feb58af"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\shadow-portal-icon.svg": {
+    "mtime": 1778226735.5341103,
+    "hash": "2762b3599981eb519ddefb0f633b7e81"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\Shadow-Portal-Logo.png": {
+    "mtime": 1778226711.4703217,
+    "hash": "65c6540c22ed217436130056237cbbcd"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\shadow-portal-logo.svg": {
+    "mtime": 1778226735.5341103,
+    "hash": "e49b12db10c836f5d10f57df73486ccf"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\public\\file.svg": {
+    "mtime": 1778226711.4824164,
+    "hash": "d09f95206c3fa0bb9bd9fefabfd0ea71"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\public\\globe.svg": {
+    "mtime": 1778226711.4834957,
+    "hash": "2aaafa6a49b6563925fe440891e32717"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\public\\next.svg": {
+    "mtime": 1778226711.4834957,
+    "hash": "8e061864f388b47f33a1c3780831193e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\public\\vercel.svg": {
+    "mtime": 1778226711.4844959,
+    "hash": "c0af2f507b369b085b35ef4bbe3bcf1e"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\admin_app\\public\\window.svg": {
+    "mtime": 1778226711.4848459,
+    "hash": "a2760511c65806022ad20adf74370ff3"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\assets\\images\\icon.png": {
+    "mtime": 1778226718.4398227,
+    "hash": "9315208f19a7021b5c238e66db26cbfe"
+  },
+  "C:\\Users\\chams\\Documents\\GitHub\\erp_external_app\\production-version\\assets\\images\\splash.png": {
+    "mtime": 1778226718.4398227,
+    "hash": "8c3269b6a92e2d0bb83917ef6b32a315"
+  }
+}

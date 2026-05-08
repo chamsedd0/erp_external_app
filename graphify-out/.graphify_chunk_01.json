@@ -1,0 +1,544 @@
+{
+  "nodes": [
+    {
+      "id": "agents_md_nextjs_agent_rules",
+      "label": "Next.js Agent Rules (AGENTS.md)",
+      "file_type": "document",
+      "source_file": "admin_app/AGENTS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agents_md_breaking_changes_warning",
+      "label": "Breaking Changes Warning for Next.js",
+      "file_type": "rationale",
+      "source_file": "admin_app/AGENTS.md",
+      "source_location": "line 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "route_devices_slug",
+      "label": "Admin Devices [slug] API Route",
+      "file_type": "code",
+      "source_file": "admin_app/src/app/api/admin/devices/[slug]/route.ts",
+      "source_location": "line 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_api_getDevices",
+      "label": "api.getDevices() Call",
+      "file_type": "code",
+      "source_file": "admin_app/src/app/api/admin/devices/[slug]/route.ts",
+      "source_location": "line 10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_DeviceEntry",
+      "label": "DeviceEntry Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 61",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_Tenant",
+      "label": "Tenant Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_PlatformStats",
+      "label": "PlatformStats Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_TenantStats",
+      "label": "TenantStats Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 39",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_HealthResult",
+      "label": "HealthResult Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 46",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_TenantFormData",
+      "label": "TenantFormData Type",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 55",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_NotificationEntry",
+      "label": "NotificationEntry Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 69",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "types_NotificationPage",
+      "label": "NotificationPage Interface",
+      "file_type": "code",
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 81",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_env_PORT",
+      "label": "Backend PORT Config",
+      "file_type": "document",
+      "source_file": "backend/.env.example",
+      "source_location": "line 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_env_ODOO",
+      "label": "Odoo Connection Config (URL, DB, Username, Password)",
+      "file_type": "document",
+      "source_file": "backend/.env.example",
+      "source_location": "line 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_env_JWT_SECRET",
+      "label": "JWT Secret Config",
+      "file_type": "document",
+      "source_file": "backend/.env.example",
+      "source_location": "line 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_index_express_app",
+      "label": "Express Application Entry Point",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_index_shadow_portal",
+      "label": "Shadow Portal Middleware",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_route_auth",
+      "label": "Auth Router (/auth)",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_route_time_off",
+      "label": "Time Off Router (/time-off)",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 29",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_route_expenses",
+      "label": "Expenses Router (/expenses)",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 30",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_route_notifications",
+      "label": "Notifications Router (/notifications)",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 32",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_rate_limiter",
+      "label": "Rate Limiter (100 req / 15 min)",
+      "file_type": "code",
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 20",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "img_globe_svg",
+      "label": "Globe Icon (SVG)",
+      "file_type": "image",
+      "source_file": "admin_app/public/globe.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "img_next_svg",
+      "label": "Next.js Wordmark Logo (SVG)",
+      "file_type": "image",
+      "source_file": "admin_app/public/next.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "img_file_svg",
+      "label": "File/Document Icon (SVG)",
+      "file_type": "image",
+      "source_file": "admin_app/public/file.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "img_vercel_svg",
+      "label": "Vercel Logo Triangle (SVG)",
+      "file_type": "image",
+      "source_file": "admin_app/public/vercel.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "img_window_svg",
+      "label": "Browser Window Icon (SVG)",
+      "file_type": "image",
+      "source_file": "admin_app/public/window.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "agents_md_breaking_changes_warning",
+      "target": "agents_md_nextjs_agent_rules",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "admin_app/AGENTS.md",
+      "source_location": "line 3",
+      "weight": 1.0
+    },
+    {
+      "source": "route_devices_slug",
+      "target": "lib_api_getDevices",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "admin_app/src/app/api/admin/devices/[slug]/route.ts",
+      "source_location": "line 10",
+      "weight": 1.0
+    },
+    {
+      "source": "route_devices_slug",
+      "target": "types_DeviceEntry",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "admin_app/src/app/api/admin/devices/[slug]/route.ts",
+      "source_location": "line 10",
+      "weight": 1.0
+    },
+    {
+      "source": "types_TenantFormData",
+      "target": "types_Tenant",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 55",
+      "weight": 1.0
+    },
+    {
+      "source": "types_NotificationPage",
+      "target": "types_NotificationEntry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 83",
+      "weight": 1.0
+    },
+    {
+      "source": "types_TenantStats",
+      "target": "types_DeviceEntry",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "admin_app/src/lib/types.ts",
+      "source_location": "line 40",
+      "weight": 0.75
+    },
+    {
+      "source": "backend_index_express_app",
+      "target": "backend_route_auth",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 28",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_index_express_app",
+      "target": "backend_route_time_off",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 29",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_index_express_app",
+      "target": "backend_route_expenses",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 30",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_index_express_app",
+      "target": "backend_route_notifications",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 32",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_index_express_app",
+      "target": "backend_rate_limiter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 26",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_index_shadow_portal",
+      "target": "backend_index_express_app",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 16",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_env_ODOO",
+      "target": "types_Tenant",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "backend/.env.example",
+      "source_location": "line 2",
+      "weight": 0.85
+    },
+    {
+      "source": "backend_env_JWT_SECRET",
+      "target": "backend_route_auth",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "backend/.env.example",
+      "source_location": "line 6",
+      "weight": 0.85
+    },
+    {
+      "source": "backend_route_notifications",
+      "target": "types_NotificationEntry",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "backend/dist/index.js",
+      "source_location": "line 32",
+      "weight": 0.85
+    },
+    {
+      "source": "route_devices_slug",
+      "target": "backend_route_auth",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "admin_app/src/app/api/admin/devices/[slug]/route.ts",
+      "source_location": null,
+      "weight": 0.65
+    },
+    {
+      "source": "img_next_svg",
+      "target": "agents_md_nextjs_agent_rules",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "admin_app/public/next.svg",
+      "source_location": null,
+      "weight": 0.75
+    },
+    {
+      "source": "img_vercel_svg",
+      "target": "agents_md_nextjs_agent_rules",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "admin_app/public/vercel.svg",
+      "source_location": null,
+      "weight": 0.65
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "backend_middleware_routes",
+      "label": "Express Backend Middleware and Route Registration",
+      "nodes": [
+        "backend_index_express_app",
+        "backend_route_auth",
+        "backend_route_time_off",
+        "backend_route_expenses",
+        "backend_route_notifications",
+        "backend_rate_limiter"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/dist/index.js"
+    },
+    {
+      "id": "tenant_data_model",
+      "label": "Tenant Data Model and Related Types",
+      "nodes": [
+        "types_Tenant",
+        "types_TenantFormData",
+        "types_TenantStats",
+        "types_PlatformStats",
+        "types_HealthResult"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "admin_app/src/lib/types.ts"
+    },
+    {
+      "id": "notification_data_model",
+      "label": "Notification Data Model",
+      "nodes": [
+        "types_NotificationEntry",
+        "types_NotificationPage",
+        "backend_route_notifications"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "admin_app/src/lib/types.ts"
+    },
+    {
+      "id": "odoo_integration_config",
+      "label": "Odoo Integration Configuration",
+      "nodes": [
+        "backend_env_ODOO",
+        "types_Tenant",
+        "backend_index_express_app"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "backend/.env.example"
+    }
+  ],
+  "input_tokens": 26757,
+  "output_tokens": 0
+}
