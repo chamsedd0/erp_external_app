@@ -5,6 +5,7 @@ import { RenewalBadge } from '@/components/renewal-badge';
 import { BillingActions } from './billing-actions';
 import { DollarSign, AlertTriangle, Clock } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Billing — Shadow Portal Admin' };
 
 export default async function BillingPage() {

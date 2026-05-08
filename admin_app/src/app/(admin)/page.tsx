@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { RenewalBadge } from '@/components/renewal-badge';
+
+export const dynamic = 'force-dynamic';
 import {
     DSCard,
     DSCardHeader,
