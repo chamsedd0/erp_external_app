@@ -36,6 +36,7 @@ const EMPTY: TenantFormData = {
     subscription_start: new Date().toISOString().slice(0, 10),
     subscription_renewal: '',
     monthly_amount: 199,
+    billing_frequency: 'monthly',
     enabled: true,
     notes: '',
 };
@@ -65,6 +66,7 @@ export function TenantForm({ tenant, isNew = false }: Props) {
             subscription_start: tenant.subscription_start,
             subscription_renewal: tenant.subscription_renewal,
             monthly_amount: tenant.monthly_amount,
+            billing_frequency: tenant.billing_frequency ?? 'monthly',
             enabled: tenant.enabled,
             notes: tenant.notes ?? '',
         } : {}),
@@ -294,6 +296,36 @@ export function TenantForm({ tenant, isNew = false }: Props) {
             <DSCard>
                 <DSCardHeader title="Subscription & Billing" />
                 <DSCardContent>
+                    {/* Subscription number badge (edit only, read-only) */}
+                    {!isNew && tenant?.subscription_number && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '10px 12px', background: '#F8FAFC',
+                            border: '1px solid #E2E8F0', borderRadius: 8, marginBottom: 14,
+                        }}>
+                            <Hash size={13} color="#94A3B8" />
+                            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>Subscription Number</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', fontFamily: 'monospace', marginLeft: 4 }}>
+                                {tenant.subscription_number}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 'auto' }}>employee login code</span>
+                        </div>
+                    )}
+                    {!isNew && !tenant?.subscription_number && (
+                        <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14 }}>
+                            No subscription number assigned. Re-save this tenant to auto-generate one.
+                        </div>
+                    )}
+                    {isNew && (
+                        <div style={{
+                            fontSize: 12, color: '#64748B', padding: '8px 12px',
+                            background: '#EFF6FF', border: '1px solid #BFDBFE',
+                            borderRadius: 8, marginBottom: 14,
+                        }}>
+                            A unique subscription number (e.g. <strong>SP-00006</strong>) will be auto-generated when you save this client.
+                            Employees will use it to log in to the mobile app.
+                        </div>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                         <DSField label="Plan">
                             <DSSelectInput
@@ -320,6 +352,17 @@ export function TenantForm({ tenant, isNew = false }: Props) {
                                     { value: 'overdue', label: 'Overdue' },
                                     { value: 'suspended', label: 'Suspended' },
                                     { value: 'cancelled', label: 'Cancelled' },
+                                ]}
+                            />
+                        </DSField>
+                        <DSField label="Billing Frequency">
+                            <DSSelectInput
+                                value={form.billing_frequency ?? 'monthly'}
+                                onChange={(e) => set('billing_frequency', e.target.value as 'monthly' | 'quarterly' | 'yearly')}
+                                options={[
+                                    { value: 'monthly', label: 'Monthly' },
+                                    { value: 'quarterly', label: 'Quarterly' },
+                                    { value: 'yearly', label: 'Yearly' },
                                 ]}
                             />
                         </DSField>

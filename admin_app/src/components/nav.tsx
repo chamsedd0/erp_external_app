@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LayoutDashboard, Building2, CreditCard, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Building2, CreditCard, LogOut } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
@@ -130,8 +130,12 @@ export function Sidebar() {
                     color: '#fff',
                     boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
                     flexShrink: 0,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    letterSpacing: -0.5,
+                    fontFamily: 'system-ui, sans-serif',
                 }}>
-                    <Shield size={18} />
+                    SP
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                     <div style={{ color: '#fff', fontSize: 15, fontWeight: 700, letterSpacing: -0.2 }}>

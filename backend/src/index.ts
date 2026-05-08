@@ -11,6 +11,7 @@ import { helpdeskRouter } from './routes/helpdesk';
 import { maintenanceRouter } from './routes/maintenance';
 import { attendanceRouter } from './routes/attendance';
 import { cronRouter } from './routes/cron';
+import { pushError } from './lib/errorLog';
 import rateLimit from 'express-rate-limit';
 
 
@@ -76,6 +77,32 @@ app.use('/timesheet', timesheetRouter);
 app.use('/helpdesk', helpdeskRouter);
 app.use('/maintenance', maintenanceRouter);
 app.use('/attendance', attendanceRouter);
+
+// ── Error capture middleware — intercepts res.json calls for 5xx ──────────────
+// Must be registered AFTER all route handlers.
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const originalJson = res.json.bind(res);
+    (res as any).json = function (body: any) {
+        if (res.statusCode >= 500) {
+            const tenantId = (req as any).jwtPayload?.tenantId as string | undefined;
+            if (tenantId) {
+                const errorMsg = (typeof body === 'object' && body?.error)
+                    ? String(body.error).slice(0, 500)
+                    : 'Internal server error';
+                void pushError(tenantId, {
+                    timestamp: new Date().toISOString(),
+                    method: req.method,
+                    path: req.path,
+                    status: res.statusCode,
+                    error: errorMsg,
+                    employee_id: (req as any).jwtPayload?.id,
+                });
+            }
+        }
+        return originalJson(body);
+    };
+    next();
+});
 
 // ── Local dev server ──────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {

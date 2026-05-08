@@ -3,9 +3,12 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { getOdooClient } from '../odoo/client';
-import { tenantStore, TenantConfig, applyTenantDefaults } from '../lib/tenantStore';
+import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber } from '../lib/tenantStore';
 import { pushStore } from '../lib/pushStore';
 import { notificationStore } from '../lib/notificationStore';
+import { planStore, SubscriptionPlan } from '../lib/planStore';
+import { getErrors, clearErrors } from '../lib/errorLog';
+import { generateInvoiceHTML } from '../lib/invoiceTemplate';
 import { redisGet, redisScan } from '../lib/redis';
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
@@ -15,31 +18,70 @@ const authRouter = Router();
 const loginSchema = z.object({
     employee_id: z.string(),
     pin: z.string(),
-    tenant_slug: z.string(),
+    tenant_slug: z.string().optional(),
+    tenant_subscription_number: z.string().optional(),
+}).refine(d => d.tenant_slug || d.tenant_subscription_number, {
+    message: 'tenant_slug or tenant_subscription_number is required',
 });
 
 authRouter.post('/login', async (req, res) => {
     try {
-        const { employee_id, pin, tenant_slug } = loginSchema.parse(req.body);
+        const body = loginSchema.parse(req.body);
 
-        // 1. Look up tenant
-        const tenantConfig = await tenantStore.getTenant(tenant_slug);
+        // 1. Resolve tenant by slug or subscription number
+        let tenantId: string;
+        if (body.tenant_slug) {
+            tenantId = body.tenant_slug;
+        } else {
+            const all = await tenantStore.listTenants();
+            const match = Object.entries(all).find(
+                ([, cfg]) => cfg.subscription_number === body.tenant_subscription_number
+            );
+            if (!match) {
+                return res.status(401).json({ error: 'Unknown company code' });
+            }
+            tenantId = match[0];
+        }
+
+        const tenantConfig = await tenantStore.getTenant(tenantId);
         if (!tenantConfig) {
             return res.status(401).json({ error: 'Unknown company code' });
         }
 
-        // Reject login if tenant is disabled / suspended / cancelled
-        if (!tenantConfig.enabled || tenantConfig.subscription_status === 'suspended' || tenantConfig.subscription_status === 'cancelled') {
+        // 2. Reject login if tenant is disabled / suspended / cancelled
+        if (
+            !tenantConfig.enabled ||
+            tenantConfig.subscription_status === 'suspended' ||
+            tenantConfig.subscription_status === 'cancelled'
+        ) {
             return res.status(403).json({ error: 'Account access is currently disabled. Please contact your administrator.' });
         }
 
-        const client = getOdooClient(tenant_slug, tenantConfig);
+        // 3. Max employee check — based on plan's max_employees
+        const plan = await planStore.getPlan(tenantConfig.subscription_plan).catch(() => null);
+        const maxEmployees = plan?.max_employees ?? { starter: 10, professional: 50, enterprise: 0 }[tenantConfig.subscription_plan] ?? 10;
 
-        // 2. Authenticate Admin to get UID
+        if (maxEmployees > 0) {
+            const empId = parseInt(body.employee_id, 10);
+            const existingToken = !isNaN(empId) ? await pushStore.getToken(tenantId, empId).catch(() => null) : null;
+            if (!existingToken) {
+                // Employee has no registered device — count existing unique employees
+                const devices = await pushStore.listDevicesForTenant(tenantId).catch(() => []);
+                if (devices.length >= maxEmployees) {
+                    return res.status(403).json({
+                        error: 'Employee limit reached for this subscription plan. Contact your administrator.',
+                    });
+                }
+            }
+        }
+
+        const client = getOdooClient(tenantId, tenantConfig);
+
+        // 4. Authenticate Admin to get UID
         const uid = await client.authenticate();
 
-        // 3. Search for Employee
-        const employees: any = await client.searchEmployee(uid, employee_id, pin);
+        // 5. Search for Employee
+        const employees: any = await client.searchEmployee(uid, body.employee_id, body.pin);
 
         if (!employees || employees.length === 0) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -47,13 +89,13 @@ authRouter.post('/login', async (req, res) => {
 
         const employee = employees[0];
 
-        // 4. Generate JWT (includes tenantId)
+        // 6. Generate JWT (includes tenantId)
         const token = jwt.sign(
             {
                 id: employee.id,
                 name: employee.name,
                 role: 'employee',
-                tenantId: tenant_slug,
+                tenantId,
             },
             config.jwtSecret,
             { expiresIn: '7d' }
@@ -81,8 +123,15 @@ authRouter.post('/login', async (req, res) => {
 
 /** GET /auth/tenant/:slug — public, returns display info only (no credentials) */
 authRouter.get('/tenant/:slug', async (req, res) => {
-    const cfg = await tenantStore.getTenant(req.params.slug);
-    if (!cfg) return res.status(404).json({ error: 'Company not found' });
+    // Support lookup by subscription number OR slug
+    let cfg = await tenantStore.getTenant(req.params.slug);
+    if (!cfg) {
+        // Try subscription number lookup
+        const all = await tenantStore.listTenants();
+        const match = Object.values(all).find(t => t.subscription_number === req.params.slug);
+        if (!match) return res.status(404).json({ error: 'Company not found' });
+        cfg = match;
+    }
     res.json({ name: cfg.name, hr_email: cfg.hr_email });
 });
 
@@ -156,9 +205,11 @@ const tenantBodySchema = z.object({
     subscription_start: z.string().default(() => new Date().toISOString().split('T')[0]),
     subscription_renewal: z.string().default(''),
     monthly_amount: z.number().min(0).default(0),
+    billing_frequency: z.enum(['monthly', 'quarterly', 'yearly']).default('monthly'),
 
     enabled: z.boolean().default(true),
     notes: z.string().optional(),
+    subscription_number: z.string().optional(),
 });
 
 /** Partial schema for PUT (all fields optional except slug comes from params) */
@@ -175,13 +226,21 @@ adminRouter.post('/tenants', async (req, res) => {
     try {
         const { slug, ...fields } = tenantBodySchema.parse(req.body);
         const existing = await tenantStore.getTenant(slug);
+
+        // Auto-generate subscription_number if creating new tenant without one
+        let subscriptionNumber = fields.subscription_number ?? existing?.subscription_number;
+        if (!subscriptionNumber) {
+            subscriptionNumber = await generateSubscriptionNumber();
+        }
+
         const cfg = applyTenantDefaults({
             ...existing,
             ...fields,
+            subscription_number: subscriptionNumber,
             created_at: existing?.created_at ?? new Date().toISOString(),
         });
         await tenantStore.saveTenant(slug, cfg);
-        res.json({ success: true, slug });
+        res.json({ success: true, slug, subscription_number: subscriptionNumber });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
@@ -336,6 +395,90 @@ adminRouter.get('/tenants/:slug/notifications', async (req, res) => {
     }
 });
 
+// ── GET /admin/tenants/:slug/errors — error log ───────────────────────────────
+adminRouter.get('/tenants/:slug/errors', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const errors = await getErrors(req.params.slug);
+        res.json({ errors });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── DELETE /admin/tenants/:slug/errors — clear error log ─────────────────────
+adminRouter.delete('/tenants/:slug/errors', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        await clearErrors(req.params.slug);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── POST /admin/tenants/:slug/send-invoice — send invoice email via Resend ───
+adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        if (!cfg.contact_email) return res.status(400).json({ error: 'Tenant has no contact email configured' });
+        if (!config.resendApiKey) return res.status(503).json({ error: 'Email service not configured (RESEND_API_KEY missing)' });
+
+        const now = new Date();
+        const billingPeriod = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const subNum = cfg.subscription_number || req.params.slug.toUpperCase();
+        const invoiceNumber = `INV-${subNum}-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Compute due date: 15 days from now
+        const dueDate = new Date(now.getTime() + 15 * 86400000).toISOString().split('T')[0];
+
+        // Get plan name
+        const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
+        const planName = plan?.name ?? (cfg.subscription_plan.charAt(0).toUpperCase() + cfg.subscription_plan.slice(1));
+
+        const html = generateInvoiceHTML({
+            tenantName: cfg.name,
+            subscriptionNumber: subNum,
+            planName,
+            billingFrequency: cfg.billing_frequency ?? 'monthly',
+            amount: cfg.monthly_amount,
+            billingPeriod,
+            dueDate,
+            contactName: cfg.contact_name,
+            contactEmail: cfg.contact_email,
+            invoiceNumber,
+        });
+
+        const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${config.resendApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: config.resendFromEmail,
+                to: cfg.contact_email,
+                subject: `Invoice ${invoiceNumber} — ${cfg.name}`,
+                html,
+            }),
+        });
+
+        if (!emailRes.ok) {
+            const err = await emailRes.json().catch(() => ({ message: 'Unknown error' }));
+            return res.status(502).json({ error: 'Email delivery failed', details: err });
+        }
+
+        const result = await emailRes.json();
+        res.json({ status: 'sent', invoice_number: invoiceNumber, email_id: result.id });
+    } catch (error: any) {
+        console.error('Send Invoice Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── GET /admin/stats — platform-wide metrics ──────────────────────────────────
 adminRouter.get('/stats', async (_req, res) => {
     try {
@@ -378,6 +521,95 @@ adminRouter.get('/stats', async (_req, res) => {
             monthly_revenue,
             upcoming_renewals,
         });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── Plan management routes ────────────────────────────────────────────────────
+
+const planSchema = z.object({
+    id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'ID must be lowercase letters, numbers, and hyphens only'),
+    name: z.string().min(1),
+    max_employees: z.number().int().min(0).default(10),
+    billing_frequencies: z.array(z.enum(['monthly', 'quarterly', 'yearly'])).min(1),
+    prices: z.object({
+        monthly: z.number().min(0),
+        quarterly: z.number().min(0),
+        yearly: z.number().min(0),
+    }),
+    support_tier: z.string().min(1),
+    custom_odoo_apps: z.boolean().default(false),
+    is_active: z.boolean().default(true),
+    created_at: z.string().optional(),
+});
+
+// GET /admin/plans
+adminRouter.get('/plans', async (_req, res) => {
+    try {
+        const plans = await planStore.listPlans();
+        res.json(plans);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST /admin/plans — create new plan
+adminRouter.post('/plans', async (req, res) => {
+    try {
+        const data = planSchema.parse(req.body);
+        const existing = await planStore.getPlan(data.id);
+        if (existing) {
+            return res.status(409).json({ error: `Plan '${data.id}' already exists` });
+        }
+        const plan: SubscriptionPlan = {
+            ...data,
+            created_at: data.created_at ?? new Date().toISOString(),
+        };
+        await planStore.savePlan(plan);
+        res.json({ success: true, plan });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
+        }
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT /admin/plans/:planId — update plan
+adminRouter.put('/plans/:planId', async (req, res) => {
+    try {
+        const existing = await planStore.getPlan(req.params.planId);
+        if (!existing) return res.status(404).json({ error: 'Plan not found' });
+
+        const updates = planSchema.partial().parse(req.body);
+        const updated: SubscriptionPlan = { ...existing, ...updates, id: existing.id };
+        await planStore.savePlan(updated);
+        res.json({ success: true, plan: updated });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
+        }
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /admin/plans/:planId
+adminRouter.delete('/plans/:planId', async (req, res) => {
+    try {
+        // Guard: reject if any tenant uses this plan
+        const tenants = await tenantStore.listTenants();
+        const inUse = Object.entries(tenants).filter(([, cfg]) => cfg.subscription_plan === req.params.planId);
+        if (inUse.length > 0) {
+            return res.status(400).json({
+                error: `Cannot delete plan '${req.params.planId}' — ${inUse.length} tenant(s) are using it.`,
+                tenants: inUse.map(([slug, cfg]) => ({ slug, name: cfg.name })),
+            });
+        }
+
+        const deleted = await planStore.deletePlan(req.params.planId);
+        if (!deleted) return res.status(404).json({ error: 'Plan not found' });
+        res.json({ success: true });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

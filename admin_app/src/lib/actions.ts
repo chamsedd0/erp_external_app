@@ -1,7 +1,7 @@
 'use server';
 
 import { api } from './api';
-import type { TenantFormData } from './types';
+import type { TenantFormData, SubscriptionPlan } from './types';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -37,4 +37,28 @@ export async function updateStatusAction(
     revalidatePath(`/clients/${slug}`);
     revalidatePath('/clients');
     revalidatePath('/billing');
+}
+
+// ── Plan actions ──────────────────────────────────────────────────────────────
+
+export async function createPlanAction(plan: Omit<SubscriptionPlan, 'created_at'>) {
+    await api.createPlan(plan);
+    revalidatePath('/billing');
+}
+
+export async function updatePlanAction(id: string, updates: Partial<SubscriptionPlan>) {
+    await api.updatePlan(id, updates);
+    revalidatePath('/billing');
+}
+
+export async function deletePlanAction(id: string) {
+    await api.deletePlan(id);
+    revalidatePath('/billing');
+}
+
+// ── Error log actions ─────────────────────────────────────────────────────────
+
+export async function clearErrorsAction(slug: string) {
+    await api.clearErrors(slug);
+    revalidatePath(`/clients/${slug}`);
 }

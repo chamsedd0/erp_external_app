@@ -2,8 +2,30 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-    title: 'Shadow Portal Admin',
-    description: 'Platform administration dashboard',
+    title: {
+        template: '%s | Shadow Portal',
+        default: 'Shadow Portal Admin',
+    },
+    description: 'Manage tenants, subscriptions, and Odoo ERP integrations from one secure platform.',
+    keywords: ['ERP', 'Odoo', 'tenant management', 'HR portal', 'Shadow Portal'],
+    openGraph: {
+        type: 'website',
+        siteName: 'Shadow Portal',
+        title: 'Shadow Portal Admin',
+        description: 'Multi-tenant Odoo ERP management platform.',
+        images: [{ url: '/og-image.svg', width: 1200, height: 630 }],
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'Shadow Portal Admin',
+        description: 'Multi-tenant Odoo ERP management platform.',
+        images: ['/og-image.svg'],
+    },
+    icons: {
+        icon: [
+            { url: '/icon.svg', type: 'image/svg+xml' },
+        ],
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

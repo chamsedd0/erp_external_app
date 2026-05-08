@@ -3,13 +3,17 @@ import { api } from '@/lib/api';
 import { DSStatCard, DSCard, DSCardHeader, DSCardContent, DSStatusBadge, DSPlanBadge, Th } from '@/components/ui/primitives';
 import { RenewalBadge } from '@/components/renewal-badge';
 import { BillingActions } from './billing-actions';
+import { PlansManager } from './plans-manager';
 import { DollarSign, AlertTriangle, Clock } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Billing — Shadow Portal Admin' };
+export const metadata = { title: 'Billing' };
 
 export default async function BillingPage() {
-    const tenants = await api.listTenants().catch(() => [] as Awaited<ReturnType<typeof api.listTenants>>);
+    const [tenants, plans] = await Promise.all([
+        api.listTenants().catch(() => [] as Awaited<ReturnType<typeof api.listTenants>>),
+        api.listPlans().catch(() => [] as Awaited<ReturnType<typeof api.listPlans>>),
+    ]);
 
     const now = new Date();
     const in7  = new Date(now.getTime() + 7  * 86400000);
@@ -51,6 +55,17 @@ export default async function BillingPage() {
                     Subscription revenue, renewals, and overdue accounts
                 </div>
             </div>
+
+            {/* Subscription Plans */}
+            <DSCard style={{ marginBottom: 24 }}>
+                <DSCardHeader
+                    title="Subscription Plans"
+                    subtitle="Define plan tiers, employee limits, pricing, and support SLA"
+                />
+                <DSCardContent>
+                    <PlansManager plans={plans} />
+                </DSCardContent>
+            </DSCard>
 
             {/* Stats row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>

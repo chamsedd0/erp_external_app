@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="iconG" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+    <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Logo icon -->
+  <rect x="100" y="230" width="80" height="80" rx="18" fill="url(#iconG)"/>
+  <text x="140" y="285" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="34" fill="white" letter-spacing="-1">SP</text>
+
+  <!-- Wordmark -->
+  <text x="205" y="268" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="48" fill="white" letter-spacing="-1.5">Shadow Portal</text>
+  <text x="205" y="300" font-family="system-ui,-apple-system,sans-serif" font-weight="500" font-size="18" fill="#64748B" letter-spacing="4">ADMIN PLATFORM</text>
+
+  <!-- Tagline -->
+  <text x="100" y="370" font-family="system-ui,-apple-system,sans-serif" font-weight="400" font-size="22" fill="#94A3B8">
+    Multi-tenant Odoo ERP management — one secure platform.
+  </text>
+
+  <!-- Decorative right-side accent -->
+  <circle cx="1050" cy="315" r="180" fill="rgba(59,130,246,0.06)"/>
+  <circle cx="1050" cy="315" r="120" fill="rgba(59,130,246,0.06)"/>
+  <circle cx="1050" cy="315" r="60" fill="rgba(59,130,246,0.1)"/>
+</svg>

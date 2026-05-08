@@ -43,6 +43,21 @@ export async function redisDel(key: string): Promise<void> {
     await redisCommand('DEL', key);
 }
 
+/** Prepend value(s) to a Redis list. Returns new list length. */
+export async function redisLPush(key: string, ...values: string[]): Promise<number> {
+    return redisCommand<number>('LPUSH', key, ...values);
+}
+
+/** Return elements from a list between start and stop (inclusive). -1 = last element. */
+export async function redisLRange(key: string, start: number, stop: number): Promise<string[]> {
+    return redisCommand<string[]>('LRANGE', key, start, stop);
+}
+
+/** Trim list to only contain elements between start and stop (inclusive). */
+export async function redisTrim(key: string, start: number, stop: number): Promise<void> {
+    await redisCommand('LTRIM', key, start, stop);
+}
+
 /**
  * Scan for all keys matching a glob pattern.
  * Iterates cursor until complete. Returns all matching keys.

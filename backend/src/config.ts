@@ -9,6 +9,8 @@ const envSchema = z.object({
     ADMIN_SECRET: z.string(),
     UPSTASH_REDIS_REST_URL: z.string(),
     UPSTASH_REDIS_REST_TOKEN: z.string(),
+    RESEND_API_KEY: z.string().optional(),
+    RESEND_FROM_EMAIL: z.string().optional(),
 });
 
 const envVars = envSchema.safeParse(process.env);
@@ -26,4 +28,6 @@ export const config = {
         url: envVars.data.UPSTASH_REDIS_REST_URL,
         token: envVars.data.UPSTASH_REDIS_REST_TOKEN,
     },
+    resendApiKey: envVars.data.RESEND_API_KEY ?? '',
+    resendFromEmail: envVars.data.RESEND_FROM_EMAIL ?? 'billing@shadowportal.app',
 };

@@ -17,10 +17,37 @@ export interface Tenant {
     subscription_start: string;
     subscription_renewal: string;
     monthly_amount: number;
+    billing_frequency?: 'monthly' | 'quarterly' | 'yearly';
+    subscription_number?: string;   // 'SP-00001'
 
     enabled: boolean;
     created_at: string;
     notes?: string;
+}
+
+// ── Subscription Plan ─────────────────────────────────────────────────────────
+
+export interface SubscriptionPlan {
+    id: string;
+    name: string;
+    max_employees: number;          // 0 = unlimited
+    billing_frequencies: Array<'monthly' | 'quarterly' | 'yearly'>;
+    prices: { monthly: number; quarterly: number; yearly: number };
+    support_tier: string;
+    custom_odoo_apps: boolean;
+    is_active: boolean;
+    created_at: string;
+}
+
+// ── Error log ─────────────────────────────────────────────────────────────────
+
+export interface ErrorLogEntry {
+    timestamp: string;
+    method: string;
+    path: string;
+    status: number;
+    error: string;
+    employee_id?: number;
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────

@@ -27,6 +27,10 @@ export interface TenantConfig {
     enabled: boolean;
     created_at: string;           // ISO timestamp
     notes?: string;
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+    subscription_number?: string;   // 'SP-00001' — employee-facing login code (auto-generated)
+    billing_frequency?: 'monthly' | 'quarterly' | 'yearly';
 }
 
 /**
@@ -55,7 +59,25 @@ export function applyTenantDefaults(raw: Partial<TenantConfig>): TenantConfig {
         enabled: raw.enabled ?? true,
         created_at: raw.created_at ?? new Date().toISOString(),
         notes: raw.notes,
+
+        subscription_number: raw.subscription_number ?? '',
+        billing_frequency: raw.billing_frequency ?? 'monthly',
     };
+}
+
+/**
+ * Auto-generate the next subscription number in SP-XXXXX format.
+ * Reads all existing tenants and increments from the highest.
+ */
+export async function generateSubscriptionNumber(): Promise<string> {
+    const all = await tenantStore.listTenants();
+    const nums = Object.values(all)
+        .map(t => t.subscription_number)
+        .filter(Boolean)
+        .map(n => parseInt((n as string).replace('SP-', ''), 10))
+        .filter(n => !isNaN(n));
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `SP-${String(next).padStart(5, '0')}`;
 }
 
 async function readAll(): Promise<Record<string, TenantConfig>> {
