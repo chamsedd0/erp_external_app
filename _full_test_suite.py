@@ -126,6 +126,9 @@ ODOO_EXPECTED_ERRORS = [
     "incompatible companies",
     "you are not allowed",
     "access denied",
+    "overlaps",          # time-off overlap on same day
+    "time off that",     # "you can not set 2 time off that overlaps…"
+    "leave already",
 ]
 
 # ── Admin API tests (platform-level, runs once) ────────────────────────────────
