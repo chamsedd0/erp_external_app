@@ -167,7 +167,16 @@ router.post('/', async (req, res) => {
         if (analyticAccountId) recordData.account_id = analyticAccountId;
         if (body.task_id) recordData.task_id = body.task_id;
 
-        const newId = await client.createRecord(uid, 'account.analytic.line', recordData);
+        let newId: number;
+        try {
+            newId = await client.createRecord(uid, 'account.analytic.line', recordData) as number;
+        } catch (createErr: any) {
+            const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
+            if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('invalid field') || msg.includes('object')) {
+                return res.json({ available: false, message: 'Timesheet module not available on this Odoo instance.' });
+            }
+            throw createErr;
+        }
 
         res.json({ status: 'success', id: newId });
     } catch (error: any) {

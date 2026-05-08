@@ -308,7 +308,14 @@ tenants = [
         "leave_type_id": None,  # leave module not installed on V18
         "product_id": 28,       # Communication (from lavendary instance)
     },
-    # technostream-v16: instance is down (404) — skip
+    # technostream-v16: instance is down (404) — skip (URL was a typo)
+    {
+        "slug": "energytracks-v19",
+        "emp_barcode": "19200002", "emp_pin": "2222", "emp_id": 2,
+        "project_id": 1,      # ET-J26-0009 - DEM
+        "leave_type_id": 1,   # Paid Time Off
+        "product_id": 5,      # Communication
+    },
 ]
 
 target = sys.argv[1] if len(sys.argv) > 1 else None
