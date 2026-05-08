@@ -197,6 +197,8 @@ router.post('/', async (req, res) => {
             if (msg.includes('schedule_date') || msg.includes('duration') || msg.includes('invalid field')) {
                 console.warn('[maintenance] schedule_date/duration rejected, retrying without them:', msg);
                 newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
+            } else if (msg.includes('incompatible companies') || msg.includes('company')) {
+                return res.status(400).json({ error: 'Incompatible companies: the employee belongs to a different company than the maintenance team. Please contact your administrator.' });
             } else {
                 throw createErr;
             }

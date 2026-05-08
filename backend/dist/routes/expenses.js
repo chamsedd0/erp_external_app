@@ -224,6 +224,9 @@ router.post('/', async (req, res) => {
                     newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
                 }
             }
+            else if (msg1.includes('incompatible companies') || msg1.includes('company')) {
+                return res.status(400).json({ error: 'Incompatible companies: the selected product belongs to a different company than the employee. Please choose a product from the same company.' });
+            }
             else {
                 throw err1;
             }

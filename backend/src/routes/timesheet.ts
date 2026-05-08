@@ -36,15 +36,24 @@ router.get('/', async (req, res) => {
 
         const uid = await client.authenticate();
 
-        const entries: any = await client.searchRead(
-            uid,
-            'account.analytic.line',
-            [
-                ['employee_id', '=', parsedEmployeeId],
-                ['project_id', '!=', false],
-            ],
-            ['id', 'name', 'project_id', 'task_id', 'date', 'unit_amount', 'create_date']
-        );
+        let entries: any;
+        try {
+            entries = await client.searchRead(
+                uid,
+                'account.analytic.line',
+                [
+                    ['employee_id', '=', parsedEmployeeId],
+                    ['project_id', '!=', false],
+                ],
+                ['id', 'name', 'project_id', 'task_id', 'date', 'unit_amount', 'create_date']
+            );
+        } catch (e: any) {
+            const msg = String(e?.faultString || e?.message || '').toLowerCase();
+            if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('invalid field')) {
+                return res.json({ entries: [], available: false, message: 'Timesheet module not available on this Odoo instance.' });
+            }
+            throw e;
+        }
 
         const sorted = Array.isArray(entries)
             ? entries
@@ -67,9 +76,18 @@ router.get('/projects', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
-        const projects: any = await client.searchRead(
-            uid, 'project.project', [['active', '=', true]], ['id', 'name']
-        );
+        let projects: any;
+        try {
+            projects = await client.searchRead(
+                uid, 'project.project', [['active', '=', true]], ['id', 'name']
+            );
+        } catch (e: any) {
+            const msg = String(e?.faultString || e?.message || '').toLowerCase();
+            if (msg.includes("doesn't exist") || msg.includes('does not exist')) {
+                return res.json({ projects: [], available: false, message: 'Project module not available on this Odoo instance.' });
+            }
+            throw e;
+        }
         res.json({ projects: Array.isArray(projects) ? projects : [] });
     } catch (error: any) {
         console.error('Fetch Projects Error:', error);

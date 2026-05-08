@@ -78,6 +78,9 @@ router.get('/', async (req, res) => {
             if (msg.includes('access denied') || msg.includes('no access')) {
                 return res.json({ records: [], message: 'Attendance records not accessible — check Odoo access rights.' });
             }
+            if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('object')) {
+                return res.json({ records: [], available: false, message: 'Attendance module not available on this Odoo instance.' });
+            }
             throw e;
         }
 
@@ -164,7 +167,16 @@ router.post('/correction', async (req, res) => {
             recordData.check_out = toOdooDatetime(body.check_out);
         }
 
-        const newId = await client.createRecord(uid, 'hr.attendance', recordData) as number;
+        let newId: number;
+        try {
+            newId = await client.createRecord(uid, 'hr.attendance', recordData) as number;
+        } catch (createErr: any) {
+            const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
+            if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('object')) {
+                return res.json({ available: false, message: 'Attendance module not available on this Odoo instance.' });
+            }
+            throw createErr;
+        }
 
         // Attach reason as a message on the record chatter (best-effort, not all configs support it)
         if (body.reason) {

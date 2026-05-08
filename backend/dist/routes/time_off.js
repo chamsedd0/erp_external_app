@@ -95,6 +95,9 @@ router.get('/', async (req, res) => {
                 leaveTypeField = '';
                 leaves = await client.searchRead(uid, 'hr.leave', domain, safeFields);
             }
+            else if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('Object')) {
+                return res.json({ leaves: [], available: false, message: 'Time-off module not available on this Odoo instance.' });
+            }
             else {
                 throw e;
             }
