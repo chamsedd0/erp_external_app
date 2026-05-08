@@ -38,8 +38,8 @@ def req(method, path, body=None, token=None, admin=False, _retry=2):
         return resp.status, json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         if e.code == 429 and _retry > 0:
-            print(f"  [429] rate-limited on {path}, sleeping 20s and retrying …")
-            time.sleep(20)
+            print(f"  [429] rate-limited on {path}, sleeping 65s and retrying …")
+            time.sleep(65)
             return req(method, path, body=body, token=token, admin=admin, _retry=_retry - 1)
         raw = e.read()
         try:
