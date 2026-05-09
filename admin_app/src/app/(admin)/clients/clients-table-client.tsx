@@ -8,7 +8,7 @@ import { RenewalBadge } from '@/components/renewal-badge';
 import { HealthCheck } from '@/components/health-check';
 import { Search, Eye, Pencil, Building2 } from 'lucide-react';
 
-const PLAN_ORDER = { starter: 0, professional: 1, enterprise: 2 };
+const PLAN_ORDER: Record<string, number> = { starter: 0, professional: 1, enterprise: 2 };
 
 type SortKey = 'name' | 'plan' | 'status' | 'renewal' | 'amount';
 
@@ -45,7 +45,7 @@ export function ClientsTableClient({ tenants }: Props) {
         list.sort((a, b) => {
             let cmp = 0;
             if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
-            else if (sortKey === 'plan') cmp = PLAN_ORDER[a.subscription_plan] - PLAN_ORDER[b.subscription_plan];
+            else if (sortKey === 'plan') cmp = (PLAN_ORDER[a.subscription_plan] ?? 999) - (PLAN_ORDER[b.subscription_plan] ?? 999);
             else if (sortKey === 'status') cmp = a.subscription_status.localeCompare(b.subscription_status);
             else if (sortKey === 'renewal') cmp = a.subscription_renewal.localeCompare(b.subscription_renewal);
             else if (sortKey === 'amount') cmp = a.monthly_amount - b.monthly_amount;
