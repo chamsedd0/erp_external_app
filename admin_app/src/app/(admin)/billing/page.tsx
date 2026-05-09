@@ -15,6 +15,8 @@ export default async function BillingPage() {
         api.listPlans().catch(() => [] as Awaited<ReturnType<typeof api.listPlans>>),
     ]);
 
+    const planMap = new Map(plans.map(p => [p.id, p]));
+
     const now = new Date();
     const in7  = new Date(now.getTime() + 7  * 86400000);
     const in14 = new Date(now.getTime() + 14 * 86400000);
@@ -229,7 +231,20 @@ export default async function BillingPage() {
                                     <td style={{ padding: '12px 16px' }}><DSStatusBadge status={t.subscription_status} /></td>
                                     <td style={{ padding: '12px 16px' }}><RenewalBadge date={t.subscription_renewal} /></td>
                                     <td style={{ padding: '12px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: '#0F172A' }}>
-                                        ${t.monthly_amount.toLocaleString()}
+                                        {planMap.get(t.subscription_plan)?.pricing_model === 'per_employee' ? (
+                                            <div>
+                                                <div style={{ fontSize: 12, color: '#3B82F6', fontWeight: 600 }}>
+                                                    ${planMap.get(t.subscription_plan)!.price_per_employee}/emp/mo
+                                                </div>
+                                                {t.monthly_amount > 0 && (
+                                                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                                                        override: ${t.monthly_amount.toLocaleString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            `$${t.monthly_amount.toLocaleString()}`
+                                        )}
                                     </td>
                                 </tr>
                             ))}

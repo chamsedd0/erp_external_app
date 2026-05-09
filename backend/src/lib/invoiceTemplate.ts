@@ -3,22 +3,30 @@ export interface InvoiceParams {
     subscriptionNumber: string;   // 'SP-00001'
     planName: string;
     billingFrequency: string;     // 'monthly' | 'quarterly' | 'yearly'
-    amount: number;               // in USD
+    amount: number;               // in USD (total; for per-employee = activeEmployees * pricePerEmployee)
     billingPeriod: string;        // e.g. 'May 2026'
     dueDate: string;              // e.g. '2026-06-01'
     contactName: string;
     contactEmail: string;
     invoiceNumber: string;        // 'INV-SP-00001-2026-05'
+    activeEmployees?: number;     // set for per_employee pricing model
+    pricePerEmployee?: number;    // USD/employee/month; set for per_employee pricing model
 }
 
 export function generateInvoiceHTML(p: InvoiceParams): string {
     const formattedAmount = p.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
     const formattedDue = new Date(p.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const frequencyLabel = p.billingFrequency === 'monthly'
-        ? 'Monthly subscription'
-        : p.billingFrequency === 'quarterly'
-            ? 'Quarterly subscription'
-            : 'Annual subscription';
+    const isPerEmployee = p.activeEmployees !== undefined && p.pricePerEmployee !== undefined;
+    const frequencyLabel = isPerEmployee
+        ? 'Per-employee subscription'
+        : p.billingFrequency === 'monthly'
+            ? 'Monthly subscription'
+            : p.billingFrequency === 'quarterly'
+                ? 'Quarterly subscription'
+                : 'Annual subscription';
+    const lineItemSubtext = isPerEmployee
+        ? `${p.activeEmployees} active employee${p.activeEmployees !== 1 ? 's' : ''} × $${p.pricePerEmployee?.toLocaleString('en-US')}/employee/month`
+        : p.billingPeriod;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -102,7 +110,7 @@ export function generateInvoiceHTML(p: InvoiceParams): string {
                 <tr>
                   <td style="padding:16px;border-bottom:1px solid #F1F5F9;">
                     <div style="font-size:14px;font-weight:500;color:#0F172A;">${frequencyLabel} — ${p.planName} Plan</div>
-                    <div style="font-size:12px;color:#94A3B8;margin-top:3px;">${p.billingPeriod}</div>
+                    <div style="font-size:12px;color:#94A3B8;margin-top:3px;">${lineItemSubtext}</div>
                   </td>
                   <td style="padding:16px;border-bottom:1px solid #F1F5F9;text-align:right;font-size:14px;font-weight:600;color:#0F172A;font-variant-numeric:tabular-nums;">${formattedAmount}</td>
                 </tr>

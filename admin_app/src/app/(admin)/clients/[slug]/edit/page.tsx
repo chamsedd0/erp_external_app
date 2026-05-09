@@ -15,7 +15,10 @@ export default async function EditClientPage({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const tenant = await api.getTenant(slug).catch(() => null);
+    const [tenant, plans] = await Promise.all([
+        api.getTenant(slug).catch(() => null),
+        api.listPlans().catch(() => []),
+    ]);
     if (!tenant) notFound();
 
     return (
@@ -32,7 +35,7 @@ export default async function EditClientPage({
                     Update connection, contact, and subscription details
                 </div>
             </div>
-            <TenantForm tenant={tenant} />
+            <TenantForm tenant={tenant} plans={plans} />
         </div>
     );
 }

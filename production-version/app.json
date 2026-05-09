@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
@@ -68,6 +68,7 @@
       "eas": {
         "projectId": "a5188e96-aef8-46b7-827e-0df8b9c75fe7"
       }
-    }
+    },
+    "owner": "chams3445"
   }
 }

@@ -23,6 +23,8 @@ const EMPTY_PLAN: Omit<SubscriptionPlan, 'created_at'> = {
     support_tier: '',
     custom_odoo_apps: false,
     is_active: true,
+    pricing_model: 'fixed',
+    price_per_employee: 0,
 };
 
 // ── Plan form (used for create and edit) ──────────────────────────────────────
@@ -86,23 +88,69 @@ function PlanForm({
                 </div>
             </div>
 
-            {/* Prices */}
+            {/* Pricing Model toggle */}
             <div style={{ marginTop: 12 }}>
-                <label style={labelStyle}>Prices (USD/month equivalent)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                    {(['monthly', 'quarterly', 'yearly'] as const).map(f => (
-                        <div key={f}>
-                            <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 3 }}>{FREQ_LABELS[f]}</div>
-                            <input
-                                type="number" min={0}
-                                value={form.prices[f]}
-                                onChange={e => setField('prices', { ...form.prices, [f]: parseFloat(e.target.value) || 0 })}
-                                style={inputStyle}
-                            />
-                        </div>
+                <label style={labelStyle}>Pricing Model</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    {(['fixed', 'per_employee'] as const).map(model => (
+                        <button
+                            key={model} type="button"
+                            onClick={() => {
+                                setField('pricing_model', model);
+                                if (model === 'per_employee') {
+                                    setField('max_employees', 0); // unlimited when billing by headcount
+                                }
+                            }}
+                            style={{
+                                height: 32, padding: '0 14px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                                background: form.pricing_model === model ? '#EFF6FF' : '#F8FAFC',
+                                color: form.pricing_model === model ? '#2563EB' : '#64748B',
+                                border: `1px solid ${form.pricing_model === model ? '#BFDBFE' : '#E2E8F0'}`,
+                                cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                        >
+                            {model === 'fixed' ? '● Fixed Price' : '○ Per Employee'}
+                        </button>
                     ))}
                 </div>
             </div>
+
+            {/* Prices — only for fixed pricing */}
+            {(form.pricing_model ?? 'fixed') === 'fixed' && (
+                <div style={{ marginTop: 12 }}>
+                    <label style={labelStyle}>Prices (USD/month equivalent)</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                        {(['monthly', 'quarterly', 'yearly'] as const).map(f => (
+                            <div key={f}>
+                                <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 3 }}>{FREQ_LABELS[f]}</div>
+                                <input
+                                    type="number" min={0}
+                                    value={form.prices[f]}
+                                    onChange={e => setField('prices', { ...form.prices, [f]: parseFloat(e.target.value) || 0 })}
+                                    style={inputStyle}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Per-employee rate — only for per_employee pricing */}
+            {form.pricing_model === 'per_employee' && (
+                <div style={{ marginTop: 12 }}>
+                    <label style={labelStyle}>Price per employee per month (USD)</label>
+                    <input
+                        type="number" min={0} step={1}
+                        value={form.price_per_employee ?? 0}
+                        onChange={e => setField('price_per_employee', parseFloat(e.target.value) || 0)}
+                        placeholder="e.g. 25"
+                        style={{ ...inputStyle, maxWidth: 160 }}
+                    />
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                        Monthly retainer = active employees × this rate. Calculated automatically at billing time.
+                    </div>
+                </div>
+            )}
 
             {/* Billing frequencies */}
             <div style={{ marginTop: 12 }}>
@@ -269,14 +317,23 @@ export function PlansManager({ plans }: { plans: SubscriptionPlan[] }) {
 
                             {/* Center: prices */}
                             <div style={{ display: 'flex', gap: 12, textAlign: 'center', flexShrink: 0 }}>
-                                {plan.billing_frequencies.map(f => (
-                                    <div key={f}>
-                                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                                            ${plan.prices[f]}
+                                {(plan.pricing_model ?? 'fixed') === 'per_employee' ? (
+                                    <div>
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
+                                            ${plan.price_per_employee ?? 0}
                                         </div>
-                                        <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{FREQ_LABELS[f]}</div>
+                                        <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>/ emp / mo</div>
                                     </div>
-                                ))}
+                                ) : (
+                                    plan.billing_frequencies.map(f => (
+                                        <div key={f}>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                ${plan.prices[f]}
+                                            </div>
+                                            <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{FREQ_LABELS[f]}</div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
 
                             {/* Right: actions */}

@@ -12,7 +12,7 @@ export interface Tenant {
     contact_email: string;
     contact_phone?: string;
 
-    subscription_plan: 'starter' | 'professional' | 'enterprise';
+    subscription_plan: string;   // plan id — 'starter' | 'professional' | 'enterprise' or any custom plan
     subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled';
     subscription_start: string;
     subscription_renewal: string;
@@ -37,6 +37,8 @@ export interface SubscriptionPlan {
     custom_odoo_apps: boolean;
     is_active: boolean;
     created_at: string;
+    pricing_model: 'fixed' | 'per_employee';
+    price_per_employee?: number;    // USD/employee/month; only when pricing_model = 'per_employee'
 }
 
 // ── Error log ─────────────────────────────────────────────────────────────────

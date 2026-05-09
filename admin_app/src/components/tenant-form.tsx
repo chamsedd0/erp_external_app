@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Tenant, TenantFormData } from '@/lib/types';
+import type { Tenant, TenantFormData, SubscriptionPlan } from '@/lib/types';
 import {
     DSCard,
     DSCardHeader,
@@ -19,6 +19,7 @@ import { Hash, Globe, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 interface Props {
     tenant?: Tenant;
     isNew?: boolean;
+    plans?: SubscriptionPlan[];
 }
 
 const EMPTY: TenantFormData = {
@@ -41,11 +42,7 @@ const EMPTY: TenantFormData = {
     notes: '',
 };
 
-const PLAN_DEFAULTS: Record<string, number> = {
-    starter: 199, professional: 599, enterprise: 1499,
-};
-
-export function TenantForm({ tenant, isNew = false }: Props) {
+export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [slug, setSlug] = useState('');
@@ -331,15 +328,27 @@ export function TenantForm({ tenant, isNew = false }: Props) {
                             <DSSelectInput
                                 value={form.subscription_plan}
                                 onChange={(e) => {
-                                    const plan = e.target.value;
-                                    set('subscription_plan', plan as TenantFormData['subscription_plan']);
-                                    set('monthly_amount', PLAN_DEFAULTS[plan] ?? form.monthly_amount);
+                                    const planId = e.target.value;
+                                    set('subscription_plan', planId);
+                                    const selected = plans.find(p => p.id === planId);
+                                    if (selected?.pricing_model === 'fixed') {
+                                        set('monthly_amount', selected.prices.monthly);
+                                    }
                                 }}
-                                options={[
-                                    { value: 'starter', label: 'Starter — $199/mo' },
-                                    { value: 'professional', label: 'Professional — $599/mo' },
-                                    { value: 'enterprise', label: 'Enterprise — $1,499/mo' },
-                                ]}
+                                options={
+                                    plans.length > 0
+                                        ? plans.filter(p => p.is_active).map(p => ({
+                                            value: p.id,
+                                            label: p.pricing_model === 'per_employee'
+                                                ? `${p.name} — $${p.price_per_employee}/emp/mo`
+                                                : `${p.name} — $${p.prices.monthly}/mo`,
+                                        }))
+                                        : [
+                                            { value: 'starter', label: 'Starter — $199/mo' },
+                                            { value: 'professional', label: 'Professional — $599/mo' },
+                                            { value: 'enterprise', label: 'Enterprise — $1,499/mo' },
+                                        ]
+                                }
                             />
                         </DSField>
                         <DSField label="Status">
@@ -366,15 +375,45 @@ export function TenantForm({ tenant, isNew = false }: Props) {
                                 ]}
                             />
                         </DSField>
-                        <DSField label="Monthly amount (USD)">
-                            <DSTextInput
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={form.monthly_amount}
-                                onChange={(e) => set('monthly_amount', Number(e.target.value))}
-                            />
-                        </DSField>
+                        {(() => {
+                            const selectedPlan = plans.find(p => p.id === form.subscription_plan);
+                            const isPerEmp = selectedPlan?.pricing_model === 'per_employee';
+                            return isPerEmp ? (
+                                <div style={{ gridColumn: 'span 3' }}>
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        padding: '10px 12px', background: '#EFF6FF',
+                                        border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 13,
+                                        color: '#1E40AF',
+                                    }}>
+                                        <Zap size={13} />
+                                        <span>
+                                            <strong>Pay-as-you-go:</strong> ${selectedPlan!.price_per_employee}/employee/month
+                                            — final amount calculated from active employee count at billing time.
+                                        </span>
+                                    </div>
+                                    <DSField label="Override amount (USD)" hint="Leave 0 to use live calculation">
+                                        <DSTextInput
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={form.monthly_amount}
+                                            onChange={(e) => set('monthly_amount', Number(e.target.value))}
+                                        />
+                                    </DSField>
+                                </div>
+                            ) : (
+                                <DSField label="Monthly amount (USD)">
+                                    <DSTextInput
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={form.monthly_amount}
+                                        onChange={(e) => set('monthly_amount', Number(e.target.value))}
+                                    />
+                                </DSField>
+                            );
+                        })()}
                         <DSField label="Start date" required>
                             <DSTextInput
                                 type="date"

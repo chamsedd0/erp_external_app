@@ -453,21 +453,33 @@ adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
         // Compute due date: 15 days from now
         const dueDate = new Date(now.getTime() + 15 * 86400000).toISOString().split('T')[0];
 
-        // Get plan name
+        // Get plan name and compute effective amount
         const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
         const planName = plan?.name ?? (cfg.subscription_plan.charAt(0).toUpperCase() + cfg.subscription_plan.slice(1));
+
+        let invoiceAmount = cfg.monthly_amount;
+        let activeEmployees: number | undefined;
+        let pricePerEmployee: number | undefined;
+        if (plan?.pricing_model === 'per_employee' && plan.price_per_employee) {
+            const devices = await pushStore.listDevicesForTenant(req.params.slug).catch(() => [] as any[]);
+            activeEmployees = devices.length;
+            pricePerEmployee = plan.price_per_employee;
+            invoiceAmount = activeEmployees * pricePerEmployee;
+        }
 
         const html = generateInvoiceHTML({
             tenantName: cfg.name,
             subscriptionNumber: subNum,
             planName,
             billingFrequency: cfg.billing_frequency ?? 'monthly',
-            amount: cfg.monthly_amount,
+            amount: invoiceAmount,
             billingPeriod,
             dueDate,
             contactName: cfg.contact_name,
             contactEmail: cfg.contact_email,
             invoiceNumber,
+            activeEmployees,
+            pricePerEmployee,
         });
 
         const emailRes = await fetch('https://api.resend.com/emails', {
@@ -513,9 +525,25 @@ adminRouter.get('/stats', async (_req, res) => {
         const allTokens = await pushStore.listAllTokens().catch(() => [] as { tenantId: string; employeeId: number }[]);
         const total_push_tokens = allTokens.length;
 
-        const monthly_revenue = cfgs
-            .filter(t => t.enabled && ['active', 'overdue'].includes(t.subscription_status))
-            .reduce((sum, t) => sum + (t.monthly_amount ?? 0), 0);
+        // Load plans once to resolve per-employee rates
+        const allPlans = await planStore.listPlans().catch(() => [] as SubscriptionPlan[]);
+        const planMap = new Map(allPlans.map(p => [p.id, p]));
+
+        // MRR: for per-employee plans, compute dynamically from active device count
+        const billingTenants = slugs.filter(slug =>
+            tenants[slug].enabled && ['active', 'overdue'].includes(tenants[slug].subscription_status)
+        );
+        let monthly_revenue = 0;
+        for (const slug of billingTenants) {
+            const t = tenants[slug];
+            const plan = planMap.get(t.subscription_plan);
+            if (plan?.pricing_model === 'per_employee' && plan.price_per_employee) {
+                const devices = await pushStore.listDevicesForTenant(slug).catch(() => [] as any[]);
+                monthly_revenue += devices.length * plan.price_per_employee;
+            } else {
+                monthly_revenue += t.monthly_amount ?? 0;
+            }
+        }
 
         // Renewals in next 30 days
         const now = new Date();
@@ -560,6 +588,8 @@ const planSchema = z.object({
     custom_odoo_apps: z.boolean().default(false),
     is_active: z.boolean().default(true),
     created_at: z.string().optional(),
+    pricing_model: z.enum(['fixed', 'per_employee']).default('fixed'),
+    price_per_employee: z.number().min(0).optional(),
 });
 
 // GET /admin/plans

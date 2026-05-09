@@ -10,6 +10,8 @@ export interface SubscriptionPlan {
     custom_odoo_apps: boolean;
     is_active: boolean;
     created_at: string;
+    pricing_model: 'fixed' | 'per_employee';             // 'fixed' = flat rate; 'per_employee' = rate × active headcount
+    price_per_employee?: number;                         // USD/employee/month; only used when pricing_model = 'per_employee'
 }
 
 const PLANS_KEY = 'shadow:plans';
@@ -25,6 +27,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
         custom_odoo_apps: false,
         is_active: true,
         created_at: '2025-01-01T00:00:00.000Z',
+        pricing_model: 'fixed',
     },
     {
         id: 'professional',
@@ -36,6 +39,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
         custom_odoo_apps: false,
         is_active: true,
         created_at: '2025-01-01T00:00:00.000Z',
+        pricing_model: 'fixed',
     },
     {
         id: 'enterprise',
@@ -47,6 +51,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
         custom_odoo_apps: true,
         is_active: true,
         created_at: '2025-01-01T00:00:00.000Z',
+        pricing_model: 'fixed',
     },
 ];
 

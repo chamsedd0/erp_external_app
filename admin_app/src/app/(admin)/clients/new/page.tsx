@@ -1,10 +1,13 @@
 import Link from 'next/link';
+import { api } from '@/lib/api';
 import { TenantForm } from '@/components/tenant-form';
 import { ChevronLeft } from 'lucide-react';
 
 export const metadata = { title: 'Add New Client — Shadow Portal Admin' };
 
-export default function NewClientPage() {
+export default async function NewClientPage() {
+    const plans = await api.listPlans().catch(() => []);
+
     return (
         <div className="page-fade" style={{ padding: 32, maxWidth: 1280, margin: '0 auto' }}>
             <Link href="/clients" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748B', textDecoration: 'none', marginBottom: 16 }}>
@@ -17,7 +20,7 @@ export default function NewClientPage() {
                     Provision a new tenant and link their Odoo instance
                 </div>
             </div>
-            <TenantForm isNew />
+            <TenantForm isNew plans={plans} />
         </div>
     );
 }

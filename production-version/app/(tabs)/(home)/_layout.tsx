@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { Platform, useColorScheme } from 'react-native';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
+// expo-glass-effect requires native module not available in Expo Go / Android
+const isLiquidGlassAvailable = () => false;
 import { useColor } from '@/hooks/useColor';
 import { Text } from '@/components/ui/text';
 
