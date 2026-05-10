@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { sendOdooError } from '../odoo/parseError';
 
 const router = Router();
 
@@ -279,8 +280,7 @@ router.post('/', async (req, res) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
-        console.error('Create Leave Error:', error);
-        res.status(500).json({ error: error.message });
+        return sendOdooError(res, error, 'Create Leave');
     }
 });
 

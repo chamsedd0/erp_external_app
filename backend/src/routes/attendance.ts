@@ -5,6 +5,7 @@ import { tenantStore } from '../lib/tenantStore';
 import { attachmentSchema } from './helpdesk';
 import { getLeaveTypeField } from './time_off';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { sendOdooError } from '../odoo/parseError';
 
 const router = Router();
 
@@ -216,8 +217,7 @@ router.post('/correction', async (req, res) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
-        console.error('Create Attendance Correction Error:', error);
-        res.status(500).json({ error: error.message });
+        return sendOdooError(res, error, 'Create Attendance Correction');
     }
 });
 
@@ -290,8 +290,7 @@ router.post('/overtime', async (req, res) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
-        console.error('Create Overtime Request Error:', error);
-        res.status(500).json({ error: error.message });
+        return sendOdooError(res, error, 'Create Overtime Request');
     }
 });
 
@@ -365,8 +364,7 @@ router.post('/justification', async (req, res) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
-        console.error('Create Absence Justification Error:', error);
-        res.status(500).json({ error: error.message });
+        return sendOdooError(res, error, 'Create Absence Justification');
     }
 });
 
