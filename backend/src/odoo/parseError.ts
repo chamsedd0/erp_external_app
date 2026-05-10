@@ -54,8 +54,12 @@ const PATTERNS: Array<{ re: RegExp; msg: string }> = [
       msg: 'This project or period is locked. Contact your manager to unlock it.' },
     { re: /task.*not.*found|task.*not.*belong|task.*project/i,
       msg: 'The selected task does not belong to this project. Please re-select.' },
-    { re: /overtime.*already|overtime.*exist/i,
+    { re: /overtime.*already|overtime.*exist|attendance_overtime_unique/i,
       msg: 'An overtime record already exists for this date.' },
+
+    // PostgreSQL-level duplicate key / unique constraint (Odoo surfaces DB errors verbatim)
+    { re: /duplicate key value.*unique constraint|violates unique constraint/i,
+      msg: 'A duplicate record already exists. Please check for existing entries before submitting again.' },
 
     // Maintenance / helpdesk
     { re: /equipment.*not.*found|equipment.*deleted/i,
