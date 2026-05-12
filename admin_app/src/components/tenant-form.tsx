@@ -44,7 +44,7 @@ const EMPTY: TenantFormData = {
     contact_email: '',
     contact_phone: '',
     subscription_plan: 'starter',
-    subscription_status: 'trial',
+    subscription_status: 'draft',
     subscription_start: new Date().toISOString().slice(0, 10),
     subscription_renewal: '',
     monthly_amount: 199,

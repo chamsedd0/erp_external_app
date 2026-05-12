@@ -542,12 +542,8 @@ adminRouter.post('/tenants/:slug/send-quotation', async (req, res) => {
     }
 });
 
-// ── POST /admin/tenants/:slug/activate — set Odoo creds, generate SP#, go live ─
+// ── POST /admin/tenants/:slug/activate — set status to trial, generate SP# ────
 const activateSchema = z.object({
-    odoo_url: z.string().url(),
-    odoo_db: z.string().min(1),
-    odoo_username: z.string().min(1),
-    odoo_password: z.string().min(1),
     subscription_start: z.string().optional(),
     subscription_renewal: z.string().optional(),
 });
@@ -561,10 +557,10 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
 
         const subNum = existing.subscription_number || await generateSubscriptionNumber();
         const today = new Date().toISOString().split('T')[0];
-        const start = data.subscription_start || today;
+        const start = data.subscription_start || existing.subscription_start || today;
         const freq = existing.billing_frequency ?? 'monthly';
 
-        let renewal = data.subscription_renewal;
+        let renewal = data.subscription_renewal || existing.subscription_renewal;
         if (!renewal) {
             const d = new Date(start + 'T12:00:00');
             if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
@@ -575,7 +571,6 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
 
         const updated = applyTenantDefaults({
             ...existing,
-            ...data,
             subscription_number: subNum,
             subscription_status: 'trial',
             subscription_start: start,

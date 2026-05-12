@@ -88,18 +88,10 @@ export async function deletePlanAction(id: string) {
 // ── Tenant activation ─────────────────────────────────────────────────────────
 
 export async function activateTenantAction(
-    slug: string,
-    data: {
-        odoo_url: string;
-        odoo_db: string;
-        odoo_username: string;
-        odoo_password: string;
-        subscription_start?: string;
-        subscription_renewal?: string;
-    }
+    slug: string
 ): Promise<{ success: boolean; error?: string; subscription_number?: string }> {
     try {
-        const result = await api.activateTenant(slug, data);
+        const result = await api.activateTenant(slug);
         revalidatePath(`/clients/${slug}`);
         revalidatePath('/clients');
         return { success: true, subscription_number: result.subscription_number };

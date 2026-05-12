@@ -416,53 +416,15 @@ function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
 
 function ActivateClientCard({ tenant }: { tenant: Tenant }) {
     const router = useRouter();
-    const [open, setOpen] = useState(false);
-    const [form, setForm] = useState({ odoo_url: '', odoo_db: '', odoo_username: '', odoo_password: '' });
     const [pending, setPending] = useState(false);
-    const [testing, setTesting] = useState(false);
-    const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
     const [error, setError] = useState('');
     const [done, setDone] = useState('');
 
-    function setField(k: keyof typeof form, v: string) {
-        setForm(prev => ({ ...prev, [k]: v }));
-        setTestResult(null); // clear stale test result when creds change
-    }
-
-    async function handleTest() {
-        if (!form.odoo_url || !form.odoo_db || !form.odoo_username || !form.odoo_password) {
-            setTestResult({ ok: false, text: 'Fill in all fields first' });
-            return;
-        }
-        setTesting(true);
-        setTestResult(null);
-        try {
-            const res = await fetch('/api/admin/health/probe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
-            });
-            const data = await res.json();
-            setTestResult(data.ok
-                ? { ok: true, text: `Connected — Odoo v${data.odoo_version ?? '?'} (${data.latency_ms}ms)` }
-                : { ok: false, text: `Failed: ${data.error ?? 'Unreachable'}` }
-            );
-        } catch {
-            setTestResult({ ok: false, text: 'Request failed' });
-        } finally {
-            setTesting(false);
-        }
-    }
-
     async function handleActivate() {
-        if (!form.odoo_url || !form.odoo_db || !form.odoo_username || !form.odoo_password) {
-            setError('All Odoo fields are required');
-            return;
-        }
         setPending(true);
         setError('');
         setDone('');
-        const result = await activateTenantAction(tenant.slug, form);
+        const result = await activateTenantAction(tenant.slug);
         setPending(false);
         if (!result.success) {
             setError(result.error ?? 'Activation failed');
@@ -476,81 +438,27 @@ function ActivateClientCard({ tenant }: { tenant: Tenant }) {
         <DSCard style={{ borderColor: '#BFDBFE', background: '#EFF6FF' }}>
             <DSCardHeader
                 title="Activate Client"
-                subtitle="Add Odoo credentials to complete setup and move client to Trial"
+                subtitle="Generate subscription number and move this client to Trial status"
             />
             <DSCardContent>
-                {!open ? (
-                    <Btn leftIcon={<Zap size={14} />} onClick={() => setOpen(true)}>
-                        Activate Client
-                    </Btn>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <DSField label="Odoo URL" required>
-                                <DSTextInput
-                                    type="url"
-                                    placeholder="https://acme.odoo.com"
-                                    value={form.odoo_url}
-                                    onChange={e => setField('odoo_url', e.target.value)}
-                                />
-                            </DSField>
-                            <DSField label="Odoo Database" required>
-                                <DSTextInput
-                                    placeholder="acme_prod"
-                                    value={form.odoo_db}
-                                    onChange={e => setField('odoo_db', e.target.value)}
-                                />
-                            </DSField>
-                            <DSField label="Odoo Username" required>
-                                <DSTextInput
-                                    placeholder="admin@acme.example"
-                                    value={form.odoo_username}
-                                    onChange={e => setField('odoo_username', e.target.value)}
-                                />
-                            </DSField>
-                            <DSField label="Odoo Password" required>
-                                <DSTextInput
-                                    type="password"
-                                    placeholder="Odoo user password"
-                                    value={form.odoo_password}
-                                    onChange={e => setField('odoo_password', e.target.value)}
-                                />
-                            </DSField>
-                        </div>
-                        {testResult && (
-                            <div style={{
-                                fontSize: 13, padding: '8px 12px', borderRadius: 6,
-                                background: testResult.ok ? '#ECFDF5' : '#FEF2F2',
-                                border: `1px solid ${testResult.ok ? '#A7F3D0' : '#FECACA'}`,
-                                color: testResult.ok ? '#065F46' : '#991B1B',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                            }}>
-                                {testResult.text}
-                            </div>
-                        )}
-                        {error && (
-                            <div style={{ fontSize: 13, color: '#991B1B', padding: '8px 12px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA' }}>
-                                {error}
-                            </div>
-                        )}
-                        {done && (
-                            <div style={{ fontSize: 13, color: '#166534', padding: '8px 12px', background: '#F0FDF4', borderRadius: 6, border: '1px solid #BBF7D0' }}>
-                                {done}
-                            </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <Btn onClick={handleActivate} disabled={pending} leftIcon={<Zap size={14} />}>
-                                {pending ? 'Activating…' : 'Confirm Activation'}
-                            </Btn>
-                            <Btn variant="outline" size="sm" onClick={handleTest} disabled={testing || pending}>
-                                {testing ? 'Testing…' : 'Test Connection'}
-                            </Btn>
-                            <Btn variant="ghost" onClick={() => { setOpen(false); setError(''); setDone(''); setTestResult(null); }}>
-                                Cancel
-                            </Btn>
-                        </div>
+                <div style={{ marginBottom: 14, fontSize: 13, color: '#1E40AF', lineHeight: 1.6 }}>
+                    The client has been created as a draft. Once they approve the quotation,
+                    click below to activate their subscription. Their SP number will be generated
+                    and they will be moved to <strong>Trial</strong> status.
+                </div>
+                {error && (
+                    <div style={{ fontSize: 13, color: '#991B1B', padding: '8px 12px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA', marginBottom: 10 }}>
+                        {error}
                     </div>
                 )}
+                {done && (
+                    <div style={{ fontSize: 13, color: '#166534', padding: '8px 12px', background: '#F0FDF4', borderRadius: 6, border: '1px solid #BBF7D0', marginBottom: 10 }}>
+                        {done}
+                    </div>
+                )}
+                <Btn onClick={handleActivate} disabled={pending} leftIcon={<Zap size={14} />}>
+                    {pending ? 'Activating…' : 'Activate Client'}
+                </Btn>
             </DSCardContent>
         </DSCard>
     );

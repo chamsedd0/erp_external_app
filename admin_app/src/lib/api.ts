@@ -84,15 +84,11 @@ export const api = {
     }): Promise<{ ok: boolean; odoo_version?: number; latency_ms?: number; error?: string }> =>
         adminFetch('/admin/health/probe', { method: 'POST', body: JSON.stringify(data) }),
 
-    activateTenant: (slug: string, data: {
-        odoo_url: string;
-        odoo_db: string;
-        odoo_username: string;
-        odoo_password: string;
+    activateTenant: (slug: string, data?: {
         subscription_start?: string;
         subscription_renewal?: string;
     }): Promise<{ success: boolean; subscription_number: string }> =>
-        adminFetch(`/admin/tenants/${slug}/activate`, { method: 'POST', body: JSON.stringify(data) }),
+        adminFetch(`/admin/tenants/${slug}/activate`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
 
     // ── Plans ─────────────────────────────────────────────────────────────────
 
