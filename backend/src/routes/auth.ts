@@ -38,11 +38,12 @@ authRouter.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Unknown company code' });
         }
 
-        // 2. Reject login if tenant is disabled / suspended / cancelled
+        // 2. Reject login if tenant is disabled / suspended / cancelled / draft
         if (
             !tenantConfig.enabled ||
             tenantConfig.subscription_status === 'suspended' ||
-            tenantConfig.subscription_status === 'cancelled'
+            tenantConfig.subscription_status === 'cancelled' ||
+            tenantConfig.subscription_status === 'draft'
         ) {
             return res.status(403).json({ error: 'Account access is currently disabled. Please contact your administrator.' });
         }
@@ -195,17 +196,17 @@ const tenantBodySchema = z.object({
     slug: z.string().min(1),
     name: z.string().min(1),
     hr_email: z.string().email(),
-    odoo_url: z.string().url(),
-    odoo_db: z.string().min(1),
-    odoo_username: z.string().min(1),
-    odoo_password: z.string().min(1),
+    odoo_url: z.union([z.string().url(), z.literal('')]).default(''),
+    odoo_db: z.string().default(''),
+    odoo_username: z.string().default(''),
+    odoo_password: z.string().default(''),
 
     contact_name: z.string().default(''),
     contact_email: z.string().email().optional().or(z.literal('')),
     contact_phone: z.string().optional(),
 
     subscription_plan: z.string().min(1).default('starter'),
-    subscription_status: z.enum(['trial', 'active', 'overdue', 'suspended', 'cancelled']).default('active'),
+    subscription_status: z.enum(['trial', 'active', 'overdue', 'suspended', 'cancelled', 'draft']).default('draft'),
     subscription_start: z.string().default(() => new Date().toISOString().split('T')[0]),
     subscription_renewal: z.string().default(''),
     monthly_amount: z.number().min(0).default(0),
@@ -509,6 +510,54 @@ adminRouter.post('/tenants/:slug/send-quotation', async (req, res) => {
         res.json({ status: 'sent', quotation_number: quotationNumber, email_id: result.id });
     } catch (error: any) {
         console.error('Send Quotation Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── POST /admin/tenants/:slug/activate — set Odoo creds, generate SP#, go live ─
+const activateSchema = z.object({
+    odoo_url: z.string().url(),
+    odoo_db: z.string().min(1),
+    odoo_username: z.string().min(1),
+    odoo_password: z.string().min(1),
+    subscription_start: z.string().optional(),
+    subscription_renewal: z.string().optional(),
+});
+
+adminRouter.post('/tenants/:slug/activate', async (req, res) => {
+    try {
+        const existing = await tenantStore.getTenant(req.params.slug);
+        if (!existing) return res.status(404).json({ error: 'Tenant not found' });
+
+        const data = activateSchema.parse(req.body);
+
+        const subNum = existing.subscription_number || await generateSubscriptionNumber();
+        const today = new Date().toISOString().split('T')[0];
+        const start = data.subscription_start || today;
+        const freq = existing.billing_frequency ?? 'monthly';
+
+        let renewal = data.subscription_renewal;
+        if (!renewal) {
+            const d = new Date(start + 'T12:00:00');
+            if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
+            else if (freq === 'quarterly') d.setMonth(d.getMonth() + 3);
+            else d.setFullYear(d.getFullYear() + 1);
+            renewal = d.toISOString().split('T')[0];
+        }
+
+        const updated = applyTenantDefaults({
+            ...existing,
+            ...data,
+            subscription_number: subNum,
+            subscription_status: 'trial',
+            subscription_start: start,
+            subscription_renewal: renewal,
+        });
+        await tenantStore.saveTenant(req.params.slug, updated);
+        res.json({ success: true, subscription_number: subNum });
+    } catch (error: any) {
+        if (error instanceof z.ZodError)
+            return res.status(400).json({ error: 'Invalid input', details: error.issues });
         res.status(500).json({ error: error.message });
     }
 });

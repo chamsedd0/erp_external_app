@@ -87,12 +87,21 @@ export default async function ClientDetailPage({
                     subtitle={stats ? `${stats.notifications_unread} unread` : undefined}
                     icon={<Bell size={16} color="#94A3B8" />}
                 />
-                <MiniStat
-                    label="Next Renewal"
-                    value={fmtDate(tenant.subscription_renewal)}
-                    subtitle={`$${tenant.monthly_amount.toLocaleString()}/mo`}
-                    icon={<CalendarDays size={16} color="#94A3B8" />}
-                />
+                {tenant.subscription_status === 'draft' ? (
+                    <MiniStat
+                        label="Activation"
+                        value="Pending"
+                        subtitle="Add Odoo credentials to activate"
+                        icon={<CalendarDays size={16} color="#94A3B8" />}
+                    />
+                ) : (
+                    <MiniStat
+                        label="Next Renewal"
+                        value={fmtDate(tenant.subscription_renewal)}
+                        subtitle={`$${tenant.monthly_amount.toLocaleString()}/mo`}
+                        icon={<CalendarDays size={16} color="#94A3B8" />}
+                    />
+                )}
             </div>
 
             <ClientDetailTabs tenant={tenant} stats={stats} />

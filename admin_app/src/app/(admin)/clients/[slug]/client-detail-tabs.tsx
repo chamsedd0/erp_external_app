@@ -16,9 +16,11 @@ import {
     Th,
     DetailRow,
     DSRenewalBadge,
+    DSField,
+    DSTextInput,
 } from '@/components/ui/primitives';
 import { HealthCheck } from '@/components/health-check';
-import { deleteTenantAction, toggleEnabledAction, updateStatusAction, clearErrorsAction } from '@/lib/actions';
+import { deleteTenantAction, toggleEnabledAction, updateStatusAction, clearErrorsAction, activateTenantAction } from '@/lib/actions';
 import {
     LayoutGrid,
     CreditCard,
@@ -35,6 +37,7 @@ import {
     AlertTriangle,
     Send,
     Fingerprint,
+    Zap,
 } from 'lucide-react';
 
 interface Props {
@@ -165,6 +168,8 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 
                 {/* ── Billing ──────────────────────────────────────────────────── */}
                 {tab === 'billing' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {tenant.subscription_status === 'draft' && <ActivateClientCard tenant={tenant} />}
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
                         <DSCard>
                             <DSCardHeader title="Subscription" action={<DSStatusBadge status={tenant.subscription_status} />} />
@@ -173,8 +178,8 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                                     {[
                                         { label: 'Monthly amount', value: `$${tenant.monthly_amount.toLocaleString()}` },
                                         { label: 'Plan', value: tenant.subscription_plan },
-                                        { label: 'Started', value: fmtDate(tenant.subscription_start) },
-                                        { label: 'Next renewal', value: fmtDate(tenant.subscription_renewal) },
+                                        { label: 'Started', value: tenant.subscription_start ? fmtDate(tenant.subscription_start) : '—' },
+                                        { label: 'Next renewal', value: tenant.subscription_renewal ? fmtDate(tenant.subscription_renewal) : 'Pending activation' },
                                     ].map(({ label, value }) => (
                                         <div key={label} style={{ background: '#F8FAFC', borderRadius: 8, padding: 12 }}>
                                             <div style={{ fontSize: 11, fontWeight: 500, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
@@ -217,6 +222,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 
                         {/* Invoice sending card */}
                         <InvoiceCard slug={tenant.slug} contactEmail={tenant.contact_email} />
+                    </div>
                     </div>
                 )}
 
@@ -402,6 +408,108 @@ function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
                     </table>
                 </div>
             )}
+        </DSCard>
+    );
+}
+
+// ─── Activate client card ─────────────────────────────────────────────────────
+
+function ActivateClientCard({ tenant }: { tenant: Tenant }) {
+    const router = useRouter();
+    const [open, setOpen] = useState(false);
+    const [form, setForm] = useState({ odoo_url: '', odoo_db: '', odoo_username: '', odoo_password: '' });
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState('');
+    const [done, setDone] = useState('');
+
+    function setField(k: keyof typeof form, v: string) {
+        setForm(prev => ({ ...prev, [k]: v }));
+    }
+
+    async function handleActivate() {
+        if (!form.odoo_url || !form.odoo_db || !form.odoo_username || !form.odoo_password) {
+            setError('All Odoo fields are required');
+            return;
+        }
+        setPending(true);
+        setError('');
+        setDone('');
+        const result = await activateTenantAction(tenant.slug, form);
+        setPending(false);
+        if (!result.success) {
+            setError(result.error ?? 'Activation failed');
+        } else {
+            setDone(`Activated! Subscription number: ${result.subscription_number}`);
+            setTimeout(() => router.refresh(), 1200);
+        }
+    }
+
+    return (
+        <DSCard style={{ borderColor: '#BFDBFE', background: '#EFF6FF' }}>
+            <DSCardHeader
+                title="Activate Client"
+                subtitle="Add Odoo credentials to complete setup and move client to Trial"
+            />
+            <DSCardContent>
+                {!open ? (
+                    <Btn leftIcon={<Zap size={14} />} onClick={() => setOpen(true)}>
+                        Activate Client
+                    </Btn>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <DSField label="Odoo URL" required>
+                                <DSTextInput
+                                    type="url"
+                                    placeholder="https://acme.odoo.com"
+                                    value={form.odoo_url}
+                                    onChange={e => setField('odoo_url', e.target.value)}
+                                />
+                            </DSField>
+                            <DSField label="Odoo Database" required>
+                                <DSTextInput
+                                    placeholder="acme_prod"
+                                    value={form.odoo_db}
+                                    onChange={e => setField('odoo_db', e.target.value)}
+                                />
+                            </DSField>
+                            <DSField label="Odoo Username" required>
+                                <DSTextInput
+                                    placeholder="admin@acme.example"
+                                    value={form.odoo_username}
+                                    onChange={e => setField('odoo_username', e.target.value)}
+                                />
+                            </DSField>
+                            <DSField label="Odoo Password" required>
+                                <DSTextInput
+                                    type="password"
+                                    placeholder="Odoo user password"
+                                    value={form.odoo_password}
+                                    onChange={e => setField('odoo_password', e.target.value)}
+                                />
+                            </DSField>
+                        </div>
+                        {error && (
+                            <div style={{ fontSize: 13, color: '#991B1B', padding: '8px 12px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA' }}>
+                                {error}
+                            </div>
+                        )}
+                        {done && (
+                            <div style={{ fontSize: 13, color: '#166534', padding: '8px 12px', background: '#F0FDF4', borderRadius: 6, border: '1px solid #BBF7D0' }}>
+                                {done}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <Btn onClick={handleActivate} disabled={pending} leftIcon={<Zap size={14} />}>
+                                {pending ? 'Activating…' : 'Confirm Activation'}
+                            </Btn>
+                            <Btn variant="ghost" onClick={() => { setOpen(false); setError(''); setDone(''); }}>
+                                Cancel
+                            </Btn>
+                        </div>
+                    </div>
+                )}
+            </DSCardContent>
         </DSCard>
     );
 }

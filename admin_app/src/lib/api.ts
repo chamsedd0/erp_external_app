@@ -76,6 +76,16 @@ export const api = {
     sendQuotation: (slug: string): Promise<{ status: string; quotation_number: string; email_id?: string }> =>
         adminFetch(`/admin/tenants/${slug}/send-quotation`, { method: 'POST' }),
 
+    activateTenant: (slug: string, data: {
+        odoo_url: string;
+        odoo_db: string;
+        odoo_username: string;
+        odoo_password: string;
+        subscription_start?: string;
+        subscription_renewal?: string;
+    }): Promise<{ success: boolean; subscription_number: string }> =>
+        adminFetch(`/admin/tenants/${slug}/activate`, { method: 'POST', body: JSON.stringify(data) }),
+
     // ── Plans ─────────────────────────────────────────────────────────────────
 
     listPlans: (): Promise<SubscriptionPlan[]> =>

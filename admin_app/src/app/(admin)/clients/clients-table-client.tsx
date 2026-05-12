@@ -47,7 +47,13 @@ export function ClientsTableClient({ tenants }: Props) {
             if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
             else if (sortKey === 'plan') cmp = (PLAN_ORDER[a.subscription_plan] ?? 999) - (PLAN_ORDER[b.subscription_plan] ?? 999);
             else if (sortKey === 'status') cmp = a.subscription_status.localeCompare(b.subscription_status);
-            else if (sortKey === 'renewal') cmp = a.subscription_renewal.localeCompare(b.subscription_renewal);
+            else if (sortKey === 'renewal') {
+                    // empty (draft) renewals sort last regardless of direction
+                    if (!a.subscription_renewal && !b.subscription_renewal) cmp = 0;
+                    else if (!a.subscription_renewal) cmp = 1;
+                    else if (!b.subscription_renewal) cmp = -1;
+                    else cmp = a.subscription_renewal.localeCompare(b.subscription_renewal);
+                }
             else if (sortKey === 'amount') cmp = a.monthly_amount - b.monthly_amount;
             return sortAsc ? cmp : -cmp;
         });
@@ -78,8 +84,9 @@ export function ClientsTableClient({ tenants }: Props) {
                         onChange={(e) => setStatusFilter(e.target.value)}
                         options={[
                             { value: '', label: 'All statuses' },
-                            { value: 'active', label: 'Active' },
+                            { value: 'draft', label: 'Draft' },
                             { value: 'trial', label: 'Trial' },
+                            { value: 'active', label: 'Active' },
                             { value: 'overdue', label: 'Overdue' },
                             { value: 'suspended', label: 'Suspended' },
                             { value: 'cancelled', label: 'Cancelled' },
@@ -201,7 +208,10 @@ export function ClientsTableClient({ tenants }: Props) {
                                         </td>
                                         {/* Health */}
                                         <td style={{ padding: '14px 16px' }}>
-                                            <HealthCheck slug={t.slug} />
+                                            {t.subscription_status === 'draft'
+                                                ? <span style={{ fontSize: 12, color: '#94A3B8' }}>Not activated</span>
+                                                : <HealthCheck slug={t.slug} />
+                                            }
                                         </td>
                                         {/* Actions */}
                                         <td style={{ padding: '14px 16px', textAlign: 'right' }}>

@@ -115,16 +115,15 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
         if (!isNew && !payload.odoo_username) delete (payload as any).odoo_username;
 
         startTransition(async () => {
-            try {
-                if (isNew) {
-                    if (!slug.trim()) { setError('Slug is required'); return; }
-                    await createTenantAction(slug.trim(), payload);
-                } else {
-                    await updateTenantAction(tenant!.slug, payload);
-                    router.push(`/clients/${tenant!.slug}`);
-                }
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : 'Something went wrong');
+            if (isNew) {
+                if (!slug.trim()) { setError('Slug is required'); return; }
+                const result = await createTenantAction(slug.trim(), payload);
+                if (result?.success === false) { setError(result.error); return; }
+                // redirect happens server-side on success
+            } else {
+                const result = await updateTenantAction(tenant!.slug, payload);
+                if (result?.success === false) { setError(result.error); return; }
+                router.push(`/clients/${tenant!.slug}`);
             }
         });
     }
@@ -367,6 +366,7 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                                 value={form.subscription_status}
                                 onChange={(e) => set('subscription_status', e.target.value as TenantFormData['subscription_status'])}
                                 options={[
+                                    { value: 'draft', label: 'Draft' },
                                     { value: 'trial', label: 'Trial' },
                                     { value: 'active', label: 'Active' },
                                     { value: 'overdue', label: 'Overdue' },

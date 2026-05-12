@@ -18,7 +18,7 @@ export interface TenantConfig {
 
     // ── Subscription / billing ────────────────────────────────────────────────
     subscription_plan: string;    // plan id — 'starter' | 'professional' | 'enterprise' or any custom plan
-    subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled';
+    subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled' | 'draft';
     subscription_start: string;   // 'YYYY-MM-DD'
     subscription_renewal: string; // 'YYYY-MM-DD' — next billing date
     monthly_amount: number;       // USD/month

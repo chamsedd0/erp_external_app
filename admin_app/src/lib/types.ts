@@ -13,7 +13,7 @@ export interface Tenant {
     contact_phone?: string;
 
     subscription_plan: string;   // plan id — 'starter' | 'professional' | 'enterprise' or any custom plan
-    subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled';
+    subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled' | 'draft';
     subscription_start: string;
     subscription_renewal: string;
     monthly_amount: number;

@@ -136,7 +136,7 @@ export function DSCardContent({ children, style }: { children: React.ReactNode; 
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 
-type StatusKey = 'active' | 'trial' | 'overdue' | 'suspended' | 'cancelled';
+type StatusKey = 'active' | 'trial' | 'overdue' | 'suspended' | 'cancelled' | 'draft';
 type PlanKey = 'starter' | 'professional' | 'enterprise';
 
 const STATUS_STYLES: Record<StatusKey, { bg: string; text: string; border: string }> = {
@@ -145,6 +145,7 @@ const STATUS_STYLES: Record<StatusKey, { bg: string; text: string; border: strin
     overdue:   { bg: '#FEE2E2', text: '#991B1B', border: '#FCA5A5' },
     suspended: { bg: '#F1F5F9', text: '#475569', border: '#CBD5E1' },
     cancelled: { bg: '#F1F5F9', text: '#6B7280', border: '#E2E8F0' },
+    draft:     { bg: '#FFF7ED', text: '#9A3412', border: '#FED7AA' },
 };
 const PLAN_STYLES: Record<PlanKey, { bg: string; text: string; border: string }> = {
     starter:      { bg: '#F1F5F9', text: '#475569', border: '#E2E8F0' },
@@ -209,6 +210,7 @@ export function DSHealthDot({
 // ── Renewal badge ─────────────────────────────────────────────────────────────
 
 export function DSRenewalBadge({ date }: { date: string }) {
+    if (!date) return <span style={{ fontSize: 13, color: '#94A3B8' }}>Pending activation</span>;
     const today = new Date();
     const target = new Date(date);
     const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);

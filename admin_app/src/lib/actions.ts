@@ -5,14 +5,28 @@ import type { TenantFormData, SubscriptionPlan } from './types';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-export async function createTenantAction(slug: string, data: TenantFormData) {
-    await api.createTenant(slug, data);
+export async function createTenantAction(
+    slug: string,
+    data: TenantFormData
+): Promise<{ success: false; error: string } | void> {
+    try {
+        await api.createTenant(slug, data);
+    } catch (e: any) {
+        return { success: false, error: e.message ?? 'Failed to create client' };
+    }
     revalidatePath('/clients');
-    redirect(`/clients/${slug}`);
+    redirect(`/clients/${slug}`); // outside try/catch — Next.js handles NEXT_REDIRECT
 }
 
-export async function updateTenantAction(slug: string, data: Partial<TenantFormData>) {
-    await api.updateTenant(slug, data);
+export async function updateTenantAction(
+    slug: string,
+    data: Partial<TenantFormData>
+): Promise<{ success: false; error: string } | void> {
+    try {
+        await api.updateTenant(slug, data);
+    } catch (e: any) {
+        return { success: false, error: e.message ?? 'Failed to update client' };
+    }
     revalidatePath(`/clients/${slug}`);
     revalidatePath('/clients');
 }
@@ -31,7 +45,7 @@ export async function toggleEnabledAction(slug: string, enabled: boolean) {
 
 export async function updateStatusAction(
     slug: string,
-    status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled'
+    status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled' | 'draft'
 ) {
     await api.updateTenant(slug, { subscription_status: status });
     revalidatePath(`/clients/${slug}`);
@@ -69,6 +83,29 @@ export async function updatePlanAction(
 export async function deletePlanAction(id: string) {
     await api.deletePlan(id);
     revalidatePath('/billing');
+}
+
+// ── Tenant activation ─────────────────────────────────────────────────────────
+
+export async function activateTenantAction(
+    slug: string,
+    data: {
+        odoo_url: string;
+        odoo_db: string;
+        odoo_username: string;
+        odoo_password: string;
+        subscription_start?: string;
+        subscription_renewal?: string;
+    }
+): Promise<{ success: boolean; error?: string; subscription_number?: string }> {
+    try {
+        const result = await api.activateTenant(slug, data);
+        revalidatePath(`/clients/${slug}`);
+        revalidatePath('/clients');
+        return { success: true, subscription_number: result.subscription_number };
+    } catch (e: any) {
+        return { success: false, error: e.message ?? 'Activation failed' };
+    }
 }
 
 // ── Error log actions ─────────────────────────────────────────────────────────
