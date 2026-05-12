@@ -88,12 +88,23 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
     }
 
     async function testConnection() {
-        const targetSlug = isNew ? slug : tenant!.slug;
-        if (!targetSlug) { setTestResult({ ok: false, text: 'Enter a slug first' }); return; }
+        if (!form.odoo_url || !form.odoo_db) {
+            setTestResult({ ok: false, text: 'Enter Odoo URL and database first' });
+            return;
+        }
         setTesting(true);
         setTestResult(null);
         try {
-            const res = await fetch(`/api/admin/health/${targetSlug}`);
+            const res = await fetch('/api/admin/health/probe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    odoo_url: form.odoo_url,
+                    odoo_db: form.odoo_db,
+                    odoo_username: form.odoo_username ?? '',
+                    odoo_password: form.odoo_password ?? '',
+                }),
+            });
             const data = await res.json();
             setTestResult(
                 data.ok

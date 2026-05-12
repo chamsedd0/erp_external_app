@@ -419,11 +419,39 @@ function ActivateClientCard({ tenant }: { tenant: Tenant }) {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState({ odoo_url: '', odoo_db: '', odoo_username: '', odoo_password: '' });
     const [pending, setPending] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
     const [error, setError] = useState('');
     const [done, setDone] = useState('');
 
     function setField(k: keyof typeof form, v: string) {
         setForm(prev => ({ ...prev, [k]: v }));
+        setTestResult(null); // clear stale test result when creds change
+    }
+
+    async function handleTest() {
+        if (!form.odoo_url || !form.odoo_db || !form.odoo_username || !form.odoo_password) {
+            setTestResult({ ok: false, text: 'Fill in all fields first' });
+            return;
+        }
+        setTesting(true);
+        setTestResult(null);
+        try {
+            const res = await fetch('/api/admin/health/probe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form),
+            });
+            const data = await res.json();
+            setTestResult(data.ok
+                ? { ok: true, text: `Connected — Odoo v${data.odoo_version ?? '?'} (${data.latency_ms}ms)` }
+                : { ok: false, text: `Failed: ${data.error ?? 'Unreachable'}` }
+            );
+        } catch {
+            setTestResult({ ok: false, text: 'Request failed' });
+        } finally {
+            setTesting(false);
+        }
     }
 
     async function handleActivate() {
@@ -489,6 +517,17 @@ function ActivateClientCard({ tenant }: { tenant: Tenant }) {
                                 />
                             </DSField>
                         </div>
+                        {testResult && (
+                            <div style={{
+                                fontSize: 13, padding: '8px 12px', borderRadius: 6,
+                                background: testResult.ok ? '#ECFDF5' : '#FEF2F2',
+                                border: `1px solid ${testResult.ok ? '#A7F3D0' : '#FECACA'}`,
+                                color: testResult.ok ? '#065F46' : '#991B1B',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                            }}>
+                                {testResult.text}
+                            </div>
+                        )}
                         {error && (
                             <div style={{ fontSize: 13, color: '#991B1B', padding: '8px 12px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA' }}>
                                 {error}
@@ -503,7 +542,10 @@ function ActivateClientCard({ tenant }: { tenant: Tenant }) {
                             <Btn onClick={handleActivate} disabled={pending} leftIcon={<Zap size={14} />}>
                                 {pending ? 'Activating…' : 'Confirm Activation'}
                             </Btn>
-                            <Btn variant="ghost" onClick={() => { setOpen(false); setError(''); setDone(''); }}>
+                            <Btn variant="outline" size="sm" onClick={handleTest} disabled={testing || pending}>
+                                {testing ? 'Testing…' : 'Test Connection'}
+                            </Btn>
+                            <Btn variant="ghost" onClick={() => { setOpen(false); setError(''); setDone(''); setTestResult(null); }}>
                                 Cancel
                             </Btn>
                         </div>

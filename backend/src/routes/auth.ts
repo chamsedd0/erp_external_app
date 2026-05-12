@@ -322,6 +322,34 @@ adminRouter.delete('/tenants/:slug', async (req, res) => {
     }
 });
 
+// ── POST /admin/health/probe — test Odoo credentials without a saved tenant ────
+const probeSchema = z.object({
+    odoo_url: z.string().url(),
+    odoo_db: z.string().min(1),
+    odoo_username: z.string().min(1),
+    odoo_password: z.string().min(1),
+});
+
+adminRouter.post('/health/probe', async (req, res) => {
+    try {
+        const { odoo_url, odoo_db, odoo_username, odoo_password } = probeSchema.parse(req.body);
+        const cfg = applyTenantDefaults({ odoo_url, odoo_db, odoo_username, odoo_password });
+        const client = getOdooClient('_probe', cfg);
+        const start = Date.now();
+        try {
+            const uid = await client.authenticate();
+            const version = await client.getVersion().catch(() => null);
+            res.json({ ok: true, odoo_version: version, latency_ms: Date.now() - start, uid });
+        } catch (odooErr: any) {
+            res.json({ ok: false, error: odooErr?.message ?? 'Connection failed', latency_ms: Date.now() - start });
+        }
+    } catch (error: any) {
+        if (error instanceof z.ZodError)
+            return res.status(400).json({ error: 'Invalid input', details: error.issues });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── GET /admin/tenants/:slug/health — probe Odoo connectivity ─────────────────
 adminRouter.get('/tenants/:slug/health', async (req, res) => {
     try {

@@ -76,6 +76,14 @@ export const api = {
     sendQuotation: (slug: string): Promise<{ status: string; quotation_number: string; email_id?: string }> =>
         adminFetch(`/admin/tenants/${slug}/send-quotation`, { method: 'POST' }),
 
+    probeOdooHealth: (data: {
+        odoo_url: string;
+        odoo_db: string;
+        odoo_username: string;
+        odoo_password: string;
+    }): Promise<{ ok: boolean; odoo_version?: number; latency_ms?: number; error?: string }> =>
+        adminFetch('/admin/health/probe', { method: 'POST', body: JSON.stringify(data) }),
+
     activateTenant: (slug: string, data: {
         odoo_url: string;
         odoo_db: string;
