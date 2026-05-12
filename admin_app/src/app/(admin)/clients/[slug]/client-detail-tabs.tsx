@@ -406,7 +406,7 @@ function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
     );
 }
 
-// ─── Invoice card ─────────────────────────────────────────────────────────────
+// ─── Quotation card ───────────────────────────────────────────────────────────
 
 function InvoiceCard({ slug, contactEmail }: { slug: string; contactEmail: string }) {
     const [sending, setSending] = useState(false);
@@ -416,15 +416,15 @@ function InvoiceCard({ slug, contactEmail }: { slug: string; contactEmail: strin
         setSending(true);
         setResult(null);
         try {
-            const res = await fetch(`/api/admin/send-invoice/${slug}`, { method: 'POST' });
+            const res = await fetch(`/api/admin/send-quotation/${slug}`, { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
-                setResult({ ok: true, message: `Invoice ${data.invoice_number} sent to ${contactEmail}` });
+                setResult({ ok: true, message: `Quotation ${data.quotation_number} sent to ${contactEmail}` });
             } else {
-                setResult({ ok: false, message: data.error ?? 'Failed to send invoice' });
+                setResult({ ok: false, message: data.error ?? 'Failed to send quotation' });
             }
         } catch {
-            setResult({ ok: false, message: 'Network error — could not send invoice' });
+            setResult({ ok: false, message: 'Network error — could not send quotation' });
         } finally {
             setSending(false);
         }
@@ -432,7 +432,7 @@ function InvoiceCard({ slug, contactEmail }: { slug: string; contactEmail: strin
 
     return (
         <DSCard>
-            <DSCardHeader title="Invoice" subtitle="Send a billing invoice by email" />
+            <DSCardHeader title="Quotation" subtitle="Send a service quotation for client approval" />
             <DSCardContent>
                 <div style={{ marginBottom: 12, fontSize: 13, color: '#475569' }}>
                     Will be sent to: <strong style={{ color: '#0F172A' }}>{contactEmail || '—'}</strong>
@@ -442,7 +442,7 @@ function InvoiceCard({ slug, contactEmail }: { slug: string; contactEmail: strin
                     onClick={handleSend}
                     disabled={sending || !contactEmail}
                 >
-                    {sending ? 'Sending…' : 'Send Invoice Email'}
+                    {sending ? 'Sending…' : 'Send Quotation'}
                 </Btn>
                 {result && (
                     <div style={{

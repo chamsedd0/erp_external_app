@@ -226,26 +226,20 @@ export function PlansManager({ plans }: { plans: SubscriptionPlan[] }) {
         if (!data.id || !data.name) { setError('Plan ID and name are required'); return; }
         setError(null);
         startTransition(async () => {
-            try {
-                await createPlanAction(data);
-                setShowNew(false);
-                router.refresh();
-            } catch (e: any) {
-                setError(e.message ?? 'Failed to create plan');
-            }
+            const result = await createPlanAction(data);
+            if (!result.success) { setError(result.error ?? 'Failed to create plan'); return; }
+            setShowNew(false);
+            router.refresh();
         });
     }
 
     function handleUpdate(id: string, plan: Omit<SubscriptionPlan, 'created_at'>) {
         setError(null);
         startTransition(async () => {
-            try {
-                await updatePlanAction(id, plan);
-                setEditingId(null);
-                router.refresh();
-            } catch (e: any) {
-                setError(e.message ?? 'Failed to update plan');
-            }
+            const result = await updatePlanAction(id, plan);
+            if (!result.success) { setError(result.error ?? 'Failed to update plan'); return; }
+            setEditingId(null);
+            router.refresh();
         });
     }
 

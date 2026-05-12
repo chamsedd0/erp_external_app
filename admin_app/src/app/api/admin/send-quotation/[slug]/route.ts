@@ -1,4 +1,3 @@
-// Deprecated: kept for backward compatibility — new route is /api/admin/send-quotation/[slug]
 import { api } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 

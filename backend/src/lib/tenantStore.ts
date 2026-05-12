@@ -17,11 +17,12 @@ export interface TenantConfig {
     contact_phone?: string;
 
     // ── Subscription / billing ────────────────────────────────────────────────
-    subscription_plan: 'starter' | 'professional' | 'enterprise';
+    subscription_plan: string;    // plan id — 'starter' | 'professional' | 'enterprise' or any custom plan
     subscription_status: 'trial' | 'active' | 'overdue' | 'suspended' | 'cancelled';
     subscription_start: string;   // 'YYYY-MM-DD'
     subscription_renewal: string; // 'YYYY-MM-DD' — next billing date
     monthly_amount: number;       // USD/month
+    max_employees?: number;       // 0 = use device count for billing; >0 = committed employee count
 
     // ── Admin flags ───────────────────────────────────────────────────────────
     enabled: boolean;
@@ -55,6 +56,7 @@ export function applyTenantDefaults(raw: Partial<TenantConfig>): TenantConfig {
         subscription_start: raw.subscription_start ?? new Date().toISOString().split('T')[0],
         subscription_renewal: raw.subscription_renewal ?? '',
         monthly_amount: raw.monthly_amount ?? 0,
+        max_employees: raw.max_employees ?? 0,
 
         enabled: raw.enabled ?? true,
         created_at: raw.created_at ?? new Date().toISOString(),

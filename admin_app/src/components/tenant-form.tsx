@@ -16,6 +16,17 @@ import {
 import { createTenantAction, updateTenantAction } from '@/lib/actions';
 import { Hash, Globe, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function calculateRenewal(start: string, freq: string): string {
+    if (!start) return '';
+    const d = new Date(start + 'T12:00:00'); // noon avoids DST edge cases
+    if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (freq === 'quarterly') d.setMonth(d.getMonth() + 3);
+    else if (freq === 'yearly') d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().split('T')[0];
+}
+
 interface Props {
     tenant?: Tenant;
     isNew?: boolean;
@@ -367,7 +378,13 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                         <DSField label="Billing Frequency">
                             <DSSelectInput
                                 value={form.billing_frequency ?? 'monthly'}
-                                onChange={(e) => set('billing_frequency', e.target.value as 'monthly' | 'quarterly' | 'yearly')}
+                                onChange={(e) => {
+                                    const freq = e.target.value as 'monthly' | 'quarterly' | 'yearly';
+                                    set('billing_frequency', freq);
+                                    if (form.subscription_start) {
+                                        set('subscription_renewal', calculateRenewal(form.subscription_start, freq));
+                                    }
+                                }}
                                 options={[
                                     { value: 'monthly', label: 'Monthly' },
                                     { value: 'quarterly', label: 'Quarterly' },
@@ -392,15 +409,26 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                                             — final amount calculated from active employee count at billing time.
                                         </span>
                                     </div>
-                                    <DSField label="Override amount (USD)" hint="Leave 0 to use live calculation">
-                                        <DSTextInput
-                                            type="number"
-                                            min={0}
-                                            step={1}
-                                            value={form.monthly_amount}
-                                            onChange={(e) => set('monthly_amount', Number(e.target.value))}
-                                        />
-                                    </DSField>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 10 }}>
+                                        <DSField label="Number of Employees" hint="Committed employee count used for billing">
+                                            <DSTextInput
+                                                type="number"
+                                                min={0}
+                                                step={1}
+                                                value={form.max_employees ?? 0}
+                                                onChange={(e) => set('max_employees', Number(e.target.value))}
+                                            />
+                                        </DSField>
+                                        <DSField label="Override amount (USD)" hint="Leave 0 to use live calculation">
+                                            <DSTextInput
+                                                type="number"
+                                                min={0}
+                                                step={1}
+                                                value={form.monthly_amount}
+                                                onChange={(e) => set('monthly_amount', Number(e.target.value))}
+                                            />
+                                        </DSField>
+                                    </div>
                                 </div>
                             ) : (
                                 <DSField label="Monthly amount (USD)">
@@ -418,7 +446,10 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                             <DSTextInput
                                 type="date"
                                 value={form.subscription_start}
-                                onChange={(e) => set('subscription_start', e.target.value)}
+                                onChange={(e) => {
+                                    set('subscription_start', e.target.value);
+                                    set('subscription_renewal', calculateRenewal(e.target.value, form.billing_frequency ?? 'monthly'));
+                                }}
                                 required
                             />
                         </DSField>

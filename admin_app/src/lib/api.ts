@@ -73,8 +73,8 @@ export const api = {
 
     // ── Invoice ───────────────────────────────────────────────────────────────
 
-    sendInvoice: (slug: string): Promise<{ status: string; invoice_number: string; email_id?: string }> =>
-        adminFetch(`/admin/tenants/${slug}/send-invoice`, { method: 'POST' }),
+    sendQuotation: (slug: string): Promise<{ status: string; quotation_number: string; email_id?: string }> =>
+        adminFetch(`/admin/tenants/${slug}/send-quotation`, { method: 'POST' }),
 
     // ── Plans ─────────────────────────────────────────────────────────────────
 

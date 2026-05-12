@@ -41,14 +41,29 @@ export async function updateStatusAction(
 
 // ── Plan actions ──────────────────────────────────────────────────────────────
 
-export async function createPlanAction(plan: Omit<SubscriptionPlan, 'created_at'>) {
-    await api.createPlan(plan);
-    revalidatePath('/billing');
+export async function createPlanAction(
+    plan: Omit<SubscriptionPlan, 'created_at'>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await api.createPlan(plan);
+        revalidatePath('/billing');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message ?? 'Failed to create plan' };
+    }
 }
 
-export async function updatePlanAction(id: string, updates: Partial<SubscriptionPlan>) {
-    await api.updatePlan(id, updates);
-    revalidatePath('/billing');
+export async function updatePlanAction(
+    id: string,
+    updates: Partial<SubscriptionPlan>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await api.updatePlan(id, updates);
+        revalidatePath('/billing');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message ?? 'Failed to update plan' };
+    }
 }
 
 export async function deletePlanAction(id: string) {

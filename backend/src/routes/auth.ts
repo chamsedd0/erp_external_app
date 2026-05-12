@@ -8,7 +8,7 @@ import { pushStore } from '../lib/pushStore';
 import { notificationStore } from '../lib/notificationStore';
 import { planStore, SubscriptionPlan } from '../lib/planStore';
 import { getErrors, clearErrors } from '../lib/errorLog';
-import { generateInvoiceHTML } from '../lib/invoiceTemplate';
+import { generateQuotationHTML } from '../lib/invoiceTemplate';
 import { redisGet, redisScan } from '../lib/redis';
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
@@ -204,11 +204,12 @@ const tenantBodySchema = z.object({
     contact_email: z.string().email().optional().or(z.literal('')),
     contact_phone: z.string().optional(),
 
-    subscription_plan: z.enum(['starter', 'professional', 'enterprise']).default('starter'),
+    subscription_plan: z.string().min(1).default('starter'),
     subscription_status: z.enum(['trial', 'active', 'overdue', 'suspended', 'cancelled']).default('active'),
     subscription_start: z.string().default(() => new Date().toISOString().split('T')[0]),
     subscription_renewal: z.string().default(''),
     monthly_amount: z.number().min(0).default(0),
+    max_employees: z.number().int().min(0).default(0).optional(),
     billing_frequency: z.enum(['monthly', 'quarterly', 'yearly']).default('monthly'),
 
     enabled: z.boolean().default(true),
@@ -437,8 +438,8 @@ adminRouter.delete('/tenants/:slug/errors', async (req, res) => {
     }
 });
 
-// ── POST /admin/tenants/:slug/send-invoice — send invoice email via Resend ───
-adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
+// ── POST /admin/tenants/:slug/send-quotation — send service quotation via Resend
+adminRouter.post('/tenants/:slug/send-quotation', async (req, res) => {
     try {
         const cfg = await tenantStore.getTenant(req.params.slug);
         if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
@@ -448,36 +449,39 @@ adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
         const now = new Date();
         const billingPeriod = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         const subNum = cfg.subscription_number || req.params.slug.toUpperCase();
-        const invoiceNumber = `INV-${subNum}-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const quotationNumber = `QUO-${subNum}-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        // Compute due date: 15 days from now
-        const dueDate = new Date(now.getTime() + 15 * 86400000).toISOString().split('T')[0];
+        // Quotation valid for 30 days
+        const validUntil = new Date(now.getTime() + 30 * 86400000).toISOString().split('T')[0];
 
         // Get plan name and compute effective amount
         const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
         const planName = plan?.name ?? (cfg.subscription_plan.charAt(0).toUpperCase() + cfg.subscription_plan.slice(1));
 
-        let invoiceAmount = cfg.monthly_amount;
+        let quotationAmount = cfg.monthly_amount;
         let activeEmployees: number | undefined;
         let pricePerEmployee: number | undefined;
         if (plan?.pricing_model === 'per_employee' && plan.price_per_employee) {
-            const devices = await pushStore.listDevicesForTenant(req.params.slug).catch(() => [] as any[]);
-            activeEmployees = devices.length;
+            const committedCount = cfg.max_employees && cfg.max_employees > 0 ? cfg.max_employees : undefined;
+            const devices = committedCount === undefined
+                ? await pushStore.listDevicesForTenant(req.params.slug).catch(() => [] as any[])
+                : [];
+            activeEmployees = committedCount ?? devices.length;
             pricePerEmployee = plan.price_per_employee;
-            invoiceAmount = activeEmployees * pricePerEmployee;
+            quotationAmount = activeEmployees * pricePerEmployee;
         }
 
-        const html = generateInvoiceHTML({
+        const html = generateQuotationHTML({
             tenantName: cfg.name,
             subscriptionNumber: subNum,
             planName,
             billingFrequency: cfg.billing_frequency ?? 'monthly',
-            amount: invoiceAmount,
+            amount: quotationAmount,
             billingPeriod,
-            dueDate,
+            validUntil,
             contactName: cfg.contact_name,
             contactEmail: cfg.contact_email,
-            invoiceNumber,
+            quotationNumber,
             activeEmployees,
             pricePerEmployee,
         });
@@ -491,7 +495,7 @@ adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
             body: JSON.stringify({
                 from: config.resendFromEmail,
                 to: cfg.contact_email,
-                subject: `Invoice ${invoiceNumber} — ${cfg.name}`,
+                subject: `Service Quotation ${quotationNumber} — ${cfg.name}`,
                 html,
             }),
         });
@@ -502,9 +506,9 @@ adminRouter.post('/tenants/:slug/send-invoice', async (req, res) => {
         }
 
         const result = await emailRes.json();
-        res.json({ status: 'sent', invoice_number: invoiceNumber, email_id: result.id });
+        res.json({ status: 'sent', quotation_number: quotationNumber, email_id: result.id });
     } catch (error: any) {
-        console.error('Send Invoice Error:', error);
+        console.error('Send Quotation Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -584,7 +588,7 @@ const planSchema = z.object({
         quarterly: z.number().min(0),
         yearly: z.number().min(0),
     }),
-    support_tier: z.string().min(1),
+    support_tier: z.string().default(''),
     custom_odoo_apps: z.boolean().default(false),
     is_active: z.boolean().default(true),
     created_at: z.string().optional(),

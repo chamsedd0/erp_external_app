@@ -17,6 +17,7 @@ export interface Tenant {
     subscription_start: string;
     subscription_renewal: string;
     monthly_amount: number;
+    max_employees?: number;      // 0 = device count used for billing; >0 = committed employee count
     billing_frequency?: 'monthly' | 'quarterly' | 'yearly';
     subscription_number?: string;   // 'SP-00001'
 
