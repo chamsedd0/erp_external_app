@@ -250,12 +250,13 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                             />
                         </DSField>
                         <div style={colSpan2}>
-                            <DSField label="HR Email" hint="Where notification summaries are delivered">
+                            <DSField label="HR Email" required hint="Where notification summaries are delivered">
                                 <DSTextInput
                                     type="email"
                                     value={form.hr_email}
                                     onChange={(e) => set('hr_email', e.target.value)}
                                     placeholder="hr@acme.example"
+                                    required
                                 />
                             </DSField>
                         </div>

@@ -16,6 +16,13 @@ async function adminFetch<T = any>(path: string, options?: RequestInit): Promise
 
     if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'Request failed' }));
+        // Surface field-level Zod errors so the UI can show which field is invalid
+        if (body.details?.length) {
+            const fields = (body.details as Array<{ path: string[]; message: string }>)
+                .map(d => `${d.path.join('.')} — ${d.message}`)
+                .join('; ');
+            throw new Error(`${body.error}: ${fields}`);
+        }
         throw new Error(body.error ?? `HTTP ${res.status}`);
     }
 
