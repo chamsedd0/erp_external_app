@@ -512,7 +512,7 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                     Cancel
                 </Btn>
                 <Btn type="submit" disabled={isPending}>
-                    {isPending ? 'Saving…' : isNew ? 'Create client' : 'Save changes'}
+                    {isPending ? 'Creating draft…' : isNew ? 'Create Draft' : 'Save changes'}
                 </Btn>
             </div>
         </form>
