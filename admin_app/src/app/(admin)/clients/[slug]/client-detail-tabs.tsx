@@ -136,7 +136,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                                 <DetailRow label="Plan"      value={<DSPlanBadge plan={tenant.subscription_plan} />} />
                                 <DetailRow label="Status"    value={<DSStatusBadge status={tenant.subscription_status} />} />
                                 <DetailRow label="Frequency" value={<span style={{ fontSize: 13, color: '#475569', textTransform: 'capitalize' }}>{tenant.billing_frequency ?? 'monthly'}</span>} />
-                                <DetailRow label="Amount"    value={<span style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>${tenant.monthly_amount.toLocaleString()}/mo</span>} />
+                                <DetailRow label="Amount"    value={<span style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>${(stats?.billing_monthly_amount ?? tenant.billing_monthly_amount ?? tenant.monthly_amount).toLocaleString()}/mo</span>} />
                                 <DetailRow label="Started"   value={<span style={{ fontSize: 13, color: '#475569' }}>{fmtDate(tenant.subscription_start)}</span>} />
                                 <DetailRow label="Renewal"   value={<DSRenewalBadge date={tenant.subscription_renewal} />} last />
                             </DSCardContent>
@@ -146,7 +146,9 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                         <DSCard>
                             <DSCardHeader title="Activity" />
                             <DSCardContent>
+                                <DetailRow label="Registered users"     value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.registered_app_users ?? '—'}</span>} />
                                 <DetailRow label="Active devices"       value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.active_devices ?? '—'}</span>} />
+                                <DetailRow label="Unassigned devices"   value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.unassigned_devices ?? 0}</span>} />
                                 <DetailRow label="Total notifications"  value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.notifications_total ?? '—'}</span>} />
                                 <DetailRow label="Unread"               value={<span style={{ fontSize: 13, color: '#0F172A' }}>{stats?.notifications_unread ?? '—'}</span>} />
                                 <DetailRow label="Last sync"            value={<span style={{ fontSize: 13, color: '#475569' }}>{stats?.last_sync ? new Date(stats.last_sync).toLocaleString() : 'Never'}</span>} />
@@ -177,7 +179,8 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                             <DSCardContent>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 16 }}>
                                     {[
-                                        { label: 'Monthly amount', value: `$${tenant.monthly_amount.toLocaleString()}` },
+                                        { label: 'Monthly amount', value: `$${(stats?.billing_monthly_amount ?? tenant.billing_monthly_amount ?? tenant.monthly_amount).toLocaleString()}` },
+                                        { label: 'Registered users', value: String(stats?.registered_app_users ?? tenant.registered_app_users ?? 0) },
                                         { label: 'Plan', value: tenant.subscription_plan },
                                         { label: 'Started', value: tenant.subscription_start ? fmtDate(tenant.subscription_start) : '—' },
                                         { label: 'Next renewal', value: tenant.subscription_renewal ? fmtDate(tenant.subscription_renewal) : 'Pending activation' },
@@ -279,7 +282,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: 14, fontWeight: 600, color: '#7F1D1D' }}>Delete tenant</div>
                                     <div style={{ fontSize: 13, color: '#991B1B', marginTop: 2, lineHeight: 1.5 }}>
-                                        Permanently remove all tenant data — devices, notifications, billing history. This cannot be undone.
+                                        Draft tenants are permanently deleted. Activated tenants are cancelled and kept so their SP number remains reserved.
                                     </div>
                                 </div>
                                 <Btn variant="danger" leftIcon={<Trash2 size={14} />} onClick={() => setConfirmDelete(true)}>
@@ -322,7 +325,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                 open={confirmDelete}
                 onClose={() => setConfirmDelete(false)}
                 title={`Delete ${tenant.name}?`}
-                description={`This will permanently remove ${tenant.slug} and all associated data. Cannot be undone.`}
+                description={tenant.subscription_number ? `This will cancel ${tenant.slug} and preserve its SP number for history.` : `This will permanently remove ${tenant.slug} and all associated draft data. Cannot be undone.`}
                 danger={`${stats?.active_devices ?? 0} device(s) · ${stats?.notifications_total ?? 0} notification(s) will be erased.`}
                 footer={
                     <>
@@ -335,7 +338,7 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                                 setConfirmDelete(false);
                             }}
                         >
-                            {isPending ? 'Deleting…' : 'Delete permanently'}
+                            {isPending ? 'Deleting…' : tenant.subscription_number ? 'Cancel tenant' : 'Delete permanently'}
                         </Btn>
                     </>
                 }

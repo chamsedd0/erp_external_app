@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisCommand = redisCommand;
 exports.redisGet = redisGet;
 exports.redisSet = redisSet;
+exports.redisSetNX = redisSetNX;
+exports.redisDelIfValue = redisDelIfValue;
 exports.redisIncr = redisIncr;
 exports.redisDel = redisDel;
 exports.redisSAdd = redisSAdd;
@@ -46,6 +48,19 @@ async function redisSet(key, value, expirySeconds) {
     else {
         await redisCommand('SET', key, value);
     }
+}
+/** Set a key only when it does not already exist. Returns true when the lock/value was written. */
+async function redisSetNX(key, value, expirySeconds) {
+    const result = expirySeconds
+        ? await redisCommand('SET', key, value, 'NX', 'EX', expirySeconds)
+        : await redisCommand('SET', key, value, 'NX');
+    return result === 'OK';
+}
+/** Delete a key only when its current value matches the expected value. */
+async function redisDelIfValue(key, value) {
+    const script = 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end';
+    const result = await redisCommand('EVAL', script, 1, key, value);
+    return result === 1;
 }
 /** Increment a numeric key atomically. */
 async function redisIncr(key) {

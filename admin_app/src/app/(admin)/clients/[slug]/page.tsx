@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { api } from '@/lib/api';
 import { DSStatusBadge, DSPlanBadge, MonoChip, MiniStat, DSRenewalBadge } from '@/components/ui/primitives';
 import { ClientDetailTabs } from './client-detail-tabs';
-import { ChevronLeft, Pencil, Smartphone, Bell, CalendarDays } from 'lucide-react';
+import { ChevronLeft, Pencil, Smartphone, Users, Bell, CalendarDays } from 'lucide-react';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
@@ -75,7 +75,13 @@ export default async function ClientDetailPage({
             </div>
 
             {/* Mini stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, margin: '20px 0 24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, margin: '20px 0 24px' }}>
+                <MiniStat
+                    label="Registered Users"
+                    value={stats?.registered_app_users ?? '—'}
+                    subtitle={stats ? `${stats.active_devices} active device${stats.active_devices === 1 ? '' : 's'}` : undefined}
+                    icon={<Users size={16} color="#94A3B8" />}
+                />
                 <MiniStat
                     label="Active Devices"
                     value={stats?.active_devices ?? '—'}
@@ -98,7 +104,7 @@ export default async function ClientDetailPage({
                     <MiniStat
                         label="Next Renewal"
                         value={fmtDate(tenant.subscription_renewal)}
-                        subtitle={`$${tenant.monthly_amount.toLocaleString()}/mo`}
+                        subtitle={`$${(stats?.billing_monthly_amount ?? tenant.billing_monthly_amount ?? tenant.monthly_amount).toLocaleString()}/mo`}
                         icon={<CalendarDays size={16} color="#94A3B8" />}
                     />
                 )}

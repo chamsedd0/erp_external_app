@@ -40,6 +40,21 @@ export async function redisSet(key: string, value: string, expirySeconds?: numbe
     }
 }
 
+/** Set a key only when it does not already exist. Returns true when the lock/value was written. */
+export async function redisSetNX(key: string, value: string, expirySeconds?: number): Promise<boolean> {
+    const result = expirySeconds
+        ? await redisCommand<string | null>('SET', key, value, 'NX', 'EX', expirySeconds)
+        : await redisCommand<string | null>('SET', key, value, 'NX');
+    return result === 'OK';
+}
+
+/** Delete a key only when its current value matches the expected value. */
+export async function redisDelIfValue(key: string, value: string): Promise<boolean> {
+    const script = 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end';
+    const result = await redisCommand<number>('EVAL', script, 1, key, value);
+    return result === 1;
+}
+
 /** Increment a numeric key atomically. */
 export async function redisIncr(key: string): Promise<number> {
     return redisCommand<number>('INCR', key);

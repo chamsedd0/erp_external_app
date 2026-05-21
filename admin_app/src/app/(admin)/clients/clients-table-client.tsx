@@ -54,7 +54,7 @@ export function ClientsTableClient({ tenants }: Props) {
                     else if (!b.subscription_renewal) cmp = -1;
                     else cmp = a.subscription_renewal.localeCompare(b.subscription_renewal);
                 }
-            else if (sortKey === 'amount') cmp = a.monthly_amount - b.monthly_amount;
+            else if (sortKey === 'amount') cmp = (a.billing_monthly_amount ?? a.monthly_amount) - (b.billing_monthly_amount ?? b.monthly_amount);
             return sortAsc ? cmp : -cmp;
         });
         return list;
@@ -204,7 +204,7 @@ export function ClientsTableClient({ tenants }: Props) {
                                         </td>
                                         {/* MRR */}
                                         <td style={{ padding: '14px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#0F172A', fontWeight: 500 }}>
-                                            ${t.monthly_amount.toLocaleString()}/mo
+                                            ${(t.billing_monthly_amount ?? t.monthly_amount).toLocaleString()}/mo
                                         </td>
                                         {/* Health */}
                                         <td style={{ padding: '14px 16px' }}>

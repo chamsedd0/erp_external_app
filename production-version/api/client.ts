@@ -163,6 +163,11 @@ export const apiClient = {
             body: JSON.stringify({ employee_id, tenant_code }),
         }),
 
+    deleteRegistration: () =>
+        apiFetch('/auth/registration', {
+            method: 'DELETE',
+        }),
+
     // ── Time Off ──────────────────────────────────────────────────────────────
 
     getTimeOffTypes: () => apiFetch('/time-off/types'),

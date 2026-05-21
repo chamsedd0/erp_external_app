@@ -1,7 +1,7 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../index';
-import { tenantStore } from '../../lib/tenantStore';
+import { generateSubscriptionNumber, tenantStore } from '../../lib/tenantStore';
 import { pushStore } from '../../lib/pushStore';
 import { getOdooClient } from '../../odoo/client';
 import { authHeader, SAMPLE_TENANT } from './helpers';
@@ -19,6 +19,8 @@ jest.mock('../../lib/tenantStore', () => {
             deleteTenant: jest.fn(),
             listTenants: jest.fn(),
         },
+        generateSubscriptionNumber: jest.fn(),
+        withSubscriptionNumberLock: jest.fn((work: () => Promise<unknown>) => work()),
     };
 });
 jest.mock('../../lib/pushStore');
@@ -26,6 +28,7 @@ jest.mock('../../lib/notificationStore');
 jest.mock('../../odoo/client');
 
 const mockTenantStore = tenantStore as jest.Mocked<typeof tenantStore>;
+const mockGenerateSubscriptionNumber = generateSubscriptionNumber as jest.MockedFunction<typeof generateSubscriptionNumber>;
 const mockPushStore = pushStore as jest.Mocked<typeof pushStore>;
 const mockNotificationStore = notificationStore as jest.Mocked<typeof notificationStore>;
 const mockGetOdooClient = getOdooClient as jest.MockedFunction<typeof getOdooClient>;
@@ -48,6 +51,7 @@ const MOCK_ODOO_CLIENT = {
 beforeEach(() => {
     jest.clearAllMocks();
     mockGetOdooClient.mockReturnValue(MOCK_ODOO_CLIENT as any);
+    mockGenerateSubscriptionNumber.mockResolvedValue('SP-00099');
 });
 
 // ─── POST /auth/login ──────────────────────────────────────────────────────────
@@ -243,6 +247,20 @@ describe('DELETE /auth/push-token', () => {
 
 // ─── GET /admin/tenants ────────────────────────────────────────────────────────
 
+describe('DELETE /auth/registration', () => {
+    it('removes the persistent registration only on explicit account deletion', async () => {
+        mockPushStore.deleteRegistration.mockResolvedValue(undefined);
+
+        const res = await request(app)
+            .delete('/auth/registration')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(mockPushStore.deleteRegistration).toHaveBeenCalledWith('testcorp', 42);
+    });
+});
+
 describe('GET /admin/tenants', () => {
     it('returns tenant array for correct admin secret', async () => {
         mockTenantStore.listTenants.mockResolvedValue({ testcorp: SAMPLE_TENANT });
@@ -318,8 +336,9 @@ describe('POST /admin/tenants', () => {
         expect(res.body.slug).toBe('newco');
         expect(mockTenantStore.saveTenant).toHaveBeenCalledWith(
             'newco',
-            expect.objectContaining({ name: 'New Co', subscription_plan: 'professional' })
+            expect.objectContaining({ name: 'New Co', subscription_plan: 'professional', subscription_number: '' })
         );
+        expect(mockGenerateSubscriptionNumber).not.toHaveBeenCalled();
     });
 
     it('preserves created_at when updating an existing tenant', async () => {
@@ -400,6 +419,7 @@ describe('PUT /admin/tenants/:slug', () => {
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.tenant.subscription_status).toBe('overdue');
+        expect(mockGenerateSubscriptionNumber).not.toHaveBeenCalled();
     });
 
     it('returns 404 when tenant not found', async () => {
@@ -425,7 +445,7 @@ describe('PUT /admin/tenants/:slug', () => {
 
 describe('DELETE /admin/tenants/:slug', () => {
     it('deletes a tenant and returns success', async () => {
-        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_number: '' });
         mockTenantStore.deleteTenant.mockResolvedValue(undefined);
 
         const res = await request(app)
@@ -435,6 +455,27 @@ describe('DELETE /admin/tenants/:slug', () => {
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(mockTenantStore.deleteTenant).toHaveBeenCalledWith('testcorp');
+    });
+
+    it('archives an activated tenant instead of deleting its subscription number', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_number: 'SP-00042' });
+        mockTenantStore.saveTenant.mockResolvedValue(undefined);
+
+        const res = await request(app)
+            .delete('/admin/tenants/testcorp')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ success: true, archived: true });
+        expect(mockTenantStore.deleteTenant).not.toHaveBeenCalled();
+        expect(mockTenantStore.saveTenant).toHaveBeenCalledWith(
+            'testcorp',
+            expect.objectContaining({
+                subscription_number: 'SP-00042',
+                subscription_status: 'cancelled',
+                enabled: false,
+            })
+        );
     });
 
     it('returns 404 when tenant not found', async () => {
@@ -454,6 +495,43 @@ describe('DELETE /admin/tenants/:slug', () => {
 });
 
 // ─── GET /admin/tenants/:slug/health ─────────────────────────────────────────
+
+describe('POST /admin/tenants/:slug/activate', () => {
+    it('assigns a subscription number only during activation', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_status: 'draft', subscription_number: '' });
+        mockTenantStore.saveTenant.mockResolvedValue(undefined);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/activate')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({});
+
+        expect(res.status).toBe(200);
+        expect(res.body.subscription_number).toBe('SP-00099');
+        expect(mockGenerateSubscriptionNumber).toHaveBeenCalledTimes(1);
+        expect(mockTenantStore.saveTenant).toHaveBeenCalledWith(
+            'testcorp',
+            expect.objectContaining({
+                subscription_number: 'SP-00099',
+                subscription_status: 'trial',
+            })
+        );
+    });
+
+    it('is idempotent when a tenant already has a subscription number', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_number: 'SP-00042' });
+        mockTenantStore.saveTenant.mockResolvedValue(undefined);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/activate')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({});
+
+        expect(res.status).toBe(200);
+        expect(res.body.subscription_number).toBe('SP-00042');
+        expect(mockGenerateSubscriptionNumber).not.toHaveBeenCalled();
+    });
+});
 
 describe('GET /admin/tenants/:slug/health', () => {
     it('returns ok:true with version and latency on successful Odoo connect', async () => {

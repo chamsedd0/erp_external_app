@@ -332,7 +332,7 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                     )}
                     {!isNew && !tenant?.subscription_number && (
                         <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14 }}>
-                            No subscription number assigned. Re-save this tenant to auto-generate one.
+                            No subscription number assigned. It will be generated when this client is activated.
                         </div>
                     )}
                     {isNew && (
@@ -341,7 +341,7 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                             background: '#EFF6FF', border: '1px solid #BFDBFE',
                             borderRadius: 8, marginBottom: 14,
                         }}>
-                            A unique subscription number (e.g. <strong>SP-00006</strong>) will be auto-generated when you save this client.
+                            A unique subscription number (e.g. <strong>SP-00006</strong>) will be generated when you activate this client.
                             Employees will use it to log in to the mobile app.
                         </div>
                     )}
@@ -418,11 +418,11 @@ export function TenantForm({ tenant, isNew = false, plans = [] }: Props) {
                                         <Zap size={13} />
                                         <span>
                                             <strong>Pay-as-you-go:</strong> ${selectedPlan!.price_per_employee}/employee/month
-                                            — final amount calculated from active employee count at billing time.
+                                            — final amount calculated from registered app users at billing time.
                                         </span>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 10 }}>
-                                        <DSField label="Number of Employees" hint="Committed employee count used for billing">
+                                        <DSField label="Employee limit" hint="Maximum registered app users allowed">
                                             <DSTextInput
                                                 type="number"
                                                 min={0}

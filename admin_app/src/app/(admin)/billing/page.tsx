@@ -22,12 +22,13 @@ export default async function BillingPage() {
     const in14 = new Date(now.getTime() + 14 * 86400000);
 
     const overdue = tenants.filter((t) => t.subscription_status === 'overdue');
-    const active  = tenants.filter((t) => ['active', 'trial', 'overdue'].includes(t.subscription_status));
+    const active  = tenants.filter((t) => ['active', 'overdue'].includes(t.subscription_status));
+    const billingAmount = (t: typeof tenants[number]) => t.billing_monthly_amount ?? t.monthly_amount;
 
     const mrr = tenants
-        .filter((t) => ['active', 'trial'].includes(t.subscription_status))
-        .reduce((s, t) => s + t.monthly_amount, 0);
-    const overdueAmount = overdue.reduce((s, t) => s + t.monthly_amount, 0);
+        .filter((t) => ['active', 'overdue'].includes(t.subscription_status))
+        .reduce((s, t) => s + billingAmount(t), 0);
+    const overdueAmount = overdue.reduce((s, t) => s + billingAmount(t), 0);
 
     const dueThisWeek = tenants.filter((t) => {
         const d = new Date(t.subscription_renewal);
@@ -88,7 +89,7 @@ export default async function BillingPage() {
                 />
                 <DSStatCard
                     label="Due This Week"
-                    value={`$${dueThisWeek.reduce((s, t) => s + t.monthly_amount, 0).toLocaleString()}`}
+                    value={`$${dueThisWeek.reduce((s, t) => s + billingAmount(t), 0).toLocaleString()}`}
                     subtitle={`${dueThisWeek.length} renewal${dueThisWeek.length !== 1 ? 's' : ''}`}
                     icon={<Clock size={18} />}
                     tint="amber"
@@ -131,7 +132,7 @@ export default async function BillingPage() {
                                                 </div>
                                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                     <div style={{ fontSize: 16, fontWeight: 700, color: '#7F1D1D', fontVariantNumeric: 'tabular-nums' }}>
-                                                        ${t.monthly_amount.toLocaleString()}
+                                                        ${billingAmount(t).toLocaleString()}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: '#B91C1C', fontWeight: 500 }}>{days}d overdue</div>
                                                 </div>
@@ -189,7 +190,7 @@ export default async function BillingPage() {
                                             </div>
                                         </div>
                                         <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                                            ${t.monthly_amount.toLocaleString()}
+                                            ${billingAmount(t).toLocaleString()}
                                         </div>
                                     </Link>
                                 );
@@ -214,6 +215,8 @@ export default async function BillingPage() {
                                 <Th label="Company" />
                                 <Th label="Plan" />
                                 <Th label="Status" />
+                                <Th label="Registered Users" align="right" />
+                                <Th label="Active Devices" align="right" />
                                 <Th label="Renewal" />
                                 <Th label="Amount" align="right" />
                             </tr>
@@ -229,21 +232,30 @@ export default async function BillingPage() {
                                     </td>
                                     <td style={{ padding: '12px 16px' }}><DSPlanBadge plan={t.subscription_plan} /></td>
                                     <td style={{ padding: '12px 16px' }}><DSStatusBadge status={t.subscription_status} /></td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
+                                        {t.registered_app_users ?? 0}
+                                    </td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#475569' }}>
+                                        {t.active_devices ?? 0}
+                                    </td>
                                     <td style={{ padding: '12px 16px' }}><RenewalBadge date={t.subscription_renewal} /></td>
                                     <td style={{ padding: '12px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: '#0F172A' }}>
                                         {planMap.get(t.subscription_plan)?.pricing_model === 'per_employee' ? (
                                             <div>
+                                                <div style={{ fontSize: 14, color: '#0F172A', fontWeight: 700 }}>
+                                                    ${billingAmount(t).toLocaleString()}
+                                                </div>
                                                 <div style={{ fontSize: 12, color: '#3B82F6', fontWeight: 600 }}>
                                                     ${planMap.get(t.subscription_plan)!.price_per_employee}/emp/mo
                                                 </div>
-                                                {t.monthly_amount > 0 && (
+                                                {t.billing_source === 'manual_override' && (
                                                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
-                                                        override: ${t.monthly_amount.toLocaleString()}
+                                                        override: ${billingAmount(t).toLocaleString()}
                                                     </div>
                                                 )}
                                             </div>
                                         ) : (
-                                            `$${t.monthly_amount.toLocaleString()}`
+                                            `$${billingAmount(t).toLocaleString()}`
                                         )}
                                     </td>
                                 </tr>

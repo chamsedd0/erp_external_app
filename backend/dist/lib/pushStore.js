@@ -4,12 +4,34 @@ exports.pushStore = void 0;
 exports.sendPushNotification = sendPushNotification;
 const redis_1 = require("./redis");
 const tokenKey = (tenantId, employeeId) => `shadow:t:${tenantId}:push_token:${employeeId}`;
+const registrationKey = (tenantId, employeeId) => `shadow:t:${tenantId}:app_registration:${employeeId}`;
 // ── Public store API ──────────────────────────────────────────────────────────
 exports.pushStore = {
     /** Save or update the Expo push token for an employee. */
     saveToken: async (tenantId, employeeId, token) => {
         const entry = { employeeId, token, updatedAt: new Date().toISOString() };
         await (0, redis_1.redisSet)(tokenKey(tenantId, employeeId), JSON.stringify(entry));
+        await exports.pushStore.saveRegistration(tenantId, employeeId);
+    },
+    /** Persist an app user registration for billing/account counting. Logout must not remove this. */
+    saveRegistration: async (tenantId, employeeId) => {
+        const now = new Date().toISOString();
+        let registeredAt = now;
+        try {
+            const raw = await (0, redis_1.redisGet)(registrationKey(tenantId, employeeId));
+            if (raw) {
+                const existing = JSON.parse(raw);
+                registeredAt = existing.registeredAt || now;
+            }
+        }
+        catch { /* overwrite malformed registration */ }
+        const entry = {
+            employeeId,
+            registeredAt,
+            lastSeenAt: now,
+            source: 'registration',
+        };
+        await (0, redis_1.redisSet)(registrationKey(tenantId, employeeId), JSON.stringify(entry));
     },
     /** Get the Expo push token for an employee. Returns null if not registered. */
     getToken: async (tenantId, employeeId) => {
@@ -24,9 +46,14 @@ exports.pushStore = {
             return null;
         }
     },
-    /** Remove the push token for an employee (called on logout). */
+    /** Remove the push token for an employee (called on logout). Registration remains billable. */
     removeToken: async (tenantId, employeeId) => {
         await (0, redis_1.redisDel)(tokenKey(tenantId, employeeId));
+    },
+    /** Remove a persistent app registration, used only for explicit account/device deletion. */
+    deleteRegistration: async (tenantId, employeeId) => {
+        await (0, redis_1.redisDel)(tokenKey(tenantId, employeeId));
+        await (0, redis_1.redisDel)(registrationKey(tenantId, employeeId));
     },
     /**
      * List every registered push token across all tenants.
@@ -75,6 +102,46 @@ exports.pushStore = {
         catch {
             return [];
         }
+    },
+    /**
+     * List unique registered app users for billing.
+     * Legacy push-token records with employee IDs count as registrations until users refresh onto the new store.
+     */
+    listRegisteredUsersForTenant: async (tenantId) => {
+        const byEmployee = new Map();
+        try {
+            const keys = await (0, redis_1.redisScan)(`shadow:t:${tenantId}:app_registration:*`);
+            for (const key of keys) {
+                try {
+                    const raw = await (0, redis_1.redisGet)(key);
+                    if (!raw)
+                        continue;
+                    const entry = JSON.parse(raw);
+                    if (typeof entry.employeeId !== 'number' || isNaN(entry.employeeId))
+                        continue;
+                    byEmployee.set(entry.employeeId, {
+                        employeeId: entry.employeeId,
+                        registeredAt: entry.registeredAt || entry.lastSeenAt || new Date(0).toISOString(),
+                        lastSeenAt: entry.lastSeenAt || entry.registeredAt || new Date(0).toISOString(),
+                        source: 'registration',
+                    });
+                }
+                catch { /* skip malformed */ }
+            }
+        }
+        catch { /* continue with legacy token fallback */ }
+        const devices = await exports.pushStore.listDevicesForTenant(tenantId).catch(() => []);
+        for (const device of devices) {
+            if (byEmployee.has(device.employeeId))
+                continue;
+            byEmployee.set(device.employeeId, {
+                employeeId: device.employeeId,
+                registeredAt: device.registered_at,
+                lastSeenAt: device.registered_at,
+                source: 'push_token',
+            });
+        }
+        return Array.from(byEmployee.values()).sort((a, b) => a.employeeId - b.employeeId);
     },
 };
 /**

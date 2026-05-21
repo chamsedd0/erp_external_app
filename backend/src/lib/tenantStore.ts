@@ -1,8 +1,9 @@
-import { redisDel, redisGet, redisIncr, redisSAdd, redisSMembers, redisSRem, redisSet } from './redis';
+import { randomUUID } from 'crypto';
+import { redisDel, redisDelIfValue, redisGet, redisSAdd, redisSetNX, redisSMembers, redisSRem, redisSet } from './redis';
 
 const TENANTS_KEY = 'shadow:tenants';
 const TENANT_INDEX_KEY = 'shadow:tenant_slugs';
-const SUBSCRIPTION_SEQ_KEY = 'shadow:subscription_seq';
+const SUBSCRIPTION_LOCK_KEY = 'shadow:subscription_number_lock';
 const tenantKey = (slug: string) => `shadow:tenant:${slug}`;
 
 export interface TenantConfig {
@@ -25,7 +26,7 @@ export interface TenantConfig {
     subscription_start: string;   // 'YYYY-MM-DD'
     subscription_renewal: string; // 'YYYY-MM-DD' — next billing date
     monthly_amount: number;       // USD/month
-    max_employees?: number;       // 0 = use device count for billing; >0 = committed employee count
+    max_employees?: number;       // plan seat cap; per-user billing uses app registrations
 
     // ── Admin flags ───────────────────────────────────────────────────────────
     enabled: boolean;
@@ -71,22 +72,30 @@ export function applyTenantDefaults(raw: Partial<TenantConfig>): TenantConfig {
 }
 
 /**
- * Auto-generate the next subscription number in SP-XXXXX format.
- * Uses Redis INCR so concurrent tenant creation cannot pick the same number.
+ * Calculate the next visible subscription number in SP-XXXXX format.
+ * Call this while holding withSubscriptionNumberLock when assigning a tenant.
  */
 export async function generateSubscriptionNumber(): Promise<string> {
-    let next = await redisIncr(SUBSCRIPTION_SEQ_KEY);
+    const next = highestExistingSubscriptionNumber(await tenantStore.listTenants()) + 1;
+    return `SP-${String(next).padStart(5, '0')}`;
+}
 
-    // First run after migration: seed above the highest legacy value.
-    if (next === 1) {
-        const maxExisting = highestExistingSubscriptionNumber(await tenantStore.listTenants());
-        if (maxExisting >= next) {
-            next = maxExisting + 1;
-            await redisSet(SUBSCRIPTION_SEQ_KEY, String(next));
+export async function withSubscriptionNumberLock<T>(work: () => Promise<T>): Promise<T> {
+    const token = randomUUID();
+    const deadline = Date.now() + 10_000;
+
+    while (Date.now() < deadline) {
+        if (await redisSetNX(SUBSCRIPTION_LOCK_KEY, token, 15)) {
+            try {
+                return await work();
+            } finally {
+                await redisDelIfValue(SUBSCRIPTION_LOCK_KEY, token).catch(() => undefined);
+            }
         }
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    return `SP-${String(next).padStart(5, '0')}`;
+    throw new Error('Could not acquire subscription number lock');
 }
 
 /**

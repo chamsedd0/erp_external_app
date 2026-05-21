@@ -3,11 +3,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tenantStore = void 0;
 exports.applyTenantDefaults = applyTenantDefaults;
 exports.generateSubscriptionNumber = generateSubscriptionNumber;
+exports.withSubscriptionNumberLock = withSubscriptionNumberLock;
 exports.resolveToSlug = resolveToSlug;
+const crypto_1 = require("crypto");
 const redis_1 = require("./redis");
 const TENANTS_KEY = 'shadow:tenants';
 const TENANT_INDEX_KEY = 'shadow:tenant_slugs';
-const SUBSCRIPTION_SEQ_KEY = 'shadow:subscription_seq';
+const SUBSCRIPTION_LOCK_KEY = 'shadow:subscription_number_lock';
 const tenantKey = (slug) => `shadow:tenant:${slug}`;
 /**
  * Apply safe defaults for any new fields that may be missing on existing tenants
@@ -38,20 +40,28 @@ function applyTenantDefaults(raw) {
     };
 }
 /**
- * Auto-generate the next subscription number in SP-XXXXX format.
- * Uses Redis INCR so concurrent tenant creation cannot pick the same number.
+ * Calculate the next visible subscription number in SP-XXXXX format.
+ * Call this while holding withSubscriptionNumberLock when assigning a tenant.
  */
 async function generateSubscriptionNumber() {
-    let next = await (0, redis_1.redisIncr)(SUBSCRIPTION_SEQ_KEY);
-    // First run after migration: seed above the highest legacy value.
-    if (next === 1) {
-        const maxExisting = highestExistingSubscriptionNumber(await exports.tenantStore.listTenants());
-        if (maxExisting >= next) {
-            next = maxExisting + 1;
-            await (0, redis_1.redisSet)(SUBSCRIPTION_SEQ_KEY, String(next));
-        }
-    }
+    const next = highestExistingSubscriptionNumber(await exports.tenantStore.listTenants()) + 1;
     return `SP-${String(next).padStart(5, '0')}`;
+}
+async function withSubscriptionNumberLock(work) {
+    const token = (0, crypto_1.randomUUID)();
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+        if (await (0, redis_1.redisSetNX)(SUBSCRIPTION_LOCK_KEY, token, 15)) {
+            try {
+                return await work();
+            }
+            finally {
+                await (0, redis_1.redisDelIfValue)(SUBSCRIPTION_LOCK_KEY, token).catch(() => undefined);
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('Could not acquire subscription number lock');
 }
 /**
  * Resolve any external tenant code (SP-XXXXX or raw slug) to the internal slug.

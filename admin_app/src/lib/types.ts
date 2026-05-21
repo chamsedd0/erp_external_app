@@ -17,9 +17,15 @@ export interface Tenant {
     subscription_start: string;
     subscription_renewal: string;
     monthly_amount: number;
-    max_employees?: number;      // 0 = device count used for billing; >0 = committed employee count
+    max_employees?: number;      // plan seat cap; billing uses registered app users unless overridden
     billing_frequency?: 'monthly' | 'quarterly' | 'yearly';
     subscription_number?: string;   // 'SP-00001'
+    active_devices?: number;
+    registered_app_users?: number;
+    unassigned_devices?: number;
+    billing_monthly_amount?: number;
+    billing_source?: 'fixed' | 'manual_override' | 'registered_app_users';
+    price_per_employee?: number;
 
     enabled: boolean;
     created_at: string;
@@ -68,6 +74,11 @@ export interface PlatformStats {
 
 export interface TenantStats {
     active_devices: number;
+    registered_app_users: number;
+    unassigned_devices: number;
+    billing_monthly_amount: number;
+    billing_source: 'fixed' | 'manual_override' | 'registered_app_users';
+    price_per_employee?: number;
     notifications_total: number;
     notifications_unread: number;
     last_sync: string | null;

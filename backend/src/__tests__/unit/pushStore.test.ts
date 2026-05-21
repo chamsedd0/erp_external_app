@@ -26,8 +26,10 @@ describe('pushStore.saveToken', () => {
         await pushStore.saveToken('tenant-a', 1, 'token-a');
         await pushStore.saveToken('tenant-b', 1, 'token-b');
         const keys = mockRedisSet.mock.calls.map((c: any) => c[0]);
-        expect(keys[0]).toBe('shadow:t:tenant-a:push_token:1');
-        expect(keys[1]).toBe('shadow:t:tenant-b:push_token:1');
+        expect(keys).toContain('shadow:t:tenant-a:push_token:1');
+        expect(keys).toContain('shadow:t:tenant-a:app_registration:1');
+        expect(keys).toContain('shadow:t:tenant-b:push_token:1');
+        expect(keys).toContain('shadow:t:tenant-b:app_registration:1');
     });
 });
 
@@ -57,6 +59,15 @@ describe('pushStore.removeToken', () => {
     it('calls redisDel with tenant-scoped key', async () => {
         await pushStore.removeToken('tenant-a', 42);
         expect(mockRedisDel).toHaveBeenCalledWith('shadow:t:tenant-a:push_token:42');
+        expect(mockRedisDel).not.toHaveBeenCalledWith('shadow:t:tenant-a:app_registration:42');
+    });
+});
+
+describe('pushStore.deleteRegistration', () => {
+    it('removes both push token and persistent registration', async () => {
+        await pushStore.deleteRegistration('tenant-a', 42);
+        expect(mockRedisDel).toHaveBeenCalledWith('shadow:t:tenant-a:push_token:42');
+        expect(mockRedisDel).toHaveBeenCalledWith('shadow:t:tenant-a:app_registration:42');
     });
 });
 

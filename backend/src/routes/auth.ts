@@ -3,7 +3,7 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { clearOdooClientCache, getOdooClient } from '../odoo/client';
-import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber, resolveToSlug } from '../lib/tenantStore';
+import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber, resolveToSlug, withSubscriptionNumberLock } from '../lib/tenantStore';
 import { pushStore } from '../lib/pushStore';
 import { notificationStore } from '../lib/notificationStore';
 import { planStore, SubscriptionPlan } from '../lib/planStore';
@@ -12,6 +12,7 @@ import { generateQuotationHTML } from '../lib/invoiceTemplate';
 import { redisGet, redisScan } from '../lib/redis';
 import { getAuthenticatedEmployee } from '../lib/authContext';
 import { portalAuthStore } from '../lib/portalAuthStore';
+import { getTenantBillingSnapshot } from '../lib/billing';
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
@@ -215,21 +216,18 @@ authRouter.post('/login', async (req, res) => {
             }
         }
 
-        // 3. Max employee check — based on plan's max_employees
+        // 3. Max employee check — based on persistent app registrations.
         const plan = await planStore.getPlan(tenantConfig.subscription_plan).catch(() => null);
         const maxEmployees = plan?.max_employees ?? { starter: 10, professional: 50, enterprise: 0 }[tenantConfig.subscription_plan] ?? 10;
 
         if (maxEmployees > 0) {
             const empId = parseInt(identifier, 10);
-            const existingToken = !isNaN(empId) ? await Promise.resolve(pushStore.getToken?.(tenantId, empId) ?? null).catch(() => null) : null;
-            if (!existingToken) {
-                // Employee has no registered device — count existing unique employees
-                const devices = await Promise.resolve(pushStore.listDevicesForTenant?.(tenantId) ?? []).catch(() => []);
-                if (devices.length >= maxEmployees) {
-                    return res.status(403).json({
-                        error: 'Employee limit reached for this subscription plan. Contact your administrator.',
-                    });
-                }
+            const registeredUsers = await Promise.resolve(pushStore.listRegisteredUsersForTenant?.(tenantId) ?? []).catch(() => []);
+            const registeredIds = new Set(registeredUsers.map(user => user.employeeId));
+            if (!isNaN(empId) && !registeredIds.has(empId) && registeredIds.size >= maxEmployees) {
+                return res.status(403).json({
+                    error: 'Employee limit reached for this subscription plan. Contact your administrator.',
+                });
             }
         }
 
@@ -439,6 +437,17 @@ authRouter.delete('/push-token', async (req, res) => {
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
 
+authRouter.delete('/registration', async (req, res) => {
+    try {
+        const auth = getAuthenticatedEmployee(req);
+        await pushStore.deleteRegistration(auth.tenantId, auth.employeeId);
+        res.json({ success: true });
+    } catch (error: any) {
+        console.error('Delete Registration Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const adminRouter = Router();
 
 /** Full schema for creating or replacing a tenant (all fields) */
@@ -477,6 +486,11 @@ function safeTenant(slug: string, cfg: TenantConfig) {
     return { slug, ...safe };
 }
 
+async function safeTenantWithBilling(slug: string, cfg: TenantConfig, plan?: SubscriptionPlan | null) {
+    const billing = await getTenantBillingSnapshot(slug, cfg, plan);
+    return { ...safeTenant(slug, cfg), ...billing };
+}
+
 const createInviteSchema = z.object({
     employee_id: z.number().int().positive(),
 });
@@ -487,21 +501,15 @@ adminRouter.post('/tenants', async (req, res) => {
         const { slug, ...fields } = tenantBodySchema.parse(req.body);
         const existing = await tenantStore.getTenant(slug);
 
-        // Auto-generate subscription_number if creating new tenant without one
-        let subscriptionNumber = fields.subscription_number ?? existing?.subscription_number;
-        if (!subscriptionNumber) {
-            subscriptionNumber = await generateSubscriptionNumber();
-        }
-
         const cfg = applyTenantDefaults({
             ...existing,
             ...fields,
-            subscription_number: subscriptionNumber,
+            subscription_number: fields.subscription_number ?? existing?.subscription_number ?? '',
             created_at: existing?.created_at ?? new Date().toISOString(),
         });
         await tenantStore.saveTenant(slug, cfg);
         clearOdooClientCache(slug);
-        res.json({ success: true, slug, subscription_number: subscriptionNumber });
+        res.json({ success: true, slug, subscription_number: cfg.subscription_number || undefined });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
@@ -515,7 +523,11 @@ adminRouter.post('/tenants', async (req, res) => {
 adminRouter.get('/tenants', async (_req, res) => {
     try {
         const tenants = await tenantStore.listTenants();
-        const safe = Object.entries(tenants).map(([slug, cfg]) => safeTenant(slug, cfg));
+        const plans = await planStore.listPlans().catch(() => [] as SubscriptionPlan[]);
+        const planMap = new Map(plans.map(plan => [plan.id, plan]));
+        const safe = await Promise.all(
+            Object.entries(tenants).map(([slug, cfg]) => safeTenantWithBilling(slug, cfg, planMap.get(cfg.subscription_plan)))
+        );
         res.json(safe);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -527,7 +539,8 @@ adminRouter.get('/tenants/:slug', async (req, res) => {
     try {
         const cfg = await tenantStore.getTenant(req.params.slug);
         if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
-        res.json(safeTenant(req.params.slug, cfg));
+        const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
+        res.json(await safeTenantWithBilling(req.params.slug, cfg, plan));
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -548,16 +561,15 @@ adminRouter.put('/tenants/:slug', async (req, res) => {
             Object.entries(updates).filter(([, v]) => v !== undefined)
         ) as typeof updates;
 
-        // Auto-generate subscription_number if the tenant doesn't have one yet
-        let subscriptionNumber = cleanUpdates.subscription_number ?? existing.subscription_number;
-        if (!subscriptionNumber) {
-            subscriptionNumber = await generateSubscriptionNumber();
-        }
-
-        const merged = applyTenantDefaults({ ...existing, ...cleanUpdates, subscription_number: subscriptionNumber });
+        const merged = applyTenantDefaults({
+            ...existing,
+            ...cleanUpdates,
+            subscription_number: cleanUpdates.subscription_number ?? existing.subscription_number ?? '',
+        });
         await tenantStore.saveTenant(req.params.slug, merged);
         clearOdooClientCache(req.params.slug);
-        res.json({ success: true, tenant: safeTenant(req.params.slug, merged) });
+        const plan = await planStore.getPlan(merged.subscription_plan).catch(() => null);
+        res.json({ success: true, tenant: await safeTenantWithBilling(req.params.slug, merged, plan) });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).issues ?? (error as any).errors });
@@ -571,9 +583,19 @@ adminRouter.delete('/tenants/:slug', async (req, res) => {
     try {
         const existing = await tenantStore.getTenant(req.params.slug);
         if (!existing) return res.status(404).json({ error: 'Tenant not found' });
+        if (existing.subscription_number) {
+            const archived = applyTenantDefaults({
+                ...existing,
+                subscription_status: 'cancelled',
+                enabled: false,
+            });
+            await tenantStore.saveTenant(req.params.slug, archived);
+            clearOdooClientCache(req.params.slug);
+            return res.json({ success: true, archived: true });
+        }
         await tenantStore.deleteTenant(req.params.slug);
         clearOdooClientCache(req.params.slug);
-        res.json({ success: true });
+        res.json({ success: true, deleted: true });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -635,9 +657,8 @@ adminRouter.get('/tenants/:slug/stats', async (req, res) => {
 
         const slug = req.params.slug;
 
-        // Count push tokens (active devices)
-        const allTokens = await pushStore.listAllTokens().catch(() => [] as { tenantId: string; employeeId: number }[]);
-        const active_devices = allTokens.filter(t => t.tenantId === slug).length;
+        const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
+        const billing = await getTenantBillingSnapshot(slug, cfg, plan);
 
         // Count notifications
         const notifKey = `shadow:t:${slug}:notifications`;
@@ -668,7 +689,7 @@ adminRouter.get('/tenants/:slug/stats', async (req, res) => {
             }
         } catch { /* ignore */ }
 
-        res.json({ active_devices, notifications_total, notifications_unread, last_sync });
+        res.json({ ...billing, notifications_total, notifications_unread, last_sync });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -799,17 +820,13 @@ adminRouter.post('/tenants/:slug/send-quotation', async (req, res) => {
         const plan = await planStore.getPlan(cfg.subscription_plan).catch(() => null);
         const planName = plan?.name ?? (cfg.subscription_plan.charAt(0).toUpperCase() + cfg.subscription_plan.slice(1));
 
-        let quotationAmount = cfg.monthly_amount;
+        const billing = await getTenantBillingSnapshot(req.params.slug, cfg, plan);
+        let quotationAmount = billing.billing_monthly_amount;
         let activeEmployees: number | undefined;
         let pricePerEmployee: number | undefined;
         if (plan?.pricing_model === 'per_employee' && plan.price_per_employee) {
-            const committedCount = cfg.max_employees && cfg.max_employees > 0 ? cfg.max_employees : undefined;
-            const devices = committedCount === undefined
-                ? await pushStore.listDevicesForTenant(req.params.slug).catch(() => [] as any[])
-                : [];
-            activeEmployees = committedCount ?? devices.length;
+            activeEmployees = billing.registered_app_users;
             pricePerEmployee = plan.price_per_employee;
-            quotationAmount = activeEmployees * pricePerEmployee;
         }
 
         const html = generateQuotationHTML({
@@ -867,7 +884,6 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
 
         const data = activateSchema.parse(req.body);
 
-        const subNum = existing.subscription_number || await generateSubscriptionNumber();
         const today = new Date().toISOString().split('T')[0];
         const start = data.subscription_start || existing.subscription_start || today;
         const freq = existing.billing_frequency ?? 'monthly';
@@ -881,20 +897,27 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
             renewal = d.toISOString().split('T')[0];
         }
 
-        const updated = applyTenantDefaults({
-            ...existing,
-            subscription_number: subNum,
-            subscription_status: 'trial',
-            subscription_start: start,
-            subscription_renewal: renewal,
+        const subNum = await withSubscriptionNumberLock(async () => {
+            const current = await tenantStore.getTenant(req.params.slug);
+            if (!current) throw Object.assign(new Error('Tenant not found'), { statusCode: 404 });
+
+            const assigned = current.subscription_number || await generateSubscriptionNumber();
+            const updated = applyTenantDefaults({
+                ...current,
+                subscription_number: assigned,
+                subscription_status: 'trial',
+                subscription_start: start,
+                subscription_renewal: renewal,
+            });
+            await tenantStore.saveTenant(req.params.slug, updated);
+            return assigned;
         });
-        await tenantStore.saveTenant(req.params.slug, updated);
         clearOdooClientCache(req.params.slug);
         res.json({ success: true, subscription_number: subNum });
     } catch (error: any) {
         if (error instanceof z.ZodError)
             return res.status(400).json({ error: 'Invalid input', details: error.issues });
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode ?? 500).json({ error: error.message });
     }
 });
 
@@ -918,7 +941,6 @@ adminRouter.get('/stats', async (_req, res) => {
         const allPlans = await planStore.listPlans().catch(() => [] as SubscriptionPlan[]);
         const planMap = new Map(allPlans.map(p => [p.id, p]));
 
-        // MRR: for per-employee plans, compute dynamically from active device count
         const billingTenants = slugs.filter(slug =>
             tenants[slug].enabled && ['active', 'overdue'].includes(tenants[slug].subscription_status)
         );
@@ -926,12 +948,8 @@ adminRouter.get('/stats', async (_req, res) => {
         for (const slug of billingTenants) {
             const t = tenants[slug];
             const plan = planMap.get(t.subscription_plan);
-            if (plan?.pricing_model === 'per_employee' && plan.price_per_employee) {
-                const devices = await pushStore.listDevicesForTenant(slug).catch(() => [] as any[]);
-                monthly_revenue += devices.length * plan.price_per_employee;
-            } else {
-                monthly_revenue += t.monthly_amount ?? 0;
-            }
+            const billing = await getTenantBillingSnapshot(slug, t, plan);
+            monthly_revenue += billing.billing_monthly_amount;
         }
 
         // Renewals in next 30 days
