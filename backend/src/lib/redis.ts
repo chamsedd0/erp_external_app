@@ -24,6 +24,8 @@ async function redisCommand<T = any>(...args: (string | number)[]): Promise<T> {
     return json.result;
 }
 
+export { redisCommand };
+
 /** Get a string value by key. Returns null if the key does not exist. */
 export async function redisGet(key: string): Promise<string | null> {
     return redisCommand<string | null>('GET', key);
@@ -38,9 +40,29 @@ export async function redisSet(key: string, value: string, expirySeconds?: numbe
     }
 }
 
+/** Increment a numeric key atomically. */
+export async function redisIncr(key: string): Promise<number> {
+    return redisCommand<number>('INCR', key);
+}
+
 /** Delete a key. No-op if the key does not exist. */
 export async function redisDel(key: string): Promise<void> {
     await redisCommand('DEL', key);
+}
+
+/** Add one or more members to a set. */
+export async function redisSAdd(key: string, ...values: string[]): Promise<number> {
+    return redisCommand<number>('SADD', key, ...values);
+}
+
+/** Remove one or more members from a set. */
+export async function redisSRem(key: string, ...values: string[]): Promise<number> {
+    return redisCommand<number>('SREM', key, ...values);
+}
+
+/** Return all members of a set. */
+export async function redisSMembers(key: string): Promise<string[]> {
+    return redisCommand<string[]>('SMEMBERS', key);
 }
 
 /** Prepend value(s) to a Redis list. Returns new list length. */

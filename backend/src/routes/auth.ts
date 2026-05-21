@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { getOdooClient } from '../odoo/client';
+import { clearOdooClientCache, getOdooClient } from '../odoo/client';
 import { tenantStore, TenantConfig, applyTenantDefaults, generateSubscriptionNumber, resolveToSlug } from '../lib/tenantStore';
 import { pushStore } from '../lib/pushStore';
 import { notificationStore } from '../lib/notificationStore';
@@ -10,42 +10,209 @@ import { planStore, SubscriptionPlan } from '../lib/planStore';
 import { getErrors, clearErrors } from '../lib/errorLog';
 import { generateQuotationHTML } from '../lib/invoiceTemplate';
 import { redisGet, redisScan } from '../lib/redis';
+import { getAuthenticatedEmployee } from '../lib/authContext';
+import { portalAuthStore } from '../lib/portalAuthStore';
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
 const authRouter = Router();
 
 const loginSchema = z.object({
-    employee_id: z.string(),
+    employee_id: z.string().optional(),
+    identifier: z.string().optional(),
+    work_email: z.string().email().optional(),
     pin: z.string(),
     tenant_slug: z.string().optional(),
+    tenant_code: z.string().optional(),
     tenant_subscription_number: z.string().optional(),
-}).refine(d => d.tenant_slug || d.tenant_subscription_number, {
-    message: 'tenant_slug or tenant_subscription_number is required',
+}).refine(d => d.tenant_slug || d.tenant_subscription_number || d.tenant_code, {
+    message: 'tenant_slug, tenant_code, or tenant_subscription_number is required',
+}).refine(d => d.employee_id || d.identifier || d.work_email, {
+    message: 'employee_id, identifier, or work_email is required',
 });
 
+const activationStartSchema = z.object({
+    tenant_code: z.string().optional(),
+    tenant_slug: z.string().optional(),
+    tenant_subscription_number: z.string().optional(),
+    work_email: z.string().email(),
+}).refine(d => d.tenant_code || d.tenant_slug || d.tenant_subscription_number, {
+    message: 'tenant_code, tenant_slug, or tenant_subscription_number is required',
+});
+
+const activationVerifySchema = activationStartSchema.extend({
+    otp: z.string().min(4).max(12),
+    pin: z.string(),
+});
+
+const inviteVerifySchema = z.object({
+    tenant_code: z.string().optional(),
+    tenant_slug: z.string().optional(),
+    tenant_subscription_number: z.string().optional(),
+    invite_code: z.string().min(6),
+    pin: z.string(),
+}).refine(d => d.tenant_code || d.tenant_slug || d.tenant_subscription_number, {
+    message: 'tenant_code, tenant_slug, or tenant_subscription_number is required',
+});
+
+async function resolveTenantCode(rawCode: string): Promise<string | null> {
+    const direct = await resolveToSlug(rawCode).catch(() => null);
+    if (direct) return direct;
+    const trimmed = rawCode.trim();
+    if (await tenantStore.getTenant(trimmed).catch(() => null)) return trimmed;
+    const lower = trimmed.toLowerCase();
+    if (await tenantStore.getTenant(lower).catch(() => null)) return lower;
+    return null;
+}
+
+function tenantAccessDisabled(cfg: TenantConfig): boolean {
+    return !cfg.enabled || ['suspended', 'cancelled', 'draft'].includes(cfg.subscription_status);
+}
+
+function signEmployeeToken(tenantId: string, employee: any) {
+    return jwt.sign(
+        {
+            id: employee.id,
+            name: employee.name,
+            role: 'employee',
+            tenantId,
+        },
+        config.jwtSecret,
+        { expiresIn: '7d' }
+    );
+}
+
+function formatLoginResponse(tenantId: string, employee: any) {
+    return {
+        token: signEmployeeToken(tenantId, employee),
+        user: {
+            id: employee.id,
+            name: employee.name,
+            department: employee.department_id ? employee.department_id[1] : null,
+            job_title: employee.job_title,
+            work_email: employee.work_email,
+        },
+    };
+}
+
+async function sendActivationEmail(to: string, otp: string, tenantName: string) {
+    if (!config.resendApiKey) {
+        if (process.env.NODE_ENV === 'production') {
+            throw Object.assign(new Error('Email service not configured'), { statusCode: 503 });
+        }
+        console.log(`[activation] OTP for ${to} (${tenantName}): ${otp}`);
+        return;
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${config.resendApiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            from: config.resendFromEmail,
+            to,
+            subject: `${tenantName} mobile app activation code`,
+            html: `<p>Your activation code is <strong>${otp}</strong>. It expires in ${Math.floor(config.activationOtpTtlSeconds / 60)} minutes.</p>`,
+        }),
+    });
+
+    if (!response.ok) {
+        throw Object.assign(new Error('Email delivery failed'), { statusCode: 502 });
+    }
+}
+
+async function loadEmployeeForLogin(
+    tenantId: string,
+    tenantConfig: TenantConfig,
+    employeeId: number,
+    workEmail?: string,
+    fallbackName?: string
+) {
+    const client = getOdooClient(tenantId, tenantConfig);
+    const uid = await client.authenticate();
+    const employees: any = await client.searchRead(
+        uid,
+        'hr.employee',
+        [['id', '=', employeeId]],
+        ['id', 'name', 'department_id', 'job_title', 'work_email'],
+        true
+    ).catch(() => []);
+
+    if (Array.isArray(employees) && employees[0]) return employees[0];
+    return {
+        id: employeeId,
+        name: fallbackName ?? `Employee ${employeeId}`,
+        department_id: null,
+        job_title: null,
+        work_email: workEmail ?? null,
+    };
+}
+
+function classifyLoginOdooError(error: any): { status: number; message: string; reason: string } {
+    const raw = String(error?.faultString || error?.faultMessage || error?.message || error || '').toLowerCase();
+    if ((raw.includes('invalid field') || raw.includes('unknown field')) && (raw.includes('pin') || raw.includes('barcode'))) {
+        return {
+            status: 422,
+            message: 'Employee portal credentials are not configured for this company. Please use first-time activation or contact your administrator.',
+            reason: 'missing_employee_auth_fields',
+        };
+    }
+    if (raw.includes('authentication failure') || raw.includes('access denied') || raw.includes('wrong login') || raw.includes('invalid database')) {
+        return {
+            status: 502,
+            message: 'Company connection is not configured correctly. Please contact your administrator.',
+            reason: 'tenant_odoo_auth_or_db',
+        };
+    }
+    if (raw.includes('timeout') || raw.includes('etimedout') || raw.includes('econn') || raw.includes('enotfound') || raw.includes('certificate') || raw.includes('socket') || raw.includes('xml-rpc')) {
+        return {
+            status: 502,
+            message: 'Company system is temporarily unavailable. Please try again later.',
+            reason: 'tenant_odoo_unavailable',
+        };
+    }
+    return {
+        status: 502,
+        message: 'Could not verify employee credentials with the company system. Please try again or contact your administrator.',
+        reason: 'tenant_odoo_unknown',
+    };
+}
+
 authRouter.post('/login', async (req, res) => {
+    let tenantId: string | null = null;
+    let stage = 'parse_input';
     try {
         const body = loginSchema.parse(req.body);
 
         // 1. Resolve tenant — accepts SP number (SP-XXXXX) or slug for backward compat
-        const rawCode = body.tenant_slug ?? body.tenant_subscription_number!;
-        const tenantId = await resolveToSlug(rawCode);
+        stage = 'resolve_tenant';
+        const rawCode = body.tenant_code ?? body.tenant_slug ?? body.tenant_subscription_number!;
+        tenantId = await resolveTenantCode(rawCode);
         if (!tenantId) return res.status(401).json({ error: 'Unknown company code' });
 
+        stage = 'load_tenant';
         const tenantConfig = await tenantStore.getTenant(tenantId);
         if (!tenantConfig) {
             return res.status(401).json({ error: 'Unknown company code' });
         }
 
         // 2. Reject login if tenant is disabled / suspended / cancelled / draft
-        if (
-            !tenantConfig.enabled ||
-            tenantConfig.subscription_status === 'suspended' ||
-            tenantConfig.subscription_status === 'cancelled' ||
-            tenantConfig.subscription_status === 'draft'
-        ) {
+        if (tenantAccessDisabled(tenantConfig)) {
             return res.status(403).json({ error: 'Account access is currently disabled. Please contact your administrator.' });
+        }
+
+        const identifier = (body.work_email ?? body.identifier ?? body.employee_id ?? '').trim();
+        const portalEmail = identifier.includes('@') ? identifier : body.work_email;
+        if (portalEmail) {
+            stage = 'portal_credential_lookup';
+            const credential = await portalAuthStore.getCredentialByEmail(tenantId, portalEmail);
+            if (await portalAuthStore.verifyCredential(credential, body.pin)) {
+                stage = 'portal_employee_load';
+                const employee = await loadEmployeeForLogin(tenantId, tenantConfig, credential!.employeeId, credential?.workEmail, credential?.name);
+                return res.json(formatLoginResponse(tenantId, employee));
+            }
         }
 
         // 3. Max employee check — based on plan's max_employees
@@ -53,11 +220,11 @@ authRouter.post('/login', async (req, res) => {
         const maxEmployees = plan?.max_employees ?? { starter: 10, professional: 50, enterprise: 0 }[tenantConfig.subscription_plan] ?? 10;
 
         if (maxEmployees > 0) {
-            const empId = parseInt(body.employee_id, 10);
-            const existingToken = !isNaN(empId) ? await pushStore.getToken(tenantId, empId).catch(() => null) : null;
+            const empId = parseInt(identifier, 10);
+            const existingToken = !isNaN(empId) ? await Promise.resolve(pushStore.getToken?.(tenantId, empId) ?? null).catch(() => null) : null;
             if (!existingToken) {
                 // Employee has no registered device — count existing unique employees
-                const devices = await pushStore.listDevicesForTenant(tenantId).catch(() => []);
+                const devices = await Promise.resolve(pushStore.listDevicesForTenant?.(tenantId) ?? []).catch(() => []);
                 if (devices.length >= maxEmployees) {
                     return res.status(403).json({
                         error: 'Employee limit reached for this subscription plan. Contact your administrator.',
@@ -69,53 +236,38 @@ authRouter.post('/login', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         // 4. Authenticate Admin to get UID
+        stage = 'odoo_authenticate';
         const uid = await client.authenticate();
 
         // 5. Search for Employee
-        const employees: any = await client.searchEmployee(uid, body.employee_id, body.pin);
+        stage = 'odoo_employee_search';
+        const employees: any = await client.searchEmployee(uid, identifier, body.pin);
 
         if (!employees || employees.length === 0) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        const employee = employees[0];
-
-        // 6. Generate JWT (includes tenantId)
-        const token = jwt.sign(
-            {
-                id: employee.id,
-                name: employee.name,
-                role: 'employee',
-                tenantId,
-            },
-            config.jwtSecret,
-            { expiresIn: '7d' }
-        );
-
-        res.json({
-            token,
-            user: {
-                id: employee.id,
-                name: employee.name,
-                department: employee.department_id ? employee.department_id[1] : null,
-                job_title: employee.job_title,
-                work_email: employee.work_email,
-            },
-        });
+        res.json(formatLoginResponse(tenantId, employees[0]));
 
     } catch (error) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
         }
-        console.error('Login Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        const classified = classifyLoginOdooError(error);
+        console.error('[auth/login] failed', {
+            stage,
+            tenantId,
+            reason: classified.reason,
+            message: error instanceof Error ? error.message : String((error as any)?.faultString || error),
+        });
+        res.status(classified.status).json({ error: classified.message });
     }
 });
 
 /** GET /auth/tenant/:code — public, returns display info only (no credentials).
  *  Accepts SP number (SP-XXXXX) or slug. Returns subscription_number — never the slug. */
 authRouter.get('/tenant/:code', async (req, res) => {
-    const slug = await resolveToSlug(req.params.code);
+    const slug = await resolveTenantCode(req.params.code);
     if (!slug) return res.status(404).json({ error: 'Company not found' });
     const cfg = await tenantStore.getTenant(slug);
     if (!cfg) return res.status(404).json({ error: 'Company not found' });
@@ -129,17 +281,125 @@ authRouter.get('/tenant/:code', async (req, res) => {
 
 // ── Push Notification Token Management ───────────────────────────────────────
 
+authRouter.post('/activation/start', async (req, res) => {
+    try {
+        const body = activationStartSchema.parse(req.body);
+        const rawCode = body.tenant_code ?? body.tenant_slug ?? body.tenant_subscription_number!;
+        const tenantId = await resolveTenantCode(rawCode);
+        const generic = { success: true, message: 'If this email can be activated, a code has been sent.' };
+        if (!tenantId) return res.json(generic);
+
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig || tenantAccessDisabled(tenantConfig)) return res.json(generic);
+
+        const client = getOdooClient(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        const email = portalAuthStore.normaliseEmail(body.work_email);
+        const employees: any = await client.searchRead(
+            uid,
+            'hr.employee',
+            [['work_email', '=', email]],
+            ['id', 'name', 'department_id', 'job_title', 'work_email'],
+            true
+        ).catch(() => []);
+
+        if (!Array.isArray(employees) || employees.length !== 1) {
+            return res.json(generic);
+        }
+
+        const employee = employees[0];
+        const { otp } = await portalAuthStore.createOtp(tenantId, employee.id, email, employee.name);
+        await sendActivationEmail(email, otp, tenantConfig.name);
+        res.json(process.env.NODE_ENV === 'production' ? generic : { ...generic, dev_otp: otp });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
+        }
+        const statusCode = error?.statusCode ?? 500;
+        res.status(statusCode).json({ error: statusCode === 500 ? 'Internal server error' : error.message });
+    }
+});
+
+authRouter.post('/activation/verify', async (req, res) => {
+    try {
+        const body = activationVerifySchema.parse(req.body);
+        const rawCode = body.tenant_code ?? body.tenant_slug ?? body.tenant_subscription_number!;
+        const tenantId = await resolveTenantCode(rawCode);
+        if (!tenantId) return res.status(401).json({ error: 'Invalid activation code' });
+
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig || tenantAccessDisabled(tenantConfig)) {
+            return res.status(403).json({ error: 'Account access is currently disabled. Please contact your administrator.' });
+        }
+
+        const pinError = portalAuthStore.validatePinPolicy(body.pin);
+        if (pinError) return res.status(400).json({ error: pinError });
+
+        const otp = await portalAuthStore.verifyOtp(tenantId, body.work_email, body.otp);
+        if (!otp) return res.status(401).json({ error: 'Invalid or expired activation code' });
+
+        await portalAuthStore.saveCredential({
+            tenantId,
+            employeeId: otp.employeeId,
+            workEmail: otp.workEmail,
+            name: otp.name,
+            pin: body.pin,
+        });
+
+        const employee = await loadEmployeeForLogin(tenantId, tenantConfig, otp.employeeId, otp.workEmail, otp.name);
+        res.json(formatLoginResponse(tenantId, employee));
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
+        }
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+authRouter.post('/activation/invite', async (req, res) => {
+    try {
+        const body = inviteVerifySchema.parse(req.body);
+        const rawCode = body.tenant_code ?? body.tenant_slug ?? body.tenant_subscription_number!;
+        const tenantId = await resolveTenantCode(rawCode);
+        if (!tenantId) return res.status(401).json({ error: 'Invalid invite code' });
+
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig || tenantAccessDisabled(tenantConfig)) {
+            return res.status(403).json({ error: 'Account access is currently disabled. Please contact your administrator.' });
+        }
+
+        const pinError = portalAuthStore.validatePinPolicy(body.pin);
+        if (pinError) return res.status(400).json({ error: pinError });
+
+        const invite = await portalAuthStore.consumeInvite(tenantId, body.invite_code);
+        if (!invite) return res.status(401).json({ error: 'Invalid or expired invite code' });
+
+        await portalAuthStore.saveCredential({
+            tenantId,
+            employeeId: invite.employeeId,
+            workEmail: invite.workEmail,
+            name: invite.name,
+            pin: body.pin,
+        });
+
+        const employee = await loadEmployeeForLogin(tenantId, tenantConfig, invite.employeeId, invite.workEmail, invite.name);
+        res.json(formatLoginResponse(tenantId, employee));
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
+        }
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Accepts SP number (tenant_code) or legacy tenant_slug for backward compat
 const pushTokenSchema = z.object({
-    employee_id: z.number(),
+    employee_id: z.number().optional(),
     token: z.string().min(1),
     tenant_code: z.string().optional(),                // preferred: SP number
     tenant_subscription_number: z.string().optional(), // alias
     tenant_slug: z.string().optional(),                // backward compat (old app versions)
-}).refine(
-    d => d.tenant_code || d.tenant_subscription_number || d.tenant_slug,
-    { message: 'tenant_code, tenant_subscription_number, or tenant_slug is required' }
-);
+});
 
 /**
  * POST /auth/push-token
@@ -149,10 +409,8 @@ const pushTokenSchema = z.object({
 authRouter.post('/push-token', async (req, res) => {
     try {
         const body = pushTokenSchema.parse(req.body);
-        const rawCode = body.tenant_code ?? body.tenant_subscription_number ?? body.tenant_slug!;
-        const slug = await resolveToSlug(rawCode);
-        if (!slug) return res.status(400).json({ error: 'Unknown company code' });
-        await pushStore.saveToken(slug, body.employee_id, body.token);
+        const auth = getAuthenticatedEmployee(req);
+        await pushStore.saveToken(auth.tenantId, auth.employeeId, body.token);
         res.json({ success: true });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -170,16 +428,8 @@ authRouter.post('/push-token', async (req, res) => {
  */
 authRouter.delete('/push-token', async (req, res) => {
     try {
-        const employeeId = req.body?.employee_id ?? req.query?.employee_id;
-        const rawCode =
-            req.body?.tenant_code ?? req.body?.tenant_subscription_number ?? req.body?.tenant_slug ??
-            req.query?.tenant_code ?? req.query?.tenant_slug;
-        if (!employeeId || !rawCode) {
-            return res.status(400).json({ error: 'employee_id and tenant identifier are required' });
-        }
-        const slug = await resolveToSlug(String(rawCode));
-        if (!slug) return res.status(400).json({ error: 'Unknown company code' });
-        await pushStore.removeToken(slug, parseInt(String(employeeId)));
+        const auth = getAuthenticatedEmployee(req);
+        await pushStore.removeToken(auth.tenantId, auth.employeeId);
         res.json({ success: true });
     } catch (error: any) {
         console.error('Delete Push Token Error:', error);
@@ -227,6 +477,10 @@ function safeTenant(slug: string, cfg: TenantConfig) {
     return { slug, ...safe };
 }
 
+const createInviteSchema = z.object({
+    employee_id: z.number().int().positive(),
+});
+
 // ── POST /admin/tenants — register or update a tenant ─────────────────────────
 adminRouter.post('/tenants', async (req, res) => {
     try {
@@ -246,6 +500,7 @@ adminRouter.post('/tenants', async (req, res) => {
             created_at: existing?.created_at ?? new Date().toISOString(),
         });
         await tenantStore.saveTenant(slug, cfg);
+        clearOdooClientCache(slug);
         res.json({ success: true, slug, subscription_number: subscriptionNumber });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -301,6 +556,7 @@ adminRouter.put('/tenants/:slug', async (req, res) => {
 
         const merged = applyTenantDefaults({ ...existing, ...cleanUpdates, subscription_number: subscriptionNumber });
         await tenantStore.saveTenant(req.params.slug, merged);
+        clearOdooClientCache(req.params.slug);
         res.json({ success: true, tenant: safeTenant(req.params.slug, merged) });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -316,6 +572,7 @@ adminRouter.delete('/tenants/:slug', async (req, res) => {
         const existing = await tenantStore.getTenant(req.params.slug);
         if (!existing) return res.status(404).json({ error: 'Tenant not found' });
         await tenantStore.deleteTenant(req.params.slug);
+        clearOdooClientCache(req.params.slug);
         res.json({ success: true });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -430,6 +687,61 @@ adminRouter.get('/tenants/:slug/devices', async (req, res) => {
 });
 
 // ── GET /admin/tenants/:slug/notifications — paginated notification history ───
+adminRouter.get('/tenants/:slug/activations', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const activations = await portalAuthStore.listCredentials(req.params.slug);
+        res.json({ activations });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+adminRouter.post('/tenants/:slug/invites', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const body = createInviteSchema.parse(req.body);
+
+        let employee: any = null;
+        try {
+            const client = getOdooClient(req.params.slug, cfg);
+            const uid = await client.authenticate();
+            const employees: any = await client.searchRead(
+                uid,
+                'hr.employee',
+                [['id', '=', body.employee_id]],
+                ['id', 'name', 'work_email'],
+                true
+            );
+            employee = Array.isArray(employees) ? employees[0] : null;
+        } catch {
+            employee = null;
+        }
+
+        const invite = await portalAuthStore.createInvite({
+            tenantId: req.params.slug,
+            employeeId: body.employee_id,
+            workEmail: employee?.work_email || undefined,
+            name: employee?.name || undefined,
+        });
+
+        res.json({
+            invite_code: invite.code,
+            employee_id: invite.employeeId,
+            work_email: invite.workEmail,
+            name: invite.name,
+            expires_at: invite.expiresAt,
+        });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
+        }
+        res.status(500).json({ error: error.message });
+    }
+});
+
 adminRouter.get('/tenants/:slug/notifications', async (req, res) => {
     try {
         const cfg = await tenantStore.getTenant(req.params.slug);
@@ -577,6 +889,7 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
             subscription_renewal: renewal,
         });
         await tenantStore.saveTenant(req.params.slug, updated);
+        clearOdooClientCache(req.params.slug);
         res.json({ success: true, subscription_number: subNum });
     } catch (error: any) {
         if (error instanceof z.ZodError)

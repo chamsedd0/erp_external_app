@@ -4,8 +4,10 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
+import { getAuthenticatedEmployeeId } from '../lib/authContext';
 
 const router = Router();
+const TIME_OFF_TASK_ERROR = 'This task is linked to a time off type. Please choose a different task or leave task blank.';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,10 @@ const createTimesheetSchema = z.object({
     name: z.string(),          // description of work done
 });
 
+function taskIsLinkedToTimeOff(task: any): boolean {
+    return Boolean(task?.leave_type_id || task?.time_off_type_id || task?.holiday_status_id);
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
@@ -27,14 +33,7 @@ router.get('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId as string);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
         const customFields = await getCustomFields(tenantId, client, uid, 'account.analytic.line');
@@ -116,12 +115,31 @@ router.get('/tasks', async (req, res) => {
         }
 
         const uid = await client.authenticate();
-        const tasks: any = await client.searchRead(
-            uid, 'project.task',
-            [['project_id', '=', parsedProjectId], ['active', '=', true]],
-            ['id', 'name']
-        );
-        res.json({ tasks: Array.isArray(tasks) ? tasks : [] });
+        let tasks: any = [];
+        try {
+            tasks = await client.searchRead(
+                uid, 'project.task',
+                [['project_id', '=', parsedProjectId], ['active', '=', true]],
+                ['id', 'name', 'leave_type_id', 'time_off_type_id', 'holiday_status_id'],
+                true
+            );
+        } catch {
+            tasks = await client.searchRead(
+                uid, 'project.task',
+                [['project_id', '=', parsedProjectId], ['active', '=', true]],
+                ['id', 'name']
+            );
+        }
+        const safeTasks = Array.isArray(tasks)
+            ? tasks
+                .map((task: any) => ({
+                    ...task,
+                    requestable: !taskIsLinkedToTimeOff(task),
+                    ...(taskIsLinkedToTimeOff(task) ? { unavailable_reason: TIME_OFF_TASK_ERROR } : {}),
+                }))
+                .filter((task: any) => task.requestable !== false)
+            : [];
+        res.json({ tasks: safeTasks });
     } catch (error: any) {
         console.error('Fetch Tasks Error:', error);
         res.status(500).json({ error: error.message });
@@ -135,7 +153,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = createTimesheetSchema.parse(req.body);
+        const body = { ...createTimesheetSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         const projects: any = await client.searchRead(
@@ -188,6 +206,9 @@ router.post('/', async (req, res) => {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
             if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('invalid field') || msg.includes('object')) {
                 return res.json({ available: false, message: 'Timesheet module not available on this Odoo instance.' });
+            }
+            if (msg.includes('linked to a time off type') || msg.includes('time off application')) {
+                return res.status(422).json({ error: TIME_OFF_TASK_ERROR });
             }
             throw createErr;
         }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Tenant, TenantStats, DeviceEntry, NotificationEntry, ErrorLogEntry } from '@/lib/types';
+import type { Tenant, TenantStats, DeviceEntry, NotificationEntry, ErrorLogEntry, ActivationEntry, InviteResult } from '@/lib/types';
 import {
     DSTabs,
     DSCard,
@@ -38,6 +38,7 @@ import {
     Send,
     Fingerprint,
     Zap,
+    UserPlus,
 } from 'lucide-react';
 
 interface Props {
@@ -228,7 +229,10 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 
                 {/* ── Devices ──────────────────────────────────────────────────── */}
                 {tab === 'devices' && (
-                    <DevicesTab slug={tenant.slug} statCount={stats?.active_devices ?? 0} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <ActivationInviteCard slug={tenant.slug} />
+                        <DevicesTab slug={tenant.slug} statCount={stats?.active_devices ?? 0} />
+                    </div>
                 )}
 
                 {/* ── Notifications ────────────────────────────────────────────── */}
@@ -341,6 +345,85 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
 }
 
 // ─── Devices tab ──────────────────────────────────────────────────────────────
+
+function ActivationInviteCard({ slug }: { slug: string }) {
+    const [employeeId, setEmployeeId] = useState('');
+    const [invite, setInvite] = useState<InviteResult | null>(null);
+    const [activations, setActivations] = useState<ActivationEntry[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const loadActivations = useCallback(() => {
+        fetch(`/api/admin/activations/${slug}`)
+            .then((r) => r.json())
+            .then((data) => setActivations(Array.isArray(data.activations) ? data.activations : []))
+            .catch(() => setActivations([]));
+    }, [slug]);
+
+    useEffect(() => {
+        loadActivations();
+    }, [loadActivations]);
+
+    async function createInvite() {
+        const parsed = Number(employeeId);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+            setError('Enter a valid Odoo employee ID.');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        setInvite(null);
+        try {
+            const res = await fetch(`/api/admin/invites/${slug}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ employee_id: parsed }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to create invite');
+            setInvite(data);
+            setEmployeeId('');
+            loadActivations();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to create invite');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <DSCard>
+            <DSCardHeader title="Employee Activation" subtitle={`${activations.length} portal credential${activations.length === 1 ? '' : 's'}`} />
+            <DSCardContent>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 12 }}>
+                    <DSField label="Employee ID">
+                        <DSTextInput value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder="Odoo employee id" inputMode="numeric" />
+                    </DSField>
+                    <Btn onClick={createInvite} disabled={loading} leftIcon={<UserPlus size={14} />}>
+                        {loading ? 'Creating...' : 'Create Invite'}
+                    </Btn>
+                </div>
+                {error && <div style={{ fontSize: 13, color: '#DC2626', marginBottom: 10 }}>{error}</div>}
+                {invite && (
+                    <div style={{ padding: 12, border: '1px solid #BFDBFE', borderRadius: 8, background: '#EFF6FF', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: '#1E40AF', marginBottom: 6 }}>Single-use invite code</div>
+                        <MonoChip size={14}>{invite.invite_code}</MonoChip>
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+                            Employee {invite.employee_id}{invite.name ? ` - ${invite.name}` : ''} - expires {new Date(invite.expires_at).toLocaleString()}
+                        </div>
+                    </div>
+                )}
+                {activations.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {activations.slice(0, 8).map((a) => (
+                            <MonoChip key={a.employeeId} size={12}>#{a.employeeId} {a.workEmail ?? a.name ?? ''}</MonoChip>
+                        ))}
+                    </div>
+                )}
+            </DSCardContent>
+        </DSCard>
+    );
+}
 
 function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
     const [devices, setDevices] = useState<DeviceEntry[] | null>(null);

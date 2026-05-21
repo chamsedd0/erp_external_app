@@ -80,8 +80,9 @@ describe('tenantStore.saveTenant', () => {
 
         await tenantStore.saveTenant('newco', { ...SAMPLE_CFG, name: 'New Co' });
 
-        expect(mockRedisSet).toHaveBeenCalledTimes(1);
-        const saved = JSON.parse((mockRedisSet.mock.calls[0] as any)[1]);
+        const legacyCall = mockRedisSet.mock.calls.find((call) => call[0] === 'shadow:tenants') as any;
+        expect(legacyCall).toBeTruthy();
+        const saved = JSON.parse(legacyCall[1]);
         expect(saved).toHaveProperty('existing');
         expect(saved).toHaveProperty('newco');
         expect(saved.newco.name).toBe('New Co');
@@ -93,7 +94,9 @@ describe('tenantStore.saveTenant', () => {
 
         await tenantStore.saveTenant('firstco', SAMPLE_CFG);
 
-        const saved = JSON.parse((mockRedisSet.mock.calls[0] as any)[1]);
+        const legacyCall = mockRedisSet.mock.calls.find((call) => call[0] === 'shadow:tenants') as any;
+        expect(legacyCall).toBeTruthy();
+        const saved = JSON.parse(legacyCall[1]);
         expect(Object.keys(saved)).toHaveLength(1);
         // created_at is preserved from SAMPLE_CFG since it's provided
         expect(saved.firstco).toMatchObject({ name: SAMPLE_CFG.name, created_at: SAMPLE_CFG.created_at });
@@ -106,7 +109,9 @@ describe('tenantStore.saveTenant', () => {
         const updated = { ...SAMPLE_CFG, name: 'Acme Corp v2' };
         await tenantStore.saveTenant('acmecorp', updated);
 
-        const saved = JSON.parse((mockRedisSet.mock.calls[0] as any)[1]);
+        const legacyCall = mockRedisSet.mock.calls.find((call) => call[0] === 'shadow:tenants') as any;
+        expect(legacyCall).toBeTruthy();
+        const saved = JSON.parse(legacyCall[1]);
         expect(saved.acmecorp.name).toBe('Acme Corp v2');
         expect(Object.keys(saved)).toHaveLength(1);
     });

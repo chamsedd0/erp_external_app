@@ -4,6 +4,8 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
+import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { companyCompatible, getEmployeeCompanyId, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
 
 const router = Router();
 
@@ -30,6 +32,7 @@ const createExpenseSchema = z.object({
 // Fields to fetch for expenses — price_unit may not exist on Odoo 17+
 const EXPENSE_READ_FIELDS_FULL = ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
 const EXPENSE_READ_FIELDS_FALLBACK = ['id', 'name', 'product_id', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
+const INCOMPATIBLE_EXPENSE_PRODUCT = 'The selected product belongs to a different company than your employee profile. Choose a product from your own company.';
 
 async function fetchExpenses(uid: number, client: any, domain: any[], customFieldNames: string[] = []): Promise<any[]> {
     const fullFields = [...EXPENSE_READ_FIELDS_FULL, ...customFieldNames];
@@ -49,14 +52,7 @@ router.get('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId as string);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
         const customFields = await getCustomFields(tenantId, client, uid, 'hr.expense');
@@ -77,14 +73,7 @@ router.get('/pending', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const id = parseInt(employeeId as string);
-        if (isNaN(id)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const id = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
         const customFields = await getCustomFields(tenantId, client, uid, 'hr.expense');
@@ -135,11 +124,23 @@ router.get('/products', async (req, res) => {
                 uid,
                 'product.product',
                 [['can_be_expensed', '=', true]],
-                ['id', 'name', 'standard_price']
+                ['id', 'name', 'standard_price', 'company_id'],
+                true
             );
             products = Array.isArray(result) ? result : [];
         } catch (e) {
-            console.warn('product.product can_be_expensed query failed, trying product.template fallback:', e);
+            console.warn('product.product can_be_expensed query failed, trying product.product fallback without company:', e);
+            try {
+                const result: any = await client.searchRead(
+                    uid,
+                    'product.product',
+                    [['can_be_expensed', '=', true]],
+                    ['id', 'name', 'standard_price']
+                );
+                products = Array.isArray(result) ? result : [];
+            } catch (fallbackError) {
+                console.warn('product.product fallback also failed, trying product.template:', fallbackError);
+            }
         }
 
         if (products.length === 0) {
@@ -148,7 +149,8 @@ router.get('/products', async (req, res) => {
                     uid,
                     'product.template',
                     [['can_be_expensed', '=', true]],
-                    ['id', 'name', 'standard_price', 'product_variant_ids']
+                    ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'],
+                    true
                 );
                 if (Array.isArray(templates)) {
                     products = templates
@@ -159,14 +161,45 @@ router.get('/products', async (req, res) => {
                             id: t.product_variant_ids[0],
                             name: t.name,
                             standard_price: t.standard_price,
+                            company_id: t.company_id,
                         }));
                 }
             } catch (e) {
-                console.warn('product.template fallback also failed:', e);
+                console.warn('product.template fallback with company failed:', e);
+                try {
+                    const templates: any = await client.searchRead(
+                        uid,
+                        'product.template',
+                        [['can_be_expensed', '=', true]],
+                        ['id', 'name', 'standard_price', 'product_variant_ids']
+                    );
+                    if (Array.isArray(templates)) {
+                        products = templates
+                            .filter((t: any) =>
+                                Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0
+                            )
+                            .map((t: any) => ({
+                                id: t.product_variant_ids[0],
+                                name: t.name,
+                                standard_price: t.standard_price,
+                            }));
+                    }
+                } catch (fallbackError) {
+                    console.warn('product.template fallback also failed:', fallbackError);
+                }
             }
         }
 
-        res.json({ products });
+        let employeeCompanyId: number | null = null;
+        try {
+            const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
+            employeeCompanyId = await getEmployeeCompanyId(client, uid, employeeId);
+        } catch (e) {
+            console.warn('[expenses] employee company lookup failed; returning unfiltered products:', e);
+        }
+
+        const enriched = withCompanyRequestability(products, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
+        res.json({ products: requestableRecords(enriched) });
     } catch (error: any) {
         console.error('Fetch Expense Products Error:', error);
         res.json({ products: [], error: error.message });
@@ -181,7 +214,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = createExpenseSchema.parse(req.body);
+        const body = { ...createExpenseSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         const employees: any = await client.searchRead(
@@ -208,6 +241,21 @@ router.post('/', async (req, res) => {
         const currencyId = companies && companies[0] && companies[0].currency_id
             ? companies[0].currency_id[0]
             : 1;
+
+        const selectedProducts: any = await client.searchRead(
+            uid,
+            'product.product',
+            [['id', '=', body.product_id]],
+            ['id', 'company_id'],
+            true
+        ).catch(() => []);
+        if (
+            Array.isArray(selectedProducts) &&
+            selectedProducts.length > 0 &&
+            !companyCompatible(selectedProducts[0].company_id, companyId)
+        ) {
+            return res.status(422).json({ error: INCOMPATIBLE_EXPENSE_PRODUCT });
+        }
 
         // Detect Odoo version to select the correct amount field.
         // v17+ replaced price_unit (writable) with total_amount as the primary input field.
@@ -281,7 +329,7 @@ router.post('/', async (req, res) => {
                     newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
                 }
             } else if (msg1.includes('incompatible companies') || msg1.includes('company')) {
-                return res.status(400).json({ error: 'Incompatible companies: the selected product belongs to a different company than the employee. Please choose a product from the same company.' });
+                return res.status(422).json({ error: INCOMPATIBLE_EXPENSE_PRODUCT });
             } else {
                 throw err1;
             }

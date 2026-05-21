@@ -189,7 +189,7 @@ export default function Notifications() {
                         <Bell size={64} color={muted} />
                         <Text style={{ marginTop: 20, fontFamily: 'DMSans_500Medium', fontSize: 18, color: text }}>No notifications</Text>
                         <Text style={{ marginTop: 8, fontFamily: 'DMSans_400Regular', color: muted, textAlign: 'center', maxWidth: 250 }}>
-                            You're all caught up! Updates on your requests will appear here.
+                            You&apos;re all caught up! Updates on your requests will appear here.
                         </Text>
                     </View>
                 ) : (

@@ -7,6 +7,9 @@ const client_1 = require("../odoo/client");
 const tenantStore_1 = require("../lib/tenantStore");
 const helpdesk_1 = require("./helpdesk");
 const time_off_1 = require("./time_off");
+const schemaCache_1 = require("../lib/schemaCache");
+const parseError_1 = require("../odoo/parseError");
+const authContext_1 = require("../lib/authContext");
 const router = (0, express_1.Router)();
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toOdooDatetime(iso) {
@@ -52,16 +55,13 @@ router.get('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId)
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        const parsedId = parseInt(employeeId);
-        if (isNaN(parsedId))
-            return res.status(400).json({ error: 'Invalid employee_id' });
+        const parsedId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
+        const customFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.attendance');
+        const customFieldNames = Object.keys(customFields);
         let records = [];
         try {
-            const raw = await client.searchRead(uid, 'hr.attendance', [['employee_id', '=', parsedId]], ['id', 'employee_id', 'check_in', 'check_out', 'worked_hours']);
+            const raw = await client.searchRead(uid, 'hr.attendance', [['employee_id', '=', parsedId]], ['id', 'employee_id', 'check_in', 'check_out', 'worked_hours', ...customFieldNames]);
             records = Array.isArray(raw) ? raw : [];
         }
         catch (e) {
@@ -79,7 +79,7 @@ router.get('/', async (req, res) => {
                 .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
                 .slice(0, 30)
             : [];
-        res.json({ records: sorted });
+        res.json({ records: sorted, custom_fields: customFields });
     }
     catch (error) {
         console.error('Fetch Attendance Records Error:', error);
@@ -94,12 +94,7 @@ router.get('/overtime', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId)
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        const parsedId = parseInt(employeeId);
-        if (isNaN(parsedId))
-            return res.status(400).json({ error: 'Invalid employee_id' });
+        const parsedId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
         if (!(await isOvertimeAvailable(client, uid))) {
             return res.json({ available: false, records: [], message: 'Overtime module requires Odoo 16+' });
@@ -132,7 +127,7 @@ router.post('/correction', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = correctionSchema.parse(req.body);
+        const body = { ...correctionSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         const recordData = {
             employee_id: body.employee_id,
@@ -140,6 +135,15 @@ router.post('/correction', async (req, res) => {
         };
         if (body.check_out) {
             recordData.check_out = toOdooDatetime(body.check_out);
+        }
+        // Pre-validate payload against live Odoo schema
+        const correctionValidation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.attendance', recordData);
+        if (!correctionValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: correctionValidation.missing,
+                invalid_values: correctionValidation.invalid,
+            });
         }
         let newId;
         try {
@@ -178,8 +182,7 @@ router.post('/correction', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Attendance Correction Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Attendance Correction');
     }
 });
 // POST /attendance/overtime — request overtime (Odoo 16+)
@@ -190,7 +193,7 @@ router.post('/overtime', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = overtimeSchema.parse(req.body);
+        const body = { ...overtimeSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         if (!(await isOvertimeAvailable(client, uid))) {
             return res.status(422).json({
@@ -203,6 +206,15 @@ router.post('/overtime', async (req, res) => {
             employee_id: body.employee_id,
             date: body.date,
         };
+        // Pre-validate base payload against live Odoo schema
+        const overtimeValidation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.attendance.overtime', recordData);
+        if (!overtimeValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: overtimeValidation.missing,
+                invalid_values: overtimeValidation.invalid,
+            });
+        }
         // Try 'duration' first; some versions use 'adjusted_cost' or similar
         let newId;
         try {
@@ -240,8 +252,7 @@ router.post('/overtime', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Overtime Request Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Overtime Request');
     }
 });
 // POST /attendance/justification — absence justification (creates hr.leave)
@@ -252,7 +263,7 @@ router.post('/justification', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = justificationSchema.parse(req.body);
+        const body = { ...justificationSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         // Detect the correct leave type field name for this Odoo version
         const leaveTypeField = await (0, time_off_1.getLeaveTypeField)(tenantId, client, uid);
@@ -270,6 +281,15 @@ router.post('/justification', async (req, res) => {
             request_date_from: formatDate(body.date_from),
             request_date_to: formatDate(body.date_to),
         };
+        // Pre-validate payload against live Odoo schema
+        const justificationValidation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.leave', payload);
+        if (!justificationValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: justificationValidation.missing,
+                invalid_values: justificationValidation.invalid,
+            });
+        }
         let newId;
         try {
             newId = await client.createRecord(uid, 'hr.leave', payload);
@@ -302,8 +322,7 @@ router.post('/justification', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Absence Justification Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Absence Justification');
     }
 });
 exports.attendanceRouter = router;

@@ -12,6 +12,10 @@ import { Building2, X } from 'lucide-react-native';
 export default function Login() {
     const [employeeId, setEmployeeId] = useState('');
     const [pin, setPin] = useState('');
+    const [mode, setMode] = useState<'login' | 'email' | 'otp' | 'invite'>('login');
+    const [activationEmail, setActivationEmail] = useState('');
+    const [otp, setOtp] = useState('');
+    const [inviteCode, setInviteCode] = useState('');
     const [loading, setLoading] = useState(false);
 
     // Company setup step
@@ -146,6 +150,57 @@ export default function Login() {
         }
     };
 
+    const handleActivationStart = async () => {
+        if (!tenantCode || !activationEmail.trim()) {
+            toast.warning('Please enter your work email');
+            return;
+        }
+        setLoading(true);
+        try {
+            await apiClient.startActivation(tenantCode, activationEmail.trim());
+            setMode('otp');
+            toast.success('Check your email for an activation code');
+        } catch (error: any) {
+            toast.error(error?.message || 'Could not start activation');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleActivationVerify = async () => {
+        if (!tenantCode || !activationEmail.trim() || !otp.trim() || !pin.trim()) {
+            toast.warning('Please enter your email, code, and new PIN');
+            return;
+        }
+        setLoading(true);
+        try {
+            const data = await apiClient.verifyActivation(tenantCode, activationEmail.trim(), otp.trim(), pin.trim());
+            await signIn(data.token, data.user);
+            router.replace('/(app)/dashboard');
+        } catch (error: any) {
+            toast.error(error?.message || 'Activation failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleInviteActivation = async () => {
+        if (!tenantCode || !inviteCode.trim() || !pin.trim()) {
+            toast.warning('Please enter your invite code and new PIN');
+            return;
+        }
+        setLoading(true);
+        try {
+            const data = await apiClient.activateWithInvite(tenantCode, inviteCode.trim(), pin.trim());
+            await signIn(data.token, data.user);
+            router.replace('/(app)/dashboard');
+        } catch (error: any) {
+            toast.error(error?.message || 'Invite activation failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -172,23 +227,27 @@ export default function Login() {
                 {/* Header */}
                 <View style={{ marginBottom: 40, alignItems: 'center' }}>
                     <Text style={{ fontSize: 42, fontFamily: 'Outfit_700Bold', color: text, marginBottom: 12 }}>
-                        Sign In
+                        {mode === 'login' ? 'Sign In' : 'Activate'}
                     </Text>
                     <Text style={{ fontSize: 17, color: muted, textAlign: 'center', fontFamily: 'DMSans_400Regular' }}>
-                        Enter your Employee ID and PIN
+                        {mode === 'login'
+                            ? 'Enter your Employee ID or email and PIN'
+                            : mode === 'invite'
+                                ? 'Enter your invite code and choose a PIN'
+                                : 'Use your work email to set up your PIN'}
                     </Text>
                 </View>
 
                 {/* Login Form */}
                 <View style={{ gap: 20 }}>
-                    <View>
+                    {mode === 'login' && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            Employee ID
+                            Employee ID or email
                         </Text>
                         <TextInput
                             value={employeeId}
                             onChangeText={setEmployeeId}
-                            placeholder="Enter your employee ID"
+                            placeholder="Enter your employee ID or email"
                             placeholderTextColor={muted}
                             autoCapitalize="none"
                             style={{
@@ -203,11 +262,84 @@ export default function Login() {
                                 fontFamily: 'DMSans_400Regular',
                             }}
                         />
-                    </View>
+                    </View>}
 
-                    <View>
+                    {(mode === 'email' || mode === 'otp') && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            PIN
+                            Work email
+                        </Text>
+                        <TextInput
+                            value={activationEmail}
+                            onChangeText={setActivationEmail}
+                            placeholder="name@company.com"
+                            placeholderTextColor={muted}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            style={{
+                                backgroundColor: cardColor,
+                                borderRadius: 100,
+                                paddingHorizontal: 20,
+                                paddingVertical: 16,
+                                fontSize: 16,
+                                color: text,
+                                borderColor: '#ffffff24',
+                                borderWidth: 1,
+                                fontFamily: 'DMSans_400Regular',
+                            }}
+                        />
+                    </View>}
+
+                    {mode === 'otp' && <View>
+                        <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
+                            Activation code
+                        </Text>
+                        <TextInput
+                            value={otp}
+                            onChangeText={setOtp}
+                            placeholder="Enter the email code"
+                            placeholderTextColor={muted}
+                            keyboardType="numeric"
+                            style={{
+                                backgroundColor: cardColor,
+                                borderRadius: 100,
+                                paddingHorizontal: 20,
+                                paddingVertical: 16,
+                                fontSize: 16,
+                                color: text,
+                                borderColor: '#ffffff24',
+                                borderWidth: 1,
+                                fontFamily: 'DMSans_400Regular',
+                            }}
+                        />
+                    </View>}
+
+                    {mode === 'invite' && <View>
+                        <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
+                            Invite code
+                        </Text>
+                        <TextInput
+                            value={inviteCode}
+                            onChangeText={setInviteCode}
+                            placeholder="Enter your invite code"
+                            placeholderTextColor={muted}
+                            autoCapitalize="characters"
+                            style={{
+                                backgroundColor: cardColor,
+                                borderRadius: 100,
+                                paddingHorizontal: 20,
+                                paddingVertical: 16,
+                                fontSize: 16,
+                                color: text,
+                                borderColor: '#ffffff24',
+                                borderWidth: 1,
+                                fontFamily: 'DMSans_400Regular',
+                            }}
+                        />
+                    </View>}
+
+                    {(mode === 'login' || mode === 'otp' || mode === 'invite') && <View>
+                        <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
+                            {mode === 'login' ? 'PIN' : 'New PIN'}
                         </Text>
                         <TextInput
                             value={pin}
@@ -228,18 +360,33 @@ export default function Login() {
                                 fontFamily: 'DMSans_400Regular',
                             }}
                         />
-                    </View>
+                    </View>}
 
                     <Button
                         size="lg"
-                        onPress={handleLogin}
+                        onPress={mode === 'login' ? handleLogin : mode === 'email' ? handleActivationStart : mode === 'otp' ? handleActivationVerify : handleInviteActivation}
                         disabled={loading}
                         style={{ marginTop: 12, borderRadius: 100 }}
                     >
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#1a1a1a' }}>
-                            {loading ? 'Signing in...' : 'Sign In'}
+                            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'email' ? 'Send Code' : 'Activate'}
                         </Text>
                     </Button>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18 }}>
+                        <TouchableOpacity onPress={() => setMode(mode === 'login' ? 'email' : 'login')} style={{ paddingVertical: 6 }}>
+                            <Text style={{ color: primary, fontFamily: 'DMSans_700Bold', fontSize: 14 }}>
+                                {mode === 'login' ? 'First time?' : 'Back to sign in'}
+                            </Text>
+                        </TouchableOpacity>
+                        {mode !== 'login' && (
+                            <TouchableOpacity onPress={() => setMode('invite')} style={{ paddingVertical: 6 }}>
+                                <Text style={{ color: muted, fontFamily: 'DMSans_500Medium', fontSize: 14 }}>
+                                    Use invite code
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     {/* PIN recovery */}
                     <TouchableOpacity

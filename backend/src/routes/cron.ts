@@ -20,7 +20,7 @@ cronRouter.get('/check-updates', async (req, res) => {
     const cronSecret = process.env.CRON_SECRET;
 
     // In production, Vercel sends Authorization: Bearer <CRON_SECRET>
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -34,11 +34,16 @@ cronRouter.get('/check-updates', async (req, res) => {
     console.log(`[cron] Starting check for ${tokens.length} employee(s)...`);
 
     // Run all checks concurrently — each is independent and fails silently
-    const results = await Promise.allSettled(
-        tokens.map(({ tenantId, employeeId }) =>
-            requestMonitor.checkUpdates(employeeId, tenantId)
-        )
-    );
+    const results: PromiseSettledResult<void>[] = [];
+    const concurrency = 5;
+    for (let i = 0; i < tokens.length; i += concurrency) {
+        const batch = tokens.slice(i, i + concurrency);
+        results.push(...await Promise.allSettled(
+            batch.map(({ tenantId, employeeId }) =>
+                requestMonitor.checkUpdates(employeeId, tenantId)
+            )
+        ));
+    }
 
     const failed = results.filter(r => r.status === 'rejected').length;
     const durationMs = Date.now() - started;

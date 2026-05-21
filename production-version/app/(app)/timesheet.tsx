@@ -105,7 +105,7 @@ export default function Timesheet() {
         setTasksLoading(true);
         try {
             const data = await apiClient.getTasks(id);
-            setTasks(data.tasks || []);
+            setTasks((data.tasks || []).filter((task: any) => task?.requestable !== false));
         } catch (error) {
             setTasks([]);
             toast.error('Could not load tasks for this project.');
@@ -130,6 +130,10 @@ export default function Timesheet() {
         }
         if (!description.trim()) {
             toast.warning('Please add a work description.');
+            return;
+        }
+        if (taskId && !tasks.some((task: any) => task.id === taskId)) {
+            toast.warning('Please select an available task.');
             return;
         }
         if (!user?.id) {
@@ -464,7 +468,7 @@ export default function Timesheet() {
                     </View>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: text }}>No entries yet</Text>
                     <Text style={{ fontFamily: 'DMSans_400Regular', color: muted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
-                        Log your first hours using the "Log Hours" tab.
+                        Log your first hours using the &quot;Log Hours&quot; tab.
                     </Text>
                 </View>
             );

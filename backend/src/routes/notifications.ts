@@ -35,8 +35,16 @@ notificationsRouter.get('/', async (req, res) => {
 // Mark as read
 notificationsRouter.put('/:id/read', async (req, res) => {
     try {
-        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const jwtPayload = (req as any).jwtPayload;
+        const tenantId = jwtPayload?.tenantId as string;
+        const employeeId: number | undefined = jwtPayload?.id;
         const { id } = req.params;
+        if (employeeId) {
+            const ownNotifications = await notificationStore.getAll(tenantId, employeeId);
+            if (!ownNotifications.some(n => n.id === id)) {
+                return res.status(404).json({ error: 'Notification not found' });
+            }
+        }
         await notificationStore.markRead(tenantId, id);
         res.json({ success: true });
     } catch (error) {

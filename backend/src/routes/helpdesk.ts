@@ -4,6 +4,7 @@ import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
+import { getAuthenticatedEmployeeId } from '../lib/authContext';
 
 const router = Router();
 
@@ -146,20 +147,12 @@ router.get('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
+        const parsedEmployeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
 
         if (!(await isHelpdeskAvailable(client, uid))) {
             return res.json({ available: false, tickets: [] });
-        }
-
-        const parsedEmployeeId = parseInt(employeeId as string);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
         }
 
         const customFields = await getCustomFields(tenantId, client, uid, 'helpdesk.ticket');
@@ -214,7 +207,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = createHelpdeskSchema.parse(req.body);
+        const body = { ...createHelpdeskSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         if (!(await isHelpdeskAvailable(client, uid))) {

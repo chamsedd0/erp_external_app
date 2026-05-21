@@ -54,6 +54,8 @@ const PATTERNS: Array<{ re: RegExp; msg: string }> = [
       msg: 'This project or period is locked. Contact your manager to unlock it.' },
     { re: /task.*not.*found|task.*not.*belong|task.*project/i,
       msg: 'The selected task does not belong to this project. Please re-select.' },
+    { re: /task.*linked.*time off|time off application/i,
+      msg: 'This task is linked to a time off type. Please choose a different task or leave task blank.' },
     { re: /overtime.*already|overtime.*exist|attendance_overtime_unique/i,
       msg: 'An overtime record already exists for this date.' },
 
@@ -134,6 +136,7 @@ export function parseOdooError(err: any): OdooErrorResult {
     // If Odoo's own message is short and clean (< 200 chars, no Python noise),
     // surface it directly so we don't swallow useful context.
     if (
+        false &&
         core.length > 0 &&
         core.length < 200 &&
         !/odoo\.|Traceback|File "|line \d|KeyError|ValueError|AttributeError/i.test(core)

@@ -6,6 +6,7 @@ import { attachmentSchema } from './helpdesk';
 import { getLeaveTypeField } from './time_off';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
+import { getAuthenticatedEmployeeId } from '../lib/authContext';
 
 const router = Router();
 
@@ -60,10 +61,7 @@ router.get('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) return res.status(400).json({ error: 'employee_id query parameter required' });
-        const parsedId = parseInt(employeeId as string);
-        if (isNaN(parsedId)) return res.status(400).json({ error: 'Invalid employee_id' });
+        const parsedId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
         const customFields = await getCustomFields(tenantId, client, uid, 'hr.attendance');
@@ -109,10 +107,7 @@ router.get('/overtime', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) return res.status(400).json({ error: 'employee_id query parameter required' });
-        const parsedId = parseInt(employeeId as string);
-        if (isNaN(parsedId)) return res.status(400).json({ error: 'Invalid employee_id' });
+        const parsedId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
 
@@ -159,7 +154,7 @@ router.post('/correction', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = correctionSchema.parse(req.body);
+        const body = { ...correctionSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         const recordData: Record<string, any> = {
@@ -229,7 +224,7 @@ router.post('/overtime', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = overtimeSchema.parse(req.body);
+        const body = { ...overtimeSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         if (!(await isOvertimeAvailable(client, uid))) {
@@ -302,7 +297,7 @@ router.post('/justification', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = justificationSchema.parse(req.body);
+        const body = { ...justificationSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         // Detect the correct leave type field name for this Odoo version

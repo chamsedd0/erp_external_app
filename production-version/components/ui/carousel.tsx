@@ -432,6 +432,7 @@ export const Carousel = forwardRef<CarouselRef, CarouselProps>(
     );
   }
 );
+Carousel.displayName = 'Carousel';
 
 // Carousel Content Component
 export function CarouselContent({ children, style }: CarouselContentProps) {

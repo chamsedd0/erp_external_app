@@ -6,6 +6,9 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const client_1 = require("../odoo/client");
 const tenantStore_1 = require("../lib/tenantStore");
+const schemaCache_1 = require("../lib/schemaCache");
+const parseError_1 = require("../odoo/parseError");
+const authContext_1 = require("../lib/authContext");
 const router = (0, express_1.Router)();
 // Shared attachment schema
 const attachmentSchema = zod_1.z.object({
@@ -30,6 +33,24 @@ const createLeaveSchema = zod_1.z.object({
 //   v17+     → may be holiday_status_id, leave_type_id, or something else
 // We detect the correct name once per tenant and cache it.
 exports._leaveTypeField = new Map();
+function enrichLeaveType(type) {
+    const remaining = typeof type.virtual_remaining_leaves === 'number'
+        ? type.virtual_remaining_leaves
+        : typeof type.remaining_leaves === 'number'
+            ? type.remaining_leaves
+            : undefined;
+    const allocated = typeof type.max_leaves === 'number' ? type.max_leaves : undefined;
+    const requiresAllocation = type.requires_allocation !== undefined && type.requires_allocation !== false && type.requires_allocation !== 'no';
+    const allowsNegative = type.allows_negative === true || (typeof type.max_allowed_negative === 'number' && type.max_allowed_negative > 0);
+    const requestable = allowsNegative || !(requiresAllocation && remaining !== undefined && remaining <= 0);
+    return {
+        ...type,
+        requestable,
+        ...(remaining !== undefined ? { remaining_leaves: remaining } : {}),
+        ...(allocated !== undefined ? { allocated_leaves: allocated } : {}),
+        ...(requestable ? {} : { unavailable_reason: 'You do not have an allocation for this time off type.' }),
+    };
+}
 async function getLeaveTypeField(tenantId, client, uid) {
     const cached = exports._leaveTypeField.get(tenantId);
     if (cached)
@@ -66,16 +87,11 @@ router.get('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
         let leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
+        const customFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.leave');
+        const customFieldNames = Object.keys(customFields);
         const safeFields = [
             'id', 'name',
             'date_from', 'date_to',
@@ -85,7 +101,7 @@ router.get('/', async (req, res) => {
         const domain = [['employee_id', '=', parsedEmployeeId]];
         let leaves;
         try {
-            leaves = await client.searchRead(uid, 'hr.leave', domain, [...safeFields, leaveTypeField]);
+            leaves = await client.searchRead(uid, 'hr.leave', domain, [...safeFields, leaveTypeField, ...customFieldNames]);
         }
         catch (e) {
             const msg = String(e?.faultString || e?.message || '');
@@ -93,7 +109,7 @@ router.get('/', async (req, res) => {
                 console.warn(`[${tenantId}] [time_off] Field "${leaveTypeField}" rejected, resetting cache and retrying without it.`);
                 exports._leaveTypeField.delete(tenantId);
                 leaveTypeField = '';
-                leaves = await client.searchRead(uid, 'hr.leave', domain, safeFields);
+                leaves = await client.searchRead(uid, 'hr.leave', domain, [...safeFields, ...customFieldNames]);
             }
             else if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('Object')) {
                 return res.json({ leaves: [], available: false, message: 'Time-off module not available on this Odoo instance.' });
@@ -108,7 +124,7 @@ router.get('/', async (req, res) => {
                 leave_type_id: leaveTypeField ? (l[leaveTypeField] ?? null) : null,
             }))
             : leaves;
-        res.json({ leaves: normalised });
+        res.json({ leaves: normalised, custom_fields: customFields });
     }
     catch (error) {
         console.error('Fetch Leaves Error:', error);
@@ -125,13 +141,21 @@ router.get('/types', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
         try {
-            const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name'], true);
+            const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'], true);
             if (Array.isArray(types) && types.length > 0) {
-                return res.json({ types });
+                return res.json({ types: types.map(enrichLeaveType) });
             }
         }
         catch {
-            // Fall through to Odoo 19+ approach
+            try {
+                const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name'], true);
+                if (Array.isArray(types) && types.length > 0) {
+                    return res.json({ types: types.map(enrichLeaveType) });
+                }
+            }
+            catch {
+                // Fall through to Odoo 19+ approach
+            }
         }
         try {
             const allTypes = await client.searchRead(uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true);
@@ -145,7 +169,8 @@ router.get('/types', async (req, res) => {
                         return false;
                     seen.add(t.name);
                     return true;
-                });
+                })
+                    .map(enrichLeaveType);
                 return res.json({ types: leaveTypes });
             }
         }
@@ -166,14 +191,7 @@ router.get('/pending', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
         const domain = [
             ['employee_id', '=', parsedEmployeeId],
@@ -201,7 +219,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = createLeaveSchema.parse(req.body);
+        const body = { ...createLeaveSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         const leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
         const formatDatetime = (isoString) => isoString.replace('T', ' ').substring(0, 19);
@@ -214,6 +232,15 @@ router.post('/', async (req, res) => {
             request_date_from: body.date_from.split('T')[0],
             request_date_to: body.date_to.split('T')[0],
         });
+        // Pre-validate payload against live Odoo schema
+        const validation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.leave', leavePayload(leaveTypeField));
+        if (!validation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: validation.missing,
+                invalid_values: validation.invalid,
+            });
+        }
         let newLeaveId;
         try {
             newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload(leaveTypeField));
@@ -244,8 +271,7 @@ router.post('/', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Leave Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Leave');
     }
 });
 exports.timeOffRouter = router;

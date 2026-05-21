@@ -11,8 +11,13 @@ const mockMonitor = requestMonitor as jest.Mocked<typeof requestMonitor>;
 
 beforeEach(() => {
     jest.clearAllMocks();
+    process.env.CRON_SECRET = 'test-cron-secret';
     mockMonitor.checkUpdates.mockResolvedValue(undefined);
 });
+
+const cronGet = () => request(app)
+    .get('/cron/check-updates')
+    .set('Authorization', 'Bearer test-cron-secret');
 
 // ─── GET /cron/check-updates ───────────────────────────────────────────────────
 
@@ -20,7 +25,7 @@ describe('GET /cron/check-updates', () => {
     it('returns 200 with checked=0 when no push tokens are registered', async () => {
         mockPushStore.listAllTokens.mockResolvedValue([]);
 
-        const res = await request(app).get('/cron/check-updates');
+        const res = await cronGet();
 
         expect(res.status).toBe(200);
         expect(res.body.checked).toBe(0);
@@ -34,7 +39,7 @@ describe('GET /cron/check-updates', () => {
             { tenantId: 'globex', employeeId: 5 },
         ]);
 
-        const res = await request(app).get('/cron/check-updates');
+        const res = await cronGet();
 
         expect(res.status).toBe(200);
         expect(res.body.checked).toBe(3);
@@ -57,7 +62,7 @@ describe('GET /cron/check-updates', () => {
             .mockRejectedValueOnce(new Error('Odoo down'))       // #2 fails
             .mockResolvedValueOnce(undefined);                   // #3 succeeds
 
-        const res = await request(app).get('/cron/check-updates');
+        const res = await cronGet();
 
         expect(res.status).toBe(200);
         expect(res.body.checked).toBe(3);
@@ -68,7 +73,7 @@ describe('GET /cron/check-updates', () => {
     it('responds with durationMs field', async () => {
         mockPushStore.listAllTokens.mockResolvedValue([{ tenantId: 'x', employeeId: 99 }]);
 
-        const res = await request(app).get('/cron/check-updates');
+        const res = await cronGet();
 
         expect(res.status).toBe(200);
         expect(typeof res.body.durationMs).toBe('number');
@@ -102,14 +107,14 @@ describe('GET /cron/check-updates', () => {
         if (original !== undefined) { process.env.CRON_SECRET = original; } else { delete process.env.CRON_SECRET; }
     });
 
-    it('accepts request with no CRON_SECRET set (dev mode)', async () => {
+    it('rejects request with no CRON_SECRET set', async () => {
         const original = process.env.CRON_SECRET;
         delete process.env.CRON_SECRET;
         mockPushStore.listAllTokens.mockResolvedValue([]);
 
         const res = await request(app).get('/cron/check-updates');
 
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(401);
         if (original !== undefined) { process.env.CRON_SECRET = original; } else { delete process.env.CRON_SECRET; }
     });
 
@@ -117,7 +122,7 @@ describe('GET /cron/check-updates', () => {
         mockPushStore.listAllTokens.mockRejectedValue(new Error('Redis unavailable'));
 
         // checkUpdates should never be called; the caught error propagates to 500
-        const res = await request(app).get('/cron/check-updates');
+        const res = await cronGet();
         // May be 500 or the express error handler — just verify it doesn't hang/crash
         expect([200, 500]).toContain(res.status);
     });

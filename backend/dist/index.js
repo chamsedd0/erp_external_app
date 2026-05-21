@@ -16,12 +16,36 @@ const helpdesk_1 = require("./routes/helpdesk");
 const maintenance_1 = require("./routes/maintenance");
 const attendance_1 = require("./routes/attendance");
 const cron_1 = require("./routes/cron");
+const errorLog_1 = require("./lib/errorLog");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
 // Allow Authorization header in cross-origin requests (required for JWT)
 app.use((0, cors_1.default)({ allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Increase JSON payload limit to support base64 attachments (up to 3 × 5 MB ≈ 15 MB)
 app.use(express_1.default.json({ limit: '20mb' }));
+app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = function (body) {
+        if (res.statusCode >= 500) {
+            const tenantId = req.jwtPayload?.tenantId;
+            if (tenantId) {
+                const errorMsg = (typeof body === 'object' && body?.error)
+                    ? String(body.error).slice(0, 500)
+                    : 'Internal server error';
+                void (0, errorLog_1.pushError)(tenantId, {
+                    timestamp: new Date().toISOString(),
+                    method: req.method,
+                    path: req.path,
+                    status: res.statusCode,
+                    error: errorMsg,
+                    employee_id: req.jwtPayload?.id,
+                });
+            }
+        }
+        return originalJson(body);
+    };
+    next();
+});
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.send('Shadow Portal Middleware is Active');
@@ -29,10 +53,10 @@ app.get('/', (req, res) => {
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
 });
-// ── Rate Limiter: Max 200 requests per 15 mins ────────────────────────────────
+// ── Rate Limiter: Max 600 requests per 15 mins ────────────────────────────────
 const limiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: 600,
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -47,7 +71,12 @@ app.use('/admin', (req, res, next) => {
 // ── JWT Middleware ─────────────────────────────────────────────────────────────
 // All routes except /auth/* and /admin/* require a valid JWT.
 app.use((req, res, next) => {
-    if (req.path.startsWith('/auth/') || req.path.startsWith('/admin/') || req.path.startsWith('/cron/')) {
+    const publicAuthPaths = [
+        /^\/auth\/login$/,
+        /^\/auth\/tenant\/[^/]+$/,
+        /^\/auth\/activation\//,
+    ];
+    if (req.path.startsWith('/admin/') || req.path.startsWith('/cron/') || publicAuthPaths.some(re => re.test(req.path))) {
         return next();
     }
     const token = (req.headers.authorization ?? '').split(' ')[1];
@@ -73,6 +102,31 @@ app.use('/timesheet', timesheet_1.timesheetRouter);
 app.use('/helpdesk', helpdesk_1.helpdeskRouter);
 app.use('/maintenance', maintenance_1.maintenanceRouter);
 app.use('/attendance', attendance_1.attendanceRouter);
+// ── Error capture middleware — intercepts res.json calls for 5xx ──────────────
+// Must be registered AFTER all route handlers.
+app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = function (body) {
+        if (res.statusCode >= 500) {
+            const tenantId = req.jwtPayload?.tenantId;
+            if (tenantId) {
+                const errorMsg = (typeof body === 'object' && body?.error)
+                    ? String(body.error).slice(0, 500)
+                    : 'Internal server error';
+                void (0, errorLog_1.pushError)(tenantId, {
+                    timestamp: new Date().toISOString(),
+                    method: req.method,
+                    path: req.path,
+                    status: res.statusCode,
+                    error: errorMsg,
+                    employee_id: req.jwtPayload?.id,
+                });
+            }
+        }
+        return originalJson(body);
+    };
+    next();
+});
 // ── Local dev server ──────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {
     app.listen(config_1.config.port, () => {

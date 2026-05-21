@@ -49,11 +49,11 @@ describe('GET /expenses', () => {
         expect(res.status).toBe(401);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/expenses')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 500 when Odoo searchRead throws', async () => {
@@ -82,11 +82,11 @@ describe('GET /expenses/pending', () => {
         expect(res.body.expenses).toHaveLength(2);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/expenses/pending')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 });
 
@@ -168,6 +168,23 @@ describe('GET /expenses/products', () => {
 
         expect(res.body.products).toHaveLength(1);
         expect(res.body.products[0].name).toBe('With Variants');
+    });
+
+    it('excludes products from a different employee company', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([
+                { id: 10, name: 'Same Company', standard_price: 0, company_id: [1, 'My Company'] },
+                { id: 11, name: 'Global Product', standard_price: 0, company_id: false },
+                { id: 12, name: 'Other Company', standard_price: 0, company_id: [2, 'Other'] },
+            ])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]);
+
+        const res = await request(app)
+            .get('/expenses/products')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.products.map((p: any) => p.name)).toEqual(['Same Company', 'Global Product']);
     });
 });
 
@@ -302,6 +319,22 @@ describe('POST /expenses', () => {
 
         expect(res.status).toBe(400);
         expect(res.body.error).toMatch(/employee not found/i);
+    });
+
+    it('returns 422 before create when selected product belongs to another company', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }])
+            .mockResolvedValueOnce([{ id: 10, company_id: [2, 'Other Company'] }]);
+
+        const res = await request(app)
+            .post('/expenses')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/different company/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
     });
 
     it('passes payment_mode: company_account when provided', async () => {

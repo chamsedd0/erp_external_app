@@ -4,7 +4,7 @@ import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { pushStore } from '../../lib/pushStore';
 import { getOdooClient } from '../../odoo/client';
-import { SAMPLE_TENANT } from './helpers';
+import { authHeader, SAMPLE_TENANT } from './helpers';
 
 import { notificationStore } from '../../lib/notificationStore';
 
@@ -130,6 +130,30 @@ describe('POST /auth/login', () => {
         expect(res.body.error).toMatch(/invalid credentials/i);
     });
 
+    it('returns 422 when Odoo lacks barcode/PIN employee auth fields', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        MOCK_ODOO_CLIENT.searchEmployee.mockRejectedValueOnce({ faultString: 'Invalid field pin on model hr.employee' });
+
+        const res = await request(app)
+            .post('/auth/login')
+            .send({ employee_id: 'EMP007', pin: '1234', tenant_slug: 'testcorp' });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/activation|required|configured/i);
+    });
+
+    it('returns 502 for Odoo connection/config failures during login', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        MOCK_ODOO_CLIENT.authenticate.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+
+        const res = await request(app)
+            .post('/auth/login')
+            .send({ employee_id: 'EMP007', pin: '1234', tenant_slug: 'testcorp' });
+
+        expect(res.status).toBe(502);
+        expect(res.body.error).toMatch(/unavailable/i);
+    });
+
     it('returns 400 when tenant_slug is missing', async () => {
         const res = await request(app)
             .post('/auth/login')
@@ -183,6 +207,7 @@ describe('POST /auth/push-token', () => {
 
         const res = await request(app)
             .post('/auth/push-token')
+            .set('Authorization', authHeader())
             .send({ employee_id: 42, token: 'ExponentPushToken[abc]', tenant_slug: 'testcorp' });
 
         expect(res.status).toBe(200);
@@ -193,6 +218,7 @@ describe('POST /auth/push-token', () => {
     it('returns 400 with missing fields', async () => {
         const res = await request(app)
             .post('/auth/push-token')
+            .set('Authorization', authHeader())
             .send({ employee_id: 42 }); // missing token and tenant_slug
         expect(res.status).toBe(400);
     });
@@ -206,6 +232,7 @@ describe('DELETE /auth/push-token', () => {
 
         const res = await request(app)
             .delete('/auth/push-token')
+            .set('Authorization', authHeader())
             .send({ employee_id: 42, tenant_slug: 'testcorp' });
 
         expect(res.status).toBe(200);

@@ -43,11 +43,11 @@ describe('GET /attendance', () => {
         expect(res.status).toBe(401);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/attendance')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 401 when tenant not found', async () => {
@@ -137,11 +137,11 @@ describe('GET /attendance/overtime', () => {
         expect(res.status).toBe(401);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/attendance/overtime')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 });
 

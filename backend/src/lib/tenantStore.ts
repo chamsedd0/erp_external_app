@@ -1,6 +1,9 @@
-import { redisGet, redisSet, redisDel } from './redis';
+import { redisDel, redisGet, redisIncr, redisSAdd, redisSMembers, redisSRem, redisSet } from './redis';
 
 const TENANTS_KEY = 'shadow:tenants';
+const TENANT_INDEX_KEY = 'shadow:tenant_slugs';
+const SUBSCRIPTION_SEQ_KEY = 'shadow:subscription_seq';
+const tenantKey = (slug: string) => `shadow:tenant:${slug}`;
 
 export interface TenantConfig {
     // ── Odoo connection ───────────────────────────────────────────────────────
@@ -69,16 +72,20 @@ export function applyTenantDefaults(raw: Partial<TenantConfig>): TenantConfig {
 
 /**
  * Auto-generate the next subscription number in SP-XXXXX format.
- * Reads all existing tenants and increments from the highest.
+ * Uses Redis INCR so concurrent tenant creation cannot pick the same number.
  */
 export async function generateSubscriptionNumber(): Promise<string> {
-    const all = await tenantStore.listTenants();
-    const nums = Object.values(all)
-        .map(t => t.subscription_number)
-        .filter(Boolean)
-        .map(n => parseInt((n as string).replace('SP-', ''), 10))
-        .filter(n => !isNaN(n));
-    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    let next = await redisIncr(SUBSCRIPTION_SEQ_KEY);
+
+    // First run after migration: seed above the highest legacy value.
+    if (next === 1) {
+        const maxExisting = highestExistingSubscriptionNumber(await tenantStore.listTenants());
+        if (maxExisting >= next) {
+            next = maxExisting + 1;
+            await redisSet(SUBSCRIPTION_SEQ_KEY, String(next));
+        }
+    }
+
     return `SP-${String(next).padStart(5, '0')}`;
 }
 
@@ -104,6 +111,9 @@ export async function resolveToSlug(code: string): Promise<string | null> {
 }
 
 async function readAll(): Promise<Record<string, TenantConfig>> {
+    const indexed = await readIndexedTenants();
+    if (Object.keys(indexed).length > 0) return indexed;
+
     try {
         const raw = await redisGet(TENANTS_KEY);
         if (!raw) return {};
@@ -117,35 +127,79 @@ async function readAll(): Promise<Record<string, TenantConfig>> {
     }
 }
 
+function highestExistingSubscriptionNumber(all: Record<string, TenantConfig>): number {
+    const nums = Object.values(all)
+        .map(t => t.subscription_number)
+        .filter(Boolean)
+        .map(n => parseInt((n as string).replace('SP-', ''), 10))
+        .filter(n => !isNaN(n));
+    return nums.length > 0 ? Math.max(...nums) : 0;
+}
+
+async function readIndexedTenants(): Promise<Record<string, TenantConfig>> {
+    try {
+        const slugs = await redisSMembers(TENANT_INDEX_KEY);
+        if (!slugs || slugs.length === 0) return {};
+
+        const entries = await Promise.all(
+            slugs.map(async slug => {
+                const raw = await redisGet(tenantKey(slug));
+                if (!raw) return null;
+                return [slug, applyTenantDefaults(JSON.parse(raw) as Partial<TenantConfig>)] as const;
+            })
+        );
+
+        return Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, TenantConfig]>);
+    } catch {
+        return {};
+    }
+}
+
+async function readLegacyRaw(): Promise<Record<string, any>> {
+    try {
+        const raw = await redisGet(TENANTS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+}
+
 export const tenantStore = {
     getTenant: async (slug: string): Promise<TenantConfig | null> => {
-        const all = await readAll();
-        return all[slug] ?? null;
+        try {
+            const raw = await redisGet(tenantKey(slug));
+            if (raw) {
+                const parsed = JSON.parse(raw) as Partial<TenantConfig>;
+                if ('name' in parsed || 'odoo_url' in parsed || 'subscription_status' in parsed) {
+                    return applyTenantDefaults(parsed);
+                }
+            }
+        } catch { /* fall through to legacy blob */ }
+        const legacy = await readAll();
+        return legacy[slug] ?? null;
     },
 
     saveTenant: async (slug: string, cfg: TenantConfig): Promise<void> => {
-        // Read raw without normalisation so we preserve existing data exactly
-        let rawAll: Record<string, any> = {};
-        try {
-            const raw = await redisGet(TENANTS_KEY);
-            if (raw) rawAll = JSON.parse(raw);
-        } catch { /* ignore */ }
-
-        // Preserve created_at if already set
-        const existing = rawAll[slug] as Partial<TenantConfig> | undefined;
-        rawAll[slug] = {
+        const existingRaw = await redisGet(tenantKey(slug)).catch(() => null);
+        const legacyRaw = await readLegacyRaw();
+        const existing = existingRaw ? JSON.parse(existingRaw) as Partial<TenantConfig> : legacyRaw[slug] as Partial<TenantConfig> | undefined;
+        const next = {
             ...cfg,
             created_at: existing?.created_at ?? cfg.created_at ?? new Date().toISOString(),
         };
-        await redisSet(TENANTS_KEY, JSON.stringify(rawAll));
+        await redisSet(tenantKey(slug), JSON.stringify(next));
+        await redisSAdd(TENANT_INDEX_KEY, slug);
+
+        // Keep the legacy blob in sync for one release so old deployments do not go blind.
+        legacyRaw[slug] = next;
+        await redisSet(TENANTS_KEY, JSON.stringify(legacyRaw));
     },
 
     deleteTenant: async (slug: string): Promise<void> => {
-        let rawAll: Record<string, any> = {};
-        try {
-            const raw = await redisGet(TENANTS_KEY);
-            if (raw) rawAll = JSON.parse(raw);
-        } catch { /* ignore */ }
+        await redisDel(tenantKey(slug));
+        await redisSRem(TENANT_INDEX_KEY, slug);
+
+        const rawAll = await readLegacyRaw();
         delete rawAll[slug];
         await redisSet(TENANTS_KEY, JSON.stringify(rawAll));
     },

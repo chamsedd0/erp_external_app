@@ -114,11 +114,11 @@ describe('GET /maintenance', () => {
         expect(res.body.requests).toEqual([]);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/maintenance')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 401 without JWT', async () => {
@@ -287,6 +287,41 @@ describe('POST /maintenance', () => {
         expect(createArgs.priority).toBe('2');
     });
 
+    it('selects a compatible maintenance team when body omits one', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([
+                { id: 7, name: 'Compatible', company_id: [1, 'My Company'] },
+                { id: 8, name: 'Other', company_id: [2, 'Other'] },
+            ]);
+        mockClient.createRecord.mockResolvedValueOnce(63);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(200);
+        expect(mockClient.createRecord.mock.calls[0][2].maintenance_team_id).toBe(7);
+    });
+
+    it('returns 422 when selected maintenance team belongs to another company', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 2, name: 'Other', company_id: [2, 'Other'] }]);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, maintenance_team_id: 2 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/maintenance team/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
     it('retries without schedule_date and duration when Odoo rejects them', async () => {
         setupAvailable();
         mockClient.createRecord
@@ -388,6 +423,24 @@ describe('GET /maintenance/teams', () => {
         expect(res.status).toBe(200);
         expect(res.body.available).toBe(false);
         expect(res.body.teams).toEqual([]);
+    });
+
+    it('filters teams from a different employee company', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                { id: 1, name: 'Same Company', company_id: [1, 'My Company'] },
+                { id: 2, name: 'Global Team', company_id: false },
+                { id: 3, name: 'Other Company', company_id: [2, 'Other'] },
+            ])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]);
+
+        const res = await request(app)
+            .get('/maintenance/teams')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.teams.map((team: any) => team.name)).toEqual(['Same Company', 'Global Team']);
     });
 
     it('returns 401 without JWT', async () => {

@@ -53,11 +53,11 @@ describe('GET /timesheet', () => {
         expect(res.body.entries).toHaveLength(50);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
         const res = await request(app)
             .get('/timesheet')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 401 without JWT', async () => {
@@ -128,6 +128,21 @@ describe('GET /timesheet/tasks', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.tasks).toHaveLength(2);
+    });
+
+    it('filters tasks linked to time off types', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 10, name: 'Client Work', leave_type_id: false },
+            { id: 11, name: 'Time Off Task', leave_type_id: [1, 'Annual Leave'] },
+        ]);
+
+        const res = await request(app)
+            .get('/timesheet/tasks?project_id=1')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.tasks).toHaveLength(1);
+        expect(res.body.tasks[0].name).toBe('Client Work');
     });
 
     it('returns 400 when project_id is missing', async () => {
@@ -231,6 +246,21 @@ describe('POST /timesheet', () => {
 
         const createArgs = mockClient.createRecord.mock.calls[0][2];
         expect(createArgs.task_id).toBe(99);
+    });
+
+    it('returns 422 when Odoo rejects a task linked to time off', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
+            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockClient.createRecord.mockRejectedValueOnce({ faultString: 'You cannot create timesheets for a task that is linked to a time off type. Please use the Time Off application.' });
+
+        const res = await request(app)
+            .post('/timesheet')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, task_id: 99 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/time off type/i);
     });
 
     it('omits task_id when not provided', async () => {

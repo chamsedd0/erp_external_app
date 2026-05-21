@@ -115,11 +115,15 @@ describe('GET /helpdesk', () => {
         expect(res.body.tickets).toEqual([]);
     });
 
-    it('returns 400 when employee_id is missing', async () => {
+    it('derives employee_id from JWT when query parameter is missing', async () => {
+        mockClient.searchRead
+            .mockResolvedValueOnce([]) // availability probe
+            .mockResolvedValueOnce([{ id: 42, name: 'Alice', user_id: false }]);
+
         const res = await request(app)
             .get('/helpdesk')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 404 when employee not found in Odoo', async () => {

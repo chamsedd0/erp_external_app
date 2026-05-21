@@ -94,6 +94,22 @@ export interface DeviceEntry {
     registered_at: string;
 }
 
+export interface ActivationEntry {
+    tenantId: string;
+    employeeId: number;
+    workEmail?: string;
+    name?: string;
+    activatedAt: string;
+}
+
+export interface InviteResult {
+    invite_code: string;
+    employee_id: number;
+    work_email?: string;
+    name?: string;
+    expires_at: string;
+}
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 
 export interface NotificationEntry {

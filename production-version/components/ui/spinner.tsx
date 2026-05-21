@@ -91,6 +91,7 @@ const AnimatedDot = React.memo(
     );
   }
 );
+AnimatedDot.displayName = 'AnimatedDot';
 
 const AnimatedBar = React.memo(
   ({ anim, color, size, style }: AnimatedShapeProps) => {
@@ -108,6 +109,7 @@ const AnimatedBar = React.memo(
     );
   }
 );
+AnimatedBar.displayName = 'AnimatedBar';
 
 // Main Spinner Component
 export function Spinner({

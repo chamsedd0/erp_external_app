@@ -124,14 +124,32 @@ export const apiClient = {
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
-    login: (employee_id: string, pin: string, tenant_code: string) =>
+    login: (identifier: string, pin: string, tenant_code: string) =>
         apiFetch('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ employee_id, pin, tenant_subscription_number: tenant_code }),
+            body: JSON.stringify({ identifier, employee_id: identifier, pin, tenant_subscription_number: tenant_code }),
         }),
 
     getTenantInfo: (code: string) =>
         apiFetch(`/auth/tenant/${code}`),
+
+    startActivation: (tenant_code: string, work_email: string) =>
+        apiFetch('/auth/activation/start', {
+            method: 'POST',
+            body: JSON.stringify({ tenant_code, work_email }),
+        }),
+
+    verifyActivation: (tenant_code: string, work_email: string, otp: string, pin: string) =>
+        apiFetch('/auth/activation/verify', {
+            method: 'POST',
+            body: JSON.stringify({ tenant_code, work_email, otp, pin }),
+        }),
+
+    activateWithInvite: (tenant_code: string, invite_code: string, pin: string) =>
+        apiFetch('/auth/activation/invite', {
+            method: 'POST',
+            body: JSON.stringify({ tenant_code, invite_code, pin }),
+        }),
 
     savePushToken: (employee_id: number, token: string, tenant_code: string) =>
         apiFetch('/auth/push-token', {

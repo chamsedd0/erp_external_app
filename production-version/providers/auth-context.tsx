@@ -164,14 +164,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const signOut = async () => {
         const storedUser = user;
         const storedCode = tenantCode; // capture before state clears
+        if (storedUser?.id && storedCode) {
+            await removePushToken(storedUser.id, storedCode);
+        }
         setSession(null);
         setUser(null);
         await AsyncStorage.removeItem('user_token');
         await AsyncStorage.removeItem('user_data');
         // NOTE: tenant is NOT cleared on sign out — user stays on same company for next login
-        if (storedUser?.id && storedCode) {
-            removePushToken(storedUser.id, storedCode); // fire-and-forget
-        }
     };
 
     const completeOnboarding = async () => {

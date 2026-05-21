@@ -1,0 +1,201 @@
+{
+  "runId": "SMOKE-20260521-142329",
+  "writeEnabled": false,
+  "targets": [
+    "http://localhost:3000"
+  ],
+  "results": [
+    {
+      "target": "http://localhost:3000",
+      "company": "energytracks",
+      "spNumber": "SP-00001",
+      "employeeName": "Jehad Hussain",
+      "employeeRef": "Jehad Hussain (***002)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00001",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "energytracks",
+      "spNumber": "SP-00001",
+      "employeeName": "Bashar Quraishi",
+      "employeeRef": "Bashar Quraishi (***003)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00001",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "energytracks",
+      "spNumber": "SP-00001",
+      "employeeName": "HANI YES",
+      "employeeRef": "HANI YES (***029)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00001",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Isec (V17)",
+      "spNumber": "SP-00002",
+      "employeeName": "AASEM AHMAD",
+      "employeeRef": "AASEM AHMAD (***705)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00002",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Isec (V17)",
+      "spNumber": "SP-00002",
+      "employeeName": "ABDALLA MOHAMED",
+      "employeeRef": "ABDALLA MOHAMED (***741)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00002",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Isec (V17)",
+      "spNumber": "SP-00002",
+      "employeeName": "ABDULAZIZ ABDULRAHMAN",
+      "employeeRef": "ABDULAZIZ ABDULRAHMAN (***080)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00002",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Lavendary (V18)",
+      "spNumber": "SP-00003",
+      "employeeName": "Aadil Ali Shaikh",
+      "employeeRef": "Aadil Ali Shaikh (***001)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00003",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Lavendary (V18)",
+      "spNumber": "SP-00003",
+      "employeeName": "Aadil Nazir",
+      "employeeRef": "Aadil Nazir (***003)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00003",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Lavendary (V18)",
+      "spNumber": "SP-00003",
+      "employeeName": "Aadil Nazir",
+      "employeeRef": "Aadil Nazir (***002)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00003",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Zahr (V15)",
+      "spNumber": "SP-00004",
+      "employeeName": "SHAHIEZ",
+      "employeeRef": "SHAHIEZ (***001)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00004",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Zahr (V15)",
+      "spNumber": "SP-00004",
+      "employeeName": "Mohammed",
+      "employeeRef": "Mohammed (***002)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00004",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    },
+    {
+      "target": "http://localhost:3000",
+      "company": "Zahr (V15)",
+      "spNumber": "SP-00004",
+      "employeeName": "DAFER",
+      "employeeRef": "DAFER (***003)",
+      "action": "tenant lookup",
+      "method": "GET",
+      "endpoint": "/auth/tenant/SP-00004",
+      "statusCode": 404,
+      "result": "FAIL",
+      "response": {
+        "error": "Company not found"
+      },
+      "likelyCause": "employee/company mismatch"
+    }
+  ]
+}

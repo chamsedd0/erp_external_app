@@ -5,6 +5,10 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const client_1 = require("../odoo/client");
 const tenantStore_1 = require("../lib/tenantStore");
+const schemaCache_1 = require("../lib/schemaCache");
+const parseError_1 = require("../odoo/parseError");
+const authContext_1 = require("../lib/authContext");
+const odooCompatibility_1 = require("../lib/odooCompatibility");
 const router = (0, express_1.Router)();
 // Shared attachment schema
 const attachmentSchema = zod_1.z.object({
@@ -27,12 +31,15 @@ const createExpenseSchema = zod_1.z.object({
 // Fields to fetch for expenses — price_unit may not exist on Odoo 17+
 const EXPENSE_READ_FIELDS_FULL = ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
 const EXPENSE_READ_FIELDS_FALLBACK = ['id', 'name', 'product_id', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
-async function fetchExpenses(uid, client, domain) {
+const INCOMPATIBLE_EXPENSE_PRODUCT = 'The selected product belongs to a different company than your employee profile. Choose a product from your own company.';
+async function fetchExpenses(uid, client, domain, customFieldNames = []) {
+    const fullFields = [...EXPENSE_READ_FIELDS_FULL, ...customFieldNames];
+    const fallbackFields = [...EXPENSE_READ_FIELDS_FALLBACK, ...customFieldNames];
     try {
-        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FULL);
+        return await client.searchRead(uid, 'hr.expense', domain, fullFields);
     }
     catch {
-        return await client.searchRead(uid, 'hr.expense', domain, EXPENSE_READ_FIELDS_FALLBACK);
+        return await client.searchRead(uid, 'hr.expense', domain, fallbackFields);
     }
 }
 // GET / - Fetch user's expenses
@@ -43,17 +50,12 @@ router.get('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
-        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', parsedEmployeeId]]);
-        res.json({ expenses });
+        const customFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.expense');
+        const customFieldNames = Object.keys(customFields);
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', parsedEmployeeId]], customFieldNames);
+        res.json({ expenses, custom_fields: customFields });
     }
     catch (error) {
         console.error('Fetch Expenses Error:', error);
@@ -68,17 +70,12 @@ router.get('/pending', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const id = parseInt(employeeId);
-        if (isNaN(id)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const id = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
-        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]]);
-        res.json({ expenses });
+        const customFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.expense');
+        const customFieldNames = Object.keys(customFields);
+        const expenses = await fetchExpenses(uid, client, [['employee_id', '=', id], ['state', 'in', ['draft', 'reported']]], customFieldNames);
+        res.json({ expenses, custom_fields: customFields });
     }
     catch (error) {
         console.error('Fetch Pending Expenses Error:', error);
@@ -113,15 +110,22 @@ router.get('/products', async (req, res) => {
         const uid = await client.authenticate();
         let products = [];
         try {
-            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price']);
+            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'company_id'], true);
             products = Array.isArray(result) ? result : [];
         }
         catch (e) {
-            console.warn('product.product can_be_expensed query failed, trying product.template fallback:', e);
+            console.warn('product.product can_be_expensed query failed, trying product.product fallback without company:', e);
+            try {
+                const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price']);
+                products = Array.isArray(result) ? result : [];
+            }
+            catch (fallbackError) {
+                console.warn('product.product fallback also failed, trying product.template:', fallbackError);
+            }
         }
         if (products.length === 0) {
             try {
-                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids']);
+                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'], true);
                 if (Array.isArray(templates)) {
                     products = templates
                         .filter((t) => Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0)
@@ -129,14 +133,39 @@ router.get('/products', async (req, res) => {
                         id: t.product_variant_ids[0],
                         name: t.name,
                         standard_price: t.standard_price,
+                        company_id: t.company_id,
                     }));
                 }
             }
             catch (e) {
-                console.warn('product.template fallback also failed:', e);
+                console.warn('product.template fallback with company failed:', e);
+                try {
+                    const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids']);
+                    if (Array.isArray(templates)) {
+                        products = templates
+                            .filter((t) => Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0)
+                            .map((t) => ({
+                            id: t.product_variant_ids[0],
+                            name: t.name,
+                            standard_price: t.standard_price,
+                        }));
+                    }
+                }
+                catch (fallbackError) {
+                    console.warn('product.template fallback also failed:', fallbackError);
+                }
             }
         }
-        res.json({ products });
+        let employeeCompanyId = null;
+        try {
+            const employeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
+            employeeCompanyId = await (0, odooCompatibility_1.getEmployeeCompanyId)(client, uid, employeeId);
+        }
+        catch (e) {
+            console.warn('[expenses] employee company lookup failed; returning unfiltered products:', e);
+        }
+        const enriched = (0, odooCompatibility_1.withCompanyRequestability)(products, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
+        res.json({ products: (0, odooCompatibility_1.requestableRecords)(enriched) });
     }
     catch (error) {
         console.error('Fetch Expense Products Error:', error);
@@ -151,7 +180,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = createExpenseSchema.parse(req.body);
+        const body = { ...createExpenseSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         const employees = await client.searchRead(uid, 'hr.employee', [['id', '=', body.employee_id]], ['company_id']);
         if (!employees || employees.length === 0) {
@@ -163,6 +192,12 @@ router.post('/', async (req, res) => {
         const currencyId = companies && companies[0] && companies[0].currency_id
             ? companies[0].currency_id[0]
             : 1;
+        const selectedProducts = await client.searchRead(uid, 'product.product', [['id', '=', body.product_id]], ['id', 'company_id'], true).catch(() => []);
+        if (Array.isArray(selectedProducts) &&
+            selectedProducts.length > 0 &&
+            !(0, odooCompatibility_1.companyCompatible)(selectedProducts[0].company_id, companyId)) {
+            return res.status(422).json({ error: INCOMPATIBLE_EXPENSE_PRODUCT });
+        }
         // Detect Odoo version to select the correct amount field.
         // v17+ replaced price_unit (writable) with total_amount as the primary input field.
         const odooVersion = await client.getVersion().catch(() => 16);
@@ -179,6 +214,15 @@ router.post('/', async (req, res) => {
         };
         if (body.tax_ids && body.tax_ids.length > 0) {
             baseExpenseData.tax_ids = [[6, 0, body.tax_ids]];
+        }
+        // Pre-validate payload against live Odoo schema (selection values + required fields)
+        const validation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.expense', baseExpenseData);
+        if (!validation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: validation.missing,
+                invalid_values: validation.invalid,
+            });
         }
         // Build the amount field based on version, with layered retry fallback
         const withPriceUnit = { ...baseExpenseData, price_unit: body.unit_amount };
@@ -225,7 +269,7 @@ router.post('/', async (req, res) => {
                 }
             }
             else if (msg1.includes('incompatible companies') || msg1.includes('company')) {
-                return res.status(400).json({ error: 'Incompatible companies: the selected product belongs to a different company than the employee. Please choose a product from the same company.' });
+                return res.status(422).json({ error: INCOMPATIBLE_EXPENSE_PRODUCT });
             }
             else {
                 throw err1;
@@ -245,8 +289,7 @@ router.post('/', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Expense Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Expense');
     }
 });
 exports.expensesRouter = router;

@@ -5,6 +5,9 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const client_1 = require("../odoo/client");
 const tenantStore_1 = require("../lib/tenantStore");
+const schemaCache_1 = require("../lib/schemaCache");
+const parseError_1 = require("../odoo/parseError");
+const authContext_1 = require("../lib/authContext");
 const router = (0, express_1.Router)();
 // ── Helpers ───────────────────────────────────────────────────────────────────
 /** Shared attachment schema — used by helpdesk and maintenance */
@@ -127,18 +130,13 @@ router.get('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
+        const parsedEmployeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
         const uid = await client.authenticate();
         if (!(await isHelpdeskAvailable(client, uid))) {
             return res.json({ available: false, tickets: [] });
         }
-        const parsedEmployeeId = parseInt(employeeId);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const customFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'helpdesk.ticket');
+        const customFieldNames = Object.keys(customFields);
         const employees = await client.searchRead(uid, 'hr.employee', [['id', '=', parsedEmployeeId]], ['id', 'name', 'user_id']);
         if (!Array.isArray(employees) || employees.length === 0) {
             return res.status(404).json({ error: 'Employee not found' });
@@ -152,15 +150,15 @@ router.get('/', async (req, res) => {
             }
         }
         if (domain.length === 0) {
-            return res.json({ available: true, tickets: [] });
+            return res.json({ available: true, tickets: [], custom_fields: customFields });
         }
-        const tickets = await client.searchRead(uid, 'helpdesk.ticket', domain, ['id', 'name', 'description', 'stage_id', 'team_id', 'create_date', 'partner_id']);
+        const tickets = await client.searchRead(uid, 'helpdesk.ticket', domain, ['id', 'name', 'description', 'stage_id', 'team_id', 'create_date', 'partner_id', ...customFieldNames]);
         const sorted = Array.isArray(tickets)
             ? tickets
                 .sort((a, b) => new Date(b.create_date).getTime() - new Date(a.create_date).getTime())
                 .slice(0, 30)
             : [];
-        res.json({ available: true, tickets: sorted });
+        res.json({ available: true, tickets: sorted, custom_fields: customFields });
     }
     catch (error) {
         console.error('Fetch Helpdesk Tickets Error:', error);
@@ -174,7 +172,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig)
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
-        const body = createHelpdeskSchema.parse(req.body);
+        const body = { ...createHelpdeskSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
         if (!(await isHelpdeskAvailable(client, uid))) {
             return res.json({ available: false, message: 'Helpdesk module not available on this Odoo instance' });
@@ -215,6 +213,15 @@ router.post('/', async (req, res) => {
             optionalFields.ticket_type_id = body.ticket_type_id;
         if (body.tag_ids && body.tag_ids.length > 0)
             optionalFields.tag_ids = [[6, 0, body.tag_ids]];
+        // Pre-validate base ticket data against live Odoo schema
+        const ticketValidation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'helpdesk.ticket', ticketData);
+        if (!ticketValidation.valid) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                missing_required: ticketValidation.missing,
+                invalid_values: ticketValidation.invalid,
+            });
+        }
         let newId;
         try {
             newId = await client.createRecord(uid, 'helpdesk.ticket', { ...ticketData, ...optionalFields });
@@ -238,8 +245,7 @@ router.post('/', async (req, res) => {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: error.errors });
         }
-        console.error('Create Helpdesk Ticket Error:', error);
-        res.status(500).json({ error: error.message });
+        return (0, parseError_1.sendOdooError)(res, error, 'Create Helpdesk Ticket');
     }
 });
 exports.helpdeskRouter = router;

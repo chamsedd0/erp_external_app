@@ -3,11 +3,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.clearOdooClientCache = clearOdooClientCache;
 exports.getOdooClient = getOdooClient;
 const xmlrpc_1 = __importDefault(require("xmlrpc"));
 const UID_TTL_MS = 60 * 60 * 1000; // 1 hour
 const CONNECT_TIMEOUT_MS = 10000; // 10s — fail fast on bad URLs
 const _cache = new Map();
+function configFingerprint(cfg) {
+    return JSON.stringify({
+        url: cfg.odoo_url,
+        db: cfg.odoo_db,
+        username: cfg.odoo_username,
+        password: cfg.odoo_password,
+    });
+}
 function validateConfig(tenantId, cfg) {
     const missing = ['odoo_url', 'odoo_db', 'odoo_username', 'odoo_password']
         .filter(k => !cfg[k]);
@@ -16,9 +25,11 @@ function validateConfig(tenantId, cfg) {
     }
 }
 function getCache(tenantId, cfg) {
+    const fingerprint = configFingerprint(cfg);
     let entry = _cache.get(tenantId);
-    if (!entry) {
+    if (!entry || entry.fingerprint !== fingerprint) {
         entry = {
+            fingerprint,
             commonClient: xmlrpc_1.default.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/common`, timeout: CONNECT_TIMEOUT_MS }),
             objectClient: xmlrpc_1.default.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/object`, timeout: CONNECT_TIMEOUT_MS }),
             cachedUid: null,
@@ -28,6 +39,12 @@ function getCache(tenantId, cfg) {
         _cache.set(tenantId, entry);
     }
     return entry;
+}
+function clearOdooClientCache(tenantId) {
+    if (tenantId)
+        _cache.delete(tenantId);
+    else
+        _cache.clear();
 }
 // ──────────────────────────────────────────────────────────────────────────────
 // Factory — returns a per-tenant client instance
@@ -68,10 +85,14 @@ function getOdooClient(tenantId, cfg) {
                     if (error) {
                         console.error(`[${tenantId}] Odoo Auth Error:`, error);
                         cache.cachedUid = null;
+                        cache.uidCachedAt = 0;
+                        cache.odooMajorVersion = 0;
                         reject(error);
                     }
                     else if (!uid) {
                         cache.cachedUid = null;
+                        cache.uidCachedAt = 0;
+                        cache.odooMajorVersion = 0;
                         reject(new Error('Authentication failed (uid is false)'));
                     }
                     else {

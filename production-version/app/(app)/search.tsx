@@ -357,7 +357,7 @@ export default function Search() {
                             No requests found
                         </Text>
                         <Text style={{ fontSize: 14, color: muted, textAlign: 'center', marginHorizontal: 32 }}>
-                            We couldn't find any requests matching your current filters.
+                            We couldn&apos;t find any requests matching your current filters.
                         </Text>
                     </View>
                 )}

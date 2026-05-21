@@ -1,205 +1,471 @@
 "use strict";
 /**
- * Shadow Portal — End-to-End Smoke Test
+ * Exhaustive Shadow Portal mobile smoke runner.
  *
- * Hits the REAL deployed backend at https://erp-external-app.vercel.app
- * to verify every major flow works in production.
+ * Default targets, in order:
+ *   1. http://localhost:3000
+ *   2. https://erp-external-app.vercel.app
  *
  * Usage:
- *   SMOKE_TENANT=<slug> SMOKE_EMP_ID=<id> SMOKE_PIN=<pin> \
- *   SMOKE_ADMIN_SECRET=<secret> npx ts-node src/__tests__/smoke/run.ts
- *
- * All steps are sequential and log pass/fail with ✓/✗ symbols.
+ *   SMOKE_WRITE=true npm.cmd run smoke
+ *   SMOKE_BASE_URL=https://erp-external-app.vercel.app SMOKE_WRITE=true npm.cmd run smoke
+ *   SMOKE_BASE_URLS=http://localhost:3000,https://erp-external-app.vercel.app SMOKE_WRITE=true npm.cmd run smoke
  */
-const BASE_URL = process.env.SMOKE_BASE_URL ?? 'https://erp-external-app.vercel.app';
-const TENANT = process.env.SMOKE_TENANT ?? 'testcorp';
-const EMP_ID = process.env.SMOKE_EMP_ID ?? '1';
-const PIN = process.env.SMOKE_PIN ?? '1234';
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const PRODUCTION_URL = 'https://erp-external-app.vercel.app';
+const WRITE_ENABLED = String(process.env.SMOKE_WRITE ?? '').toLowerCase() === 'true';
 const ADMIN_SECRET = process.env.SMOKE_ADMIN_SECRET ?? '';
-let token = '';
-let employeeId = 0;
-// ── Utilities ─────────────────────────────────────────────────────────────────
-async function api(path, options = {}, useAuth = true) {
-    const headers = {
-        'Content-Type': 'application/json',
+const REPORT_DIR = process.env.SMOKE_REPORT_DIR ?? path_1.default.resolve(__dirname, '../../../smoke-reports');
+const RUN_ID = makeRunId();
+const TARGETS = (process.env.SMOKE_BASE_URLS
+    ? process.env.SMOKE_BASE_URLS.split(',')
+    : process.env.SMOKE_BASE_URL
+        ? [process.env.SMOKE_BASE_URL]
+        : ['http://localhost:3000', PRODUCTION_URL])
+    .map(s => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+const CREDENTIALS = [
+    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'Jehad Hussain', barcode: '19200002', pin: '2222' },
+    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'Bashar Quraishi', barcode: '19200003', pin: '3333' },
+    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'HANI YES', barcode: '19200029', pin: '2929' },
+    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'AASEM AHMAD', barcode: '45164705', pin: '4248' },
+    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'ABDALLA MOHAMED', barcode: '74882741', pin: '4568' },
+    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'ABDULAZIZ ABDULRAHMAN', barcode: '46131080', pin: '1365' },
+    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Ali Shaikh', barcode: '78800001', pin: '4444' },
+    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Nazir', barcode: '14100003', pin: '6666' },
+    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Nazir', barcode: '73800002', pin: '5555' },
+    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'SHAHIEZ', barcode: '18200001', pin: '1111' },
+    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'Mohammed', barcode: '24600002', pin: '2222' },
+    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'DAFER', barcode: '0300003', pin: '3333' },
+];
+const CREDENTIAL_BARCODES = new Set(CREDENTIALS.map(credential => credential.barcode));
+const TINY_PNG_ATTACHMENT = {
+    name: 'smoke.png',
+    mimetype: 'image/png',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+};
+const allResults = [];
+function makeRunId() {
+    const d = new Date();
+    const stamp = [
+        d.getUTCFullYear(),
+        String(d.getUTCMonth() + 1).padStart(2, '0'),
+        String(d.getUTCDate()).padStart(2, '0'),
+        '-',
+        String(d.getUTCHours()).padStart(2, '0'),
+        String(d.getUTCMinutes()).padStart(2, '0'),
+        String(d.getUTCSeconds()).padStart(2, '0'),
+    ].join('');
+    return `SMOKE-${stamp}`;
+}
+function safeName(value) {
+    return value.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+}
+function labelFor(credential, loginEmployeeId) {
+    return `${RUN_ID}-${safeName(credential.company)}-${loginEmployeeId ?? credential.barcode}`;
+}
+function nextWeekdayIso(offsetDays = 14, hour = 9, minute = 0) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + offsetDays);
+    while ([0, 6].includes(d.getUTCDay()))
+        d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(hour, minute, 0, 0);
+    return d.toISOString();
+}
+function stablePastIso(index, hour = 7) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 7);
+    d.setUTCHours(hour, index % 50, 0, 0);
+    return d.toISOString();
+}
+function dateOnly(iso) {
+    return iso.split('T')[0];
+}
+function sanitize(value) {
+    if (value === null || value === undefined)
+        return value;
+    if (Array.isArray(value))
+        return value.map(sanitize);
+    if (typeof value !== 'object')
+        return value;
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        const lower = key.toLowerCase();
+        if (['pin', 'password', 'authorization', 'token', 'barcode'].some(secret => lower.includes(secret))) {
+            out[key] = '[REDACTED]';
+        }
+        else if (typeof raw === 'string' && CREDENTIAL_BARCODES.has(raw)) {
+            out[key] = '[REDACTED_CREDENTIAL]';
+        }
+        else if (lower === 'data' && typeof raw === 'string' && raw.length > 40) {
+            out[key] = `[base64:${raw.length} chars]`;
+        }
+        else {
+            out[key] = sanitize(raw);
+        }
+    }
+    return out;
+}
+function classifyFailure(action, response, statusCode) {
+    const raw = JSON.stringify(response ?? {}).toLowerCase();
+    if (raw.includes('invalid structure') || raw.includes('validation failed') || raw.includes('invalid input'))
+        return 'invalid payload structure';
+    if (raw.includes('product') || raw.includes('category') || raw.includes('journal') || raw.includes('account'))
+        return 'missing or incompatible Odoo product/account config';
+    if (raw.includes('compan'))
+        return 'employee/company mismatch';
+    if (raw.includes('invalid field') || raw.includes('price_unit') || raw.includes('total_amount'))
+        return 'Odoo version field mismatch';
+    if (raw.includes('balance') || raw.includes('allocation') || raw.includes('overlap') || raw.includes('already'))
+        return 'expected Odoo business validation';
+    if (statusCode && statusCode >= 500)
+        return 'backend/platform/Odoo RPC failure';
+    if (action.toLowerCase().includes('expense'))
+        return 'expense submission failure';
+    return 'unclassified failure';
+}
+async function api(target, token, method, endpoint, body, extraHeaders) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token)
+        headers.Authorization = `Bearer ${token}`;
+    if (extraHeaders)
+        Object.assign(headers, extraHeaders);
+    const response = await fetch(`${target}${endpoint}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return {
+        status: response.status,
+        ok: response.ok,
+        body: await response.json().catch(() => ({})),
     };
-    if (useAuth && token) {
-        headers['Authorization'] = `Bearer ${token}`;
+}
+function record(target, credential, action, method, endpoint, apiResult, result, request, note, loginEmployeeId) {
+    const entry = {
+        target,
+        company: credential.company,
+        spNumber: credential.spNumber,
+        employeeName: credential.employeeName,
+        employeeRef: credentialRef(credential),
+        loginEmployeeId,
+        action,
+        method,
+        endpoint,
+        statusCode: apiResult?.status,
+        result,
+        request: sanitize(request),
+        response: sanitize(apiResult?.body),
+        note,
+        likelyCause: result === 'FAIL' ? classifyFailure(action, apiResult?.body, apiResult?.status) : undefined,
+    };
+    allResults.push(entry);
+    const icon = result === 'PASS' ? 'OK' : result === 'FAIL' ? 'FAIL' : result === 'MODULE_UNAVAILABLE' ? 'N/A' : 'SKIP';
+    console.log(`  ${icon.padEnd(4)} ${credential.spNumber} ${credentialRef(credential)} :: ${action}${apiResult ? ` (${apiResult.status})` : ''}${note ? ` - ${note}` : ''}`);
+}
+function passStatus(status) {
+    return status >= 200 && status < 300;
+}
+function moduleUnavailable(body) {
+    return body?.available === false;
+}
+function firstRequestable(items) {
+    return Array.isArray(items) ? (items.find(item => item?.requestable !== false) ?? null) : null;
+}
+function maskIdentifier(identifier) {
+    return `***${identifier.slice(-3)}`;
+}
+function credentialRef(credential) {
+    return `${credential.employeeName} (${maskIdentifier(credential.barcode)})`;
+}
+async function checkedApi(target, credential, token, action, method, endpoint, requestBody, loginEmployeeId, options = {}) {
+    const result = await api(target, token, method, endpoint, requestBody);
+    if (options.allowModuleUnavailable && moduleUnavailable(result.body)) {
+        record(target, credential, action, method, endpoint, result, 'MODULE_UNAVAILABLE', requestBody, result.body?.message, loginEmployeeId);
+        return result;
     }
-    if (options.headers) {
-        Object.assign(headers, options.headers);
+    if (!passStatus(result.status)) {
+        record(target, credential, action, method, endpoint, result, 'FAIL', requestBody, undefined, loginEmployeeId);
+        return result;
     }
-    const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-    const body = await res.json().catch(() => ({}));
-    return { status: res.status, body, ok: res.ok };
+    if (options.expectArrayAt && !Array.isArray(result.body?.[options.expectArrayAt])) {
+        record(target, credential, action, method, endpoint, result, 'FAIL', requestBody, `Expected ${options.expectArrayAt} array`, loginEmployeeId);
+        return result;
+    }
+    record(target, credential, action, method, endpoint, result, 'PASS', requestBody, undefined, loginEmployeeId);
+    return result;
 }
-let passCount = 0;
-let failCount = 0;
-const failures = [];
-function pass(label) {
-    passCount++;
-    console.log(`  ✓  ${label}`);
+async function targetReachable(target) {
+    try {
+        const response = await fetch(`${target}/health`);
+        return { ok: response.ok, note: response.ok ? undefined : `/health returned ${response.status}` };
+    }
+    catch (error) {
+        const cause = error?.cause?.code ? ` (${error.cause.code})` : '';
+        return { ok: false, note: `${error?.message ?? 'fetch failed'}${cause}` };
+    }
 }
-function fail(label, detail) {
-    failCount++;
-    const msg = `  ✗  ${label}${detail ? ` — ${JSON.stringify(detail)}` : ''}`;
-    console.error(msg);
-    failures.push(msg);
-}
-function check(label, condition, detail) {
-    if (condition)
-        pass(label);
-    else
-        fail(label, detail);
-}
-function section(title) {
-    console.log(`\n── ${title} ${'─'.repeat(Math.max(0, 50 - title.length))}`);
-}
-// ── Steps ─────────────────────────────────────────────────────────────────────
-async function step1_tenantLookup() {
-    section('Step 1 — Tenant lookup');
-    const { status, body, ok } = await api(`/auth/tenant/${TENANT}`, {}, false);
-    check('GET /auth/tenant/:slug returns 200', status === 200, { status });
-    check('Response has name field', typeof body.name === 'string', body);
-    check('Response has hr_email field', typeof body.hr_email === 'string', body);
-    console.log(`     Tenant: "${body.name}" | HR: ${body.hr_email}`);
-}
-async function step2_unknownTenant() {
-    section('Step 2 — Unknown tenant returns 404');
-    const { status } = await api('/auth/tenant/__nonexistent_slug_smoke_test__', {}, false);
-    check('Unknown tenant returns 404', status === 404, { status });
-}
-async function step3_login() {
-    section('Step 3 — Login');
-    const { status, body } = await api('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ employee_id: EMP_ID, pin: PIN, tenant_slug: TENANT }),
-    }, false);
-    if (status === 200 && body.token) {
-        token = body.token;
-        employeeId = body.user?.id ?? parseInt(EMP_ID);
-        pass('POST /auth/login returns 200 with token');
-        check('Token is a non-empty string', typeof token === 'string' && token.length > 10);
-        check('User id present in response', typeof body.user?.id === 'number', body.user);
-        check('User has role field', ['employee', 'manager', 'admin'].includes(body.user?.role), body.user);
+async function runEmployee(target, credential, index) {
+    let token = '';
+    let employeeId = 0;
+    const runLabelBase = labelFor(credential);
+    const tenantLookup = await checkedApi(target, credential, '', 'tenant lookup', 'GET', `/auth/tenant/${credential.spNumber}`, undefined, undefined);
+    if (!passStatus(tenantLookup.status))
+        return;
+    const loginBody = { employee_id: credential.barcode, pin: credential.pin, tenant_subscription_number: credential.spNumber };
+    const login = await api(target, '', 'POST', '/auth/login', loginBody);
+    if (passStatus(login.status) && login.body?.token && typeof login.body?.user?.id === 'number') {
+        token = login.body.token;
+        employeeId = login.body.user.id;
+        record(target, credential, 'legacy login', 'POST', '/auth/login', login, 'PASS', loginBody, undefined, employeeId);
     }
     else {
-        fail('POST /auth/login', { status, body });
-    }
-}
-async function step4_protectedRoute() {
-    section('Step 4 — JWT protection');
-    const { status: withToken } = await api(`/time-off?employee_id=${employeeId}`);
-    check('Authenticated request gets 200 (not 401)', withToken !== 401, { withToken });
-    const { status: noToken } = await api(`/time-off?employee_id=${employeeId}`, {}, false);
-    check('Unauthenticated request gets 401', noToken === 401, { noToken });
-}
-async function step5_timeOff() {
-    section('Step 5 — Time Off');
-    const { status: listStatus, body: listBody } = await api(`/time-off?employee_id=${employeeId}`);
-    check('GET /time-off returns 200', listStatus === 200, { listStatus });
-    check('Response has leaves array', Array.isArray(listBody.leaves), listBody);
-    const { status: typesStatus, body: typesBody } = await api('/time-off/types');
-    check('GET /time-off/types returns 200', typesStatus === 200, { typesStatus });
-    check('Response has types array', Array.isArray(typesBody.types), typesBody);
-    const { status: pendingStatus } = await api('/time-off/pending');
-    check('GET /time-off/pending returns 200', pendingStatus === 200, { pendingStatus });
-}
-async function step6_expenses() {
-    section('Step 6 — Expenses');
-    const { status: listStatus, body: listBody } = await api(`/expenses?employee_id=${employeeId}`);
-    check('GET /expenses returns 200', listStatus === 200, { listStatus });
-    check('Response has expenses array', Array.isArray(listBody.expenses), listBody);
-    const { status: productsStatus, body: productsBody } = await api('/expenses/products');
-    check('GET /expenses/products returns 200', productsStatus === 200, { productsStatus });
-    check('Response has products array', Array.isArray(productsBody.products), productsBody);
-}
-async function step7_timesheet() {
-    section('Step 7 — Timesheet');
-    const { status: listStatus, body: listBody } = await api(`/timesheet?employee_id=${employeeId}`);
-    check('GET /timesheet returns 200', listStatus === 200, { listStatus });
-    check('Response has entries array', Array.isArray(listBody.entries), listBody);
-    const { status: projStatus, body: projBody } = await api('/timesheet/projects');
-    check('GET /timesheet/projects returns 200', projStatus === 200, { projStatus });
-    check('Response has projects array', Array.isArray(projBody.projects), projBody);
-}
-async function step8_helpdeskMaintenance() {
-    section('Step 8 — Helpdesk & Maintenance');
-    const { status: hdTeamsStatus, body: hdTeamsBody } = await api('/helpdesk/teams');
-    check('GET /helpdesk/teams returns 200', hdTeamsStatus === 200, { hdTeamsStatus });
-    check('Helpdesk response has available field', typeof hdTeamsBody.available === 'boolean', hdTeamsBody);
-    const { status: catStatus, body: catBody } = await api('/maintenance/categories');
-    check('GET /maintenance/categories returns 200', catStatus === 200, { catStatus });
-    check('Maintenance response has available field', typeof catBody.available === 'boolean', catBody);
-}
-async function step9_notifications() {
-    section('Step 9 — Notifications');
-    const { status, body } = await api(`/notifications?employee_id=${employeeId}`);
-    check('GET /notifications returns 200', status === 200, { status });
-    check('Response has notifications array', Array.isArray(body.notifications), body);
-}
-async function step10_pushToken() {
-    section('Step 10 — Push token registration');
-    const { status: saveStatus } = await api('/auth/push-token', {
-        method: 'POST',
-        body: JSON.stringify({
-            employee_id: employeeId,
-            token: 'ExponentPushToken[smoke_test_token_do_not_use]',
-            tenant_slug: TENANT,
-        }),
-    });
-    check('POST /auth/push-token returns 200', saveStatus === 200, { saveStatus });
-    const { status: delStatus } = await api('/auth/push-token', {
-        method: 'DELETE',
-        body: JSON.stringify({ employee_id: employeeId, tenant_slug: TENANT }),
-    });
-    check('DELETE /auth/push-token returns 200', delStatus === 200, { delStatus });
-}
-async function step11_adminApi() {
-    section('Step 11 — Admin API');
-    if (!ADMIN_SECRET) {
-        console.log('     SMOKE_ADMIN_SECRET not set — skipping admin tests');
+        record(target, credential, 'legacy login', 'POST', '/auth/login', login, 'FAIL', loginBody);
         return;
     }
-    const { status: listStatus, body: listBody } = await api('/admin/tenants', {
-        headers: { 'x-admin-secret': ADMIN_SECRET },
-    });
-    check('GET /admin/tenants returns 200 with admin secret', listStatus === 200, { listStatus });
-    check('Response has tenants array', Array.isArray(listBody.tenants), listBody);
-    const { status: noSecretStatus } = await api('/admin/tenants');
-    check('GET /admin/tenants returns 401 without admin secret', noSecretStatus === 401, { noSecretStatus });
+    const runLabel = labelFor(credential, employeeId);
+    await checkedApi(target, credential, token, 'protected route with JWT', 'GET', `/time-off?employee_id=${employeeId}`, undefined, employeeId);
+    await checkedApi(target, credential, token, 'spoofed employee_id must use JWT employee', 'GET', '/expenses?employee_id=999999', undefined, employeeId, { expectArrayAt: 'expenses' });
+    const timeOff = await checkedApi(target, credential, token, 'dashboard time off list', 'GET', `/time-off?employee_id=${employeeId}`, undefined, employeeId, { expectArrayAt: 'leaves' });
+    const expenses = await checkedApi(target, credential, token, 'dashboard expenses list', 'GET', `/expenses?employee_id=${employeeId}`, undefined, employeeId, { expectArrayAt: 'expenses' });
+    await checkedApi(target, credential, token, 'dashboard timesheet list', 'GET', `/timesheet?employee_id=${employeeId}`, undefined, employeeId, { expectArrayAt: 'entries' });
+    await checkedApi(target, credential, token, 'dashboard helpdesk list', 'GET', `/helpdesk?employee_id=${employeeId}`, undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'tickets' });
+    await checkedApi(target, credential, token, 'dashboard maintenance list', 'GET', `/maintenance?employee_id=${employeeId}`, undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'requests' });
+    const leaveTypes = await checkedApi(target, credential, token, 'lookup leave types', 'GET', '/time-off/types', undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'types' });
+    const products = await checkedApi(target, credential, token, 'lookup expense products', 'GET', '/expenses/products', undefined, employeeId, { expectArrayAt: 'products' });
+    await checkedApi(target, credential, token, 'lookup expense taxes', 'GET', '/expenses/taxes', undefined, employeeId);
+    const projects = await checkedApi(target, credential, token, 'lookup timesheet projects', 'GET', '/timesheet/projects', undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'projects' });
+    await checkedApi(target, credential, token, 'lookup helpdesk teams', 'GET', '/helpdesk/teams', undefined, employeeId, { allowModuleUnavailable: true });
+    await checkedApi(target, credential, token, 'lookup helpdesk ticket types', 'GET', '/helpdesk/ticket-types', undefined, employeeId, { allowModuleUnavailable: true });
+    await checkedApi(target, credential, token, 'lookup helpdesk tags', 'GET', '/helpdesk/tags', undefined, employeeId, { allowModuleUnavailable: true });
+    await checkedApi(target, credential, token, 'lookup helpdesk agents', 'GET', '/helpdesk/agents', undefined, employeeId, { allowModuleUnavailable: true });
+    await checkedApi(target, credential, token, 'lookup maintenance categories', 'GET', '/maintenance/categories', undefined, employeeId, { allowModuleUnavailable: true });
+    await checkedApi(target, credential, token, 'lookup maintenance equipment', 'GET', '/maintenance/equipment', undefined, employeeId, { allowModuleUnavailable: true });
+    const maintenanceTeams = await checkedApi(target, credential, token, 'lookup maintenance teams', 'GET', '/maintenance/teams', undefined, employeeId, { allowModuleUnavailable: true });
+    const attendance = await checkedApi(target, credential, token, 'attendance history', 'GET', `/attendance?employee_id=${employeeId}`, undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'records' });
+    const overtime = await checkedApi(target, credential, token, 'attendance overtime history', 'GET', `/attendance/overtime?employee_id=${employeeId}`, undefined, employeeId, { allowModuleUnavailable: true });
+    const notifications = await checkedApi(target, credential, token, 'notifications list', 'GET', `/notifications?employee_id=${employeeId}`, undefined, employeeId, { expectArrayAt: 'notifications' });
+    if (Array.isArray(notifications.body?.notifications) && notifications.body.notifications[0]?.id) {
+        await checkedApi(target, credential, token, 'mark first notification read', 'PUT', `/notifications/${notifications.body.notifications[0].id}/read`, undefined, employeeId);
+    }
+    else {
+        record(target, credential, 'mark first notification read', 'PUT', '/notifications/:id/read', null, 'SKIPPED_PRECONDITION', undefined, 'No notification available', employeeId);
+    }
+    await checkedApi(target, credential, token, 'mark all notifications read', 'PUT', '/notifications/read-all', undefined, employeeId);
+    await checkedApi(target, credential, token, 'push token create', 'POST', '/auth/push-token', {
+        employee_id: employeeId,
+        token: `ExponentPushToken[${runLabelBase}]`,
+        tenant_code: credential.spNumber,
+    }, employeeId);
+    await checkedApi(target, credential, token, 'push token delete', 'DELETE', '/auth/push-token', {
+        employee_id: employeeId,
+        tenant_code: credential.spNumber,
+    }, employeeId);
+    if (!WRITE_ENABLED) {
+        record(target, credential, 'write flows', 'POST', '*', null, 'SKIPPED_PRECONDITION', undefined, 'SMOKE_WRITE=true not set', employeeId);
+        return;
+    }
+    const product = firstRequestable(products.body?.products);
+    if (product?.id) {
+        await checkedApi(target, credential, token, 'create expense', 'POST', '/expenses', {
+            employee_id: employeeId,
+            product_id: product.id,
+            name: `${runLabel} expense`,
+            unit_amount: 1,
+            quantity: 1,
+            date: dateOnly(new Date().toISOString()),
+            payment_mode: 'own_account',
+            attachments: [TINY_PNG_ATTACHMENT],
+        }, employeeId);
+    }
+    else {
+        record(target, credential, 'create expense', 'POST', '/expenses', null, 'SKIPPED_PRECONDITION', undefined, 'No expense product available', employeeId);
+    }
+    const leaveType = firstRequestable(leaveTypes.body?.types);
+    if (leaveType?.id) {
+        const from = nextWeekdayIso(14 + (index % 5), 9, 0);
+        const to = nextWeekdayIso(14 + (index % 5), 17, 0);
+        await checkedApi(target, credential, token, 'create time off', 'POST', '/time-off', {
+            employee_id: employeeId,
+            leave_type_id: leaveType.id,
+            date_from: from,
+            date_to: to,
+            name: `${runLabel} time off`,
+            attachments: [TINY_PNG_ATTACHMENT],
+        }, employeeId);
+    }
+    else {
+        record(target, credential, 'create time off', 'POST', '/time-off', null, 'SKIPPED_PRECONDITION', undefined, 'No leave type available', employeeId);
+    }
+    const project = Array.isArray(projects.body?.projects) ? projects.body.projects[0] : null;
+    if (project?.id) {
+        const tasks = await checkedApi(target, credential, token, 'lookup timesheet tasks', 'GET', `/timesheet/tasks?project_id=${project.id}`, undefined, employeeId, { allowModuleUnavailable: true, expectArrayAt: 'tasks' });
+        const task = firstRequestable(tasks.body?.tasks);
+        await checkedApi(target, credential, token, 'create timesheet', 'POST', '/timesheet', {
+            employee_id: employeeId,
+            project_id: project.id,
+            task_id: task?.id,
+            date: dateOnly(new Date().toISOString()),
+            unit_amount: 0.25,
+            name: `${runLabel} timesheet`,
+        }, employeeId);
+    }
+    else {
+        record(target, credential, 'create timesheet', 'POST', '/timesheet', null, 'SKIPPED_PRECONDITION', undefined, 'No project available', employeeId);
+    }
+    const helpdeskAvailable = !moduleUnavailable(await api(target, token, 'GET', '/helpdesk/teams'));
+    if (helpdeskAvailable) {
+        await checkedApi(target, credential, token, 'create helpdesk ticket', 'POST', '/helpdesk', {
+            employee_id: employeeId,
+            name: `${runLabel} helpdesk`,
+            description: `${runLabel} automated smoke ticket`,
+            priority: '0',
+            attachments: [TINY_PNG_ATTACHMENT],
+        }, employeeId, { allowModuleUnavailable: true });
+    }
+    else {
+        record(target, credential, 'create helpdesk ticket', 'POST', '/helpdesk', null, 'MODULE_UNAVAILABLE', undefined, 'Helpdesk module unavailable', employeeId);
+    }
+    const maintenanceAvailable = !moduleUnavailable(await api(target, token, 'GET', '/maintenance/categories'));
+    if (maintenanceAvailable) {
+        const maintenanceTeam = firstRequestable(maintenanceTeams.body?.teams);
+        await checkedApi(target, credential, token, 'create maintenance request', 'POST', '/maintenance', {
+            employee_id: employeeId,
+            name: `${runLabel} maintenance`,
+            description: `${runLabel} automated smoke maintenance request`,
+            maintenance_type: 'corrective',
+            maintenance_team_id: maintenanceTeam?.id,
+            attachments: [TINY_PNG_ATTACHMENT],
+        }, employeeId, { allowModuleUnavailable: true });
+    }
+    else {
+        record(target, credential, 'create maintenance request', 'POST', '/maintenance', null, 'MODULE_UNAVAILABLE', undefined, 'Maintenance module unavailable', employeeId);
+    }
+    if (!moduleUnavailable(attendance.body)) {
+        const checkIn = stablePastIso(index, 6);
+        const checkOut = new Date(new Date(checkIn).getTime() + 15 * 60 * 1000).toISOString();
+        await checkedApi(target, credential, token, 'create attendance correction', 'POST', '/attendance/correction', {
+            employee_id: employeeId,
+            check_in: checkIn,
+            check_out: checkOut,
+            reason: `${runLabel} attendance correction`,
+        }, employeeId, { allowModuleUnavailable: true });
+    }
+    if (!moduleUnavailable(overtime.body) && overtime.body?.available !== false) {
+        await checkedApi(target, credential, token, 'create overtime', 'POST', '/attendance/overtime', {
+            employee_id: employeeId,
+            date: dateOnly(nextWeekdayIso(35 + index, 6, 0)),
+            duration: 0.25,
+            reason: `${runLabel} overtime`,
+        }, employeeId, { allowModuleUnavailable: true });
+    }
+    if (leaveType?.id) {
+        const from = nextWeekdayIso(21 + (index % 5), 9, 0);
+        const to = nextWeekdayIso(21 + (index % 5), 17, 0);
+        await checkedApi(target, credential, token, 'create attendance justification', 'POST', '/attendance/justification', {
+            employee_id: employeeId,
+            leave_type_id: leaveType.id,
+            date_from: from,
+            date_to: to,
+            justification: `${runLabel} absence justification`,
+        }, employeeId, { allowModuleUnavailable: true });
+    }
+    else {
+        record(target, credential, 'create attendance justification', 'POST', '/attendance/justification', null, 'SKIPPED_PRECONDITION', undefined, 'No leave type available', employeeId);
+    }
+    void timeOff;
+    void expenses;
 }
-// ── Main ──────────────────────────────────────────────────────────────────────
+async function runTarget(target) {
+    console.log(`\n=== Target: ${target} ===`);
+    const reachable = await targetReachable(target);
+    if (!reachable.ok) {
+        const dummy = CREDENTIALS[0];
+        record(target, dummy, 'target reachability', 'GET', '/health', null, 'SKIPPED_PRECONDITION', undefined, `Target not reachable: ${reachable.note ?? 'unknown error'}`);
+        return;
+    }
+    for (let i = 0; i < CREDENTIALS.length; i++) {
+        const credential = CREDENTIALS[i];
+        console.log(`\n-- ${credential.spNumber} ${credential.company} :: ${credential.employeeName} --`);
+        try {
+            await runEmployee(target, credential, i);
+        }
+        catch (error) {
+            record(target, credential, 'unhandled employee flow error', '*', '*', null, 'FAIL', undefined, error?.message ?? String(error));
+        }
+    }
+    if (ADMIN_SECRET) {
+        const adminCheck = await api(target, '', 'GET', '/admin/tenants', undefined, { 'x-admin-secret': ADMIN_SECRET });
+        const dummy = CREDENTIALS[0];
+        record(target, dummy, 'admin tenants list', 'GET', '/admin/tenants', adminCheck, passStatus(adminCheck.status) ? 'PASS' : 'FAIL', undefined);
+    }
+}
+function summarize() {
+    const counts = allResults.reduce((acc, row) => {
+        acc[row.result] = (acc[row.result] ?? 0) + 1;
+        return acc;
+    }, { PASS: 0, FAIL: 0, SKIPPED_PRECONDITION: 0, MODULE_UNAVAILABLE: 0 });
+    return counts;
+}
+function writeReports() {
+    fs_1.default.mkdirSync(REPORT_DIR, { recursive: true });
+    const jsonPath = path_1.default.join(REPORT_DIR, `${RUN_ID}.json`);
+    const mdPath = path_1.default.join(REPORT_DIR, `${RUN_ID}.md`);
+    fs_1.default.writeFileSync(jsonPath, JSON.stringify({ runId: RUN_ID, writeEnabled: WRITE_ENABLED, targets: TARGETS, results: allResults }, null, 2));
+    const counts = summarize();
+    const lines = [
+        `# ${RUN_ID} Smoke Report`,
+        '',
+        `Write enabled: ${WRITE_ENABLED}`,
+        `Targets: ${TARGETS.join(', ')}`,
+        '',
+        `Summary: PASS ${counts.PASS}, FAIL ${counts.FAIL}, SKIPPED ${counts.SKIPPED_PRECONDITION}, MODULE_UNAVAILABLE ${counts.MODULE_UNAVAILABLE}`,
+        '',
+        '## Failures',
+        '',
+    ];
+    const failures = allResults.filter(r => r.result === 'FAIL');
+    if (failures.length === 0) {
+        lines.push('No failures.');
+    }
+    else {
+        lines.push('| Target | Tenant | Employee | Action | Status | Likely Cause | Error |');
+        lines.push('|---|---|---|---|---:|---|---|');
+        for (const f of failures) {
+            const error = String(f.response?.error ?? f.note ?? JSON.stringify(f.response ?? {})).replace(/\|/g, '/').slice(0, 300);
+            lines.push(`| ${f.target} | ${f.spNumber} | ${f.employeeRef} | ${f.action} | ${f.statusCode ?? ''} | ${f.likelyCause ?? ''} | ${error} |`);
+        }
+    }
+    lines.push('', '## All Results', '');
+    lines.push('| Target | Tenant | Employee | Action | Result | Status | Note |');
+    lines.push('|---|---|---|---|---|---:|---|');
+    for (const r of allResults) {
+        lines.push(`| ${r.target} | ${r.spNumber} | ${r.employeeRef} | ${r.action} | ${r.result} | ${r.statusCode ?? ''} | ${(r.note ?? '').replace(/\|/g, '/')} |`);
+    }
+    fs_1.default.writeFileSync(mdPath, lines.join('\n'));
+    return { jsonPath, mdPath };
+}
 async function main() {
-    console.log('\n╔══════════════════════════════════════════════════╗');
-    console.log('║        Shadow Portal — Smoke Test Suite          ║');
-    console.log('╚══════════════════════════════════════════════════╝');
-    console.log(`  Target: ${BASE_URL}`);
-    console.log(`  Tenant: ${TENANT} | Employee: ${EMP_ID}`);
-    try {
-        await step1_tenantLookup();
-        await step2_unknownTenant();
-        await step3_login();
-        await step4_protectedRoute();
-        await step5_timeOff();
-        await step6_expenses();
-        await step7_timesheet();
-        await step8_helpdeskMaintenance();
-        await step9_notifications();
-        await step10_pushToken();
-        await step11_adminApi();
+    console.log(`Run ID: ${RUN_ID}`);
+    console.log(`Write enabled: ${WRITE_ENABLED}`);
+    console.log(`Targets: ${TARGETS.join(', ')}`);
+    for (const target of TARGETS) {
+        await runTarget(target);
     }
-    catch (err) {
-        fail('Unhandled exception in smoke test', err?.message ?? err);
-    }
-    const total = passCount + failCount;
-    console.log('\n' + '═'.repeat(52));
-    console.log(`  Results: ${passCount}/${total} passed, ${failCount} failed`);
-    if (failures.length > 0) {
-        console.log('\n  Failed steps:');
-        failures.forEach(f => console.log(f));
-    }
-    console.log('═'.repeat(52) + '\n');
-    process.exit(failCount > 0 ? 1 : 0);
+    const paths = writeReports();
+    const counts = summarize();
+    console.log('\n=== Summary ===');
+    console.log(`PASS ${counts.PASS} | FAIL ${counts.FAIL} | SKIPPED ${counts.SKIPPED_PRECONDITION} | MODULE_UNAVAILABLE ${counts.MODULE_UNAVAILABLE}`);
+    console.log(`JSON: ${paths.jsonPath}`);
+    console.log(`Markdown: ${paths.mdPath}`);
+    process.exit(counts.FAIL > 0 ? 1 : 0);
 }
-main();
+main().catch(error => {
+    console.error(error);
+    process.exit(1);
+});

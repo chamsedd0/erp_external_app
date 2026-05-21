@@ -49,11 +49,11 @@ describe('GET /time-off', () => {
         expect(res.status).toBe(401);
     });
 
-    it('returns 400 when employee_id query param is missing', async () => {
+    it('derives employee_id from JWT when query param is missing', async () => {
         const res = await request(app)
             .get('/time-off')
             .set('Authorization', authHeader());
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
     });
 
     it('returns 500 when Odoo searchRead throws', async () => {
@@ -98,6 +98,22 @@ describe('GET /time-off/types', () => {
         expect(res.status).toBe(200);
         // Only LEAVE_ prefixed entries should be returned
         expect(res.body.types.every((t: any) => !t.code?.startsWith('WORK'))).toBe(true);
+    });
+
+    it('adds requestability metadata when leave balance fields are available', async () => {
+        mockClient.searchRead.mockResolvedValueOnce([
+            { id: 1, name: 'Annual Leave', requires_allocation: 'yes', virtual_remaining_leaves: 0, max_leaves: 0 },
+            { id: 2, name: 'Unpaid Leave', requires_allocation: 'no', virtual_remaining_leaves: 0, max_leaves: 0 },
+        ]);
+
+        const res = await request(app)
+            .get('/time-off/types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.types[0].requestable).toBe(false);
+        expect(res.body.types[0].unavailable_reason).toMatch(/allocation/i);
+        expect(res.body.types[1].requestable).toBe(true);
     });
 });
 

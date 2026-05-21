@@ -5,6 +5,8 @@ import { tenantStore } from '../lib/tenantStore';
 import { attachmentSchema } from './helpdesk';
 import { getCustomFields, validatePayload } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
+import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { companyCompatible, getEmployeeCompanyId, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
 
 const router = Router();
 
@@ -18,6 +20,21 @@ const isMaintenanceAvailable = async (client: OdooClientInstance, uid: number): 
         return false;
     }
 };
+const INCOMPATIBLE_MAINTENANCE_TEAM = 'No maintenance team is available for your employee company. Please contact your administrator.';
+
+async function fetchMaintenanceTeams(client: OdooClientInstance, uid: number): Promise<any[]> {
+    try {
+        const teams: any = await client.searchRead(
+            uid, 'maintenance.team', [], ['id', 'name', 'company_id'], true
+        );
+        return Array.isArray(teams) ? teams : [];
+    } catch {
+        const teams: any = await client.searchRead(
+            uid, 'maintenance.team', [], ['id', 'name']
+        );
+        return Array.isArray(teams) ? teams : [];
+    }
+}
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -73,10 +90,16 @@ router.get('/teams', async (req, res) => {
             return res.json({ available: false, teams: [] });
         }
 
-        const teams: any = await client.searchRead(
-            uid, 'maintenance.team', [], ['id', 'name']
-        );
-        res.json({ available: true, teams: Array.isArray(teams) ? teams : [] });
+        const teams = await fetchMaintenanceTeams(client, uid);
+        let employeeCompanyId: number | null = null;
+        try {
+            const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
+            employeeCompanyId = await getEmployeeCompanyId(client, uid, employeeId);
+        } catch (e) {
+            console.warn('[maintenance] employee company lookup failed; returning unfiltered teams:', e);
+        }
+        const enriched = withCompanyRequestability(teams, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM);
+        res.json({ available: true, teams: requestableRecords(enriched) });
     } catch (error: any) {
         console.error('Fetch Maintenance Teams Error:', error);
         res.json({ available: false, teams: [], message: error.message });
@@ -113,14 +136,7 @@ router.get('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const employeeId = req.query.employee_id;
-        if (!employeeId) {
-            return res.status(400).json({ error: 'employee_id query parameter required' });
-        }
-        const parsedEmployeeId = parseInt(employeeId as string);
-        if (isNaN(parsedEmployeeId)) {
-            return res.status(400).json({ error: 'Invalid employee_id' });
-        }
+        const parsedEmployeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
 
         const uid = await client.authenticate();
 
@@ -166,7 +182,7 @@ router.post('/', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
 
-        const body = createMaintenanceSchema.parse(req.body);
+        const body = { ...createMaintenanceSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
         if (!(await isMaintenanceAvailable(client, uid))) {
@@ -182,8 +198,32 @@ router.post('/', async (req, res) => {
         if (body.description) recordData.description = body.description;
         if (body.category_id) recordData.category_id = body.category_id;
         if (body.equipment_id) recordData.equipment_id = body.equipment_id;
-        if (body.maintenance_team_id) recordData.maintenance_team_id = body.maintenance_team_id;
         if (body.priority) recordData.priority = body.priority;
+
+        let employeeCompanyId: number | null = null;
+        try {
+            employeeCompanyId = await getEmployeeCompanyId(client, uid, body.employee_id);
+        } catch (e) {
+            console.warn('[maintenance] employee company lookup failed; skipping team compatibility preflight:', e);
+        }
+
+        const teams = await fetchMaintenanceTeams(client, uid).catch(() => []);
+        if (body.maintenance_team_id) {
+            const selectedTeam = teams.find((team: any) => team.id === body.maintenance_team_id);
+            if (selectedTeam && !companyCompatible(selectedTeam.company_id, employeeCompanyId)) {
+                return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
+            }
+            recordData.maintenance_team_id = body.maintenance_team_id;
+        } else if (teams.length > 0) {
+            const compatibleTeams = requestableRecords(
+                withCompanyRequestability(teams, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM)
+            );
+            if (compatibleTeams.length > 0) {
+                recordData.maintenance_team_id = compatibleTeams[0].id;
+            } else if (employeeCompanyId && teams.some((team: any) => 'company_id' in team)) {
+                return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
+            }
+        }
 
         // schedule_date and duration — may not exist on older Odoo versions; retry without if rejected
         const extendedFields: Record<string, any> = {};
@@ -213,7 +253,7 @@ router.post('/', async (req, res) => {
                 console.warn('[maintenance] schedule_date/duration rejected, retrying without them:', msg);
                 newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
             } else if (msg.includes('incompatible companies') || msg.includes('company')) {
-                return res.status(400).json({ error: 'Incompatible companies: the employee belongs to a different company than the maintenance team. Please contact your administrator.' });
+                return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
             } else {
                 throw createErr;
             }

@@ -5,6 +5,7 @@ import type { TenantConfig } from '../lib/tenantStore';
 // Per-tenant client cache
 // ──────────────────────────────────────────────────────────────────────────────
 interface TenantClientCache {
+    fingerprint: string;
     commonClient: ReturnType<typeof xmlrpc.createSecureClient>;
     objectClient: ReturnType<typeof xmlrpc.createSecureClient>;
     cachedUid: number | null;
@@ -16,6 +17,15 @@ const UID_TTL_MS = 60 * 60 * 1000; // 1 hour
 const CONNECT_TIMEOUT_MS = 10_000;  // 10s — fail fast on bad URLs
 const _cache = new Map<string, TenantClientCache>();
 
+function configFingerprint(cfg: TenantConfig): string {
+    return JSON.stringify({
+        url: cfg.odoo_url,
+        db: cfg.odoo_db,
+        username: cfg.odoo_username,
+        password: cfg.odoo_password,
+    });
+}
+
 function validateConfig(tenantId: string, cfg: TenantConfig) {
     const missing = (['odoo_url', 'odoo_db', 'odoo_username', 'odoo_password'] as const)
         .filter(k => !cfg[k]);
@@ -25,9 +35,11 @@ function validateConfig(tenantId: string, cfg: TenantConfig) {
 }
 
 function getCache(tenantId: string, cfg: TenantConfig): TenantClientCache {
+    const fingerprint = configFingerprint(cfg);
     let entry = _cache.get(tenantId);
-    if (!entry) {
+    if (!entry || entry.fingerprint !== fingerprint) {
         entry = {
+            fingerprint,
             commonClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/common`, timeout: CONNECT_TIMEOUT_MS } as any),
             objectClient: xmlrpc.createSecureClient({ url: `${cfg.odoo_url}/xmlrpc/2/object`, timeout: CONNECT_TIMEOUT_MS } as any),
             cachedUid: null,
@@ -37,6 +49,11 @@ function getCache(tenantId: string, cfg: TenantConfig): TenantClientCache {
         _cache.set(tenantId, entry);
     }
     return entry;
+}
+
+export function clearOdooClientCache(tenantId?: string) {
+    if (tenantId) _cache.delete(tenantId);
+    else _cache.clear();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -82,9 +99,13 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
                         if (error) {
                             console.error(`[${tenantId}] Odoo Auth Error:`, error);
                             cache.cachedUid = null;
+                            cache.uidCachedAt = 0;
+                            cache.odooMajorVersion = 0;
                             reject(error);
                         } else if (!uid) {
                             cache.cachedUid = null;
+                            cache.uidCachedAt = 0;
+                            cache.odooMajorVersion = 0;
                             reject(new Error('Authentication failed (uid is false)'));
                         } else {
                             cache.cachedUid = uid as number;

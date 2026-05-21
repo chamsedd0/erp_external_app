@@ -110,6 +110,8 @@ export default function NewRequest() {
         fetchData();
     }, []);
 
+    const requestableItems = (items: any[]) => items.filter((item: any) => item?.requestable !== false);
+
     const fetchData = async () => {
         setDataLoading(true);
         setProductsLoadError(false);
@@ -127,12 +129,12 @@ export default function NewRequest() {
                 apiClient.getHelpdeskAgents().catch(() => ({ agents: [] as any[] })),
             ]);
 
-            const types = (typesData as any).types || [];
-            const products = (productsData as any).products || [];
+            const types = requestableItems((typesData as any).types || []);
+            const products = requestableItems((productsData as any).products || []);
             const taxes = (taxesData as any).taxes || [];
             const categories = (categoriesData as any).categories || [];
             const equipment = (equipmentData as any).equipment || [];
-            const mntTeams = (mntTeamsData as any).teams || [];
+            const mntTeams = requestableItems((mntTeamsData as any).teams || []);
             const hdTypes = (hdTypesData as any).types || [];
             const hdTags = (hdTagsData as any).tags || [];
             const hdAgents = (hdAgentsData as any).agents || [];
@@ -152,10 +154,7 @@ export default function NewRequest() {
             setHelpdeskTags(hdTags);
             setHelpdeskAgents(hdAgents);
 
-            // Track if expense products failed to load (blocking field)
-            if (products.length === 0) {
-                setProductsLoadError(true);
-            }
+            setProductsLoadError(Boolean((productsData as any)._error));
         } catch (error) {
             toast.error('Failed to fetch form data. Please check your connection.');
             setProductsLoadError(true);
@@ -169,6 +168,10 @@ export default function NewRequest() {
     const handleCreateTimeOff = async () => {
         if (!holidayStatusId || !dateFrom || !dateTo) {
             toast.warning('Please select a leave type and dates.');
+            return;
+        }
+        if (!leaveTypes.some((type: any) => type.id === holidayStatusId)) {
+            toast.warning('Please select an available leave type.');
             return;
         }
         if (!user?.id) { toast.error('User session not found. Please re-login.'); return; }
@@ -196,6 +199,10 @@ export default function NewRequest() {
     const handleCreateExpense = async () => {
         if (!productId || !amount || !description || !date) {
             toast.warning('Please fill in all required fields.');
+            return;
+        }
+        if (!expenseProducts.some((product: any) => product.id === productId)) {
+            toast.warning('Please select an available expense category.');
             return;
         }
         if (!user?.id) { toast.error('User session not found. Please re-login.'); return; }
@@ -322,6 +329,10 @@ export default function NewRequest() {
             } else {
                 if (!attJustLeaveTypeId || !attJustDateFrom || !attJustDateTo || !attJustText.trim()) {
                     toast.warning('Please fill in all required fields.');
+                    setLoading(false); return;
+                }
+                if (!leaveTypes.some((type: any) => type.id === attJustLeaveTypeId)) {
+                    toast.warning('Please select an available leave type.');
                     setLoading(false); return;
                 }
                 await apiClient.createAttendanceJustification({
@@ -524,6 +535,10 @@ export default function NewRequest() {
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
                 {dataLoading ? (
                     <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="small" color={muted} /></View>
+                ) : leaveTypes.length === 0 ? (
+                    <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>No available leave types</Text>
+                    </View>
                 ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {leaveTypes.map((type: any) => (
@@ -603,6 +618,12 @@ export default function NewRequest() {
                             <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 13, color: semanticError }}>Retry</Text>
                         </TouchableOpacity>
                     </View>
+                ) : expenseProducts.length === 0 ? (
+                    <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>
+                            No compatible expense categories available
+                        </Text>
+                    </View>
                 ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {expenseProducts.map((prod: any) => (
@@ -661,7 +682,7 @@ export default function NewRequest() {
 
             <AttachmentPicker attachments={expenseAttachments} onChange={setExpenseAttachments} label="Receipts" />
 
-            <Button size="lg" onPress={handleCreateExpense} disabled={loading || (productsLoadError && expenseProducts.length === 0)}
+            <Button size="lg" onPress={handleCreateExpense} disabled={loading || expenseProducts.length === 0}
                 style={{ borderRadius: 20, marginTop: 8, backgroundColor: semanticSuccess, height: 56, shadowColor: semanticSuccess, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 6 }}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>Submit Claim</Text>}
             </Button>
@@ -674,7 +695,7 @@ export default function NewRequest() {
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
                 <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>IT Support Ticket</Text>
-                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Describe the issue you're experiencing</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Describe the issue you&apos;re experiencing</Text>
             </View>
 
             <View style={{ gap: 16 }}>
@@ -975,6 +996,10 @@ export default function NewRequest() {
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
                         {dataLoading ? (
                             <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="small" color={muted} /></View>
+                        ) : leaveTypes.length === 0 ? (
+                            <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>No available leave types</Text>
+                            </View>
                         ) : (
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                                 {leaveTypes.map((type: any) => (

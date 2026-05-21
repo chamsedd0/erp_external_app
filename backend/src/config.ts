@@ -11,6 +11,10 @@ const envSchema = z.object({
     UPSTASH_REDIS_REST_TOKEN: z.string(),
     RESEND_API_KEY: z.string().optional(),
     RESEND_FROM_EMAIL: z.string().optional(),
+    CRON_SECRET: z.string().optional(),
+    PORTAL_AUTH_SECRET: z.string().optional(),
+    ACTIVATION_OTP_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+    ACTIVATION_INVITE_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
 });
 
 const envVars = envSchema.safeParse(process.env);
@@ -30,4 +34,8 @@ export const config = {
     },
     resendApiKey: envVars.data.RESEND_API_KEY ?? '',
     resendFromEmail: envVars.data.RESEND_FROM_EMAIL ?? 'billing@shadowportal.app',
+    cronSecret: envVars.data.CRON_SECRET ?? '',
+    portalAuthSecret: envVars.data.PORTAL_AUTH_SECRET ?? envVars.data.JWT_SECRET,
+    activationOtpTtlSeconds: envVars.data.ACTIVATION_OTP_TTL_SECONDS,
+    activationInviteTtlSeconds: envVars.data.ACTIVATION_INVITE_TTL_SECONDS,
 };

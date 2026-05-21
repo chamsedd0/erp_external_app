@@ -22,6 +22,30 @@ app.use(cors({ allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Increase JSON payload limit to support base64 attachments (up to 3 × 5 MB ≈ 15 MB)
 app.use(express.json({ limit: '20mb' }));
 
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const originalJson = res.json.bind(res);
+    (res as any).json = function (body: any) {
+        if (res.statusCode >= 500) {
+            const tenantId = (req as any).jwtPayload?.tenantId as string | undefined;
+            if (tenantId) {
+                const errorMsg = (typeof body === 'object' && body?.error)
+                    ? String(body.error).slice(0, 500)
+                    : 'Internal server error';
+                void pushError(tenantId, {
+                    timestamp: new Date().toISOString(),
+                    method: req.method,
+                    path: req.path,
+                    status: res.statusCode,
+                    error: errorMsg,
+                    employee_id: (req as any).jwtPayload?.id,
+                });
+            }
+        }
+        return originalJson(body);
+    };
+    next();
+});
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.send('Shadow Portal Middleware is Active');
@@ -51,7 +75,12 @@ app.use('/admin', (req: express.Request, res: express.Response, next: express.Ne
 // ── JWT Middleware ─────────────────────────────────────────────────────────────
 // All routes except /auth/* and /admin/* require a valid JWT.
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/auth/') || req.path.startsWith('/admin/') || req.path.startsWith('/cron/')) {
+    const publicAuthPaths = [
+        /^\/auth\/login$/,
+        /^\/auth\/tenant\/[^/]+$/,
+        /^\/auth\/activation\//,
+    ];
+    if (req.path.startsWith('/admin/') || req.path.startsWith('/cron/') || publicAuthPaths.some(re => re.test(req.path))) {
         return next();
     }
     const token = (req.headers.authorization ?? '').split(' ')[1];
