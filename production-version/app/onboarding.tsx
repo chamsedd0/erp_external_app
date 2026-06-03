@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Text } from '../components/ui/text';
 import { useSession } from '../providers/auth-context';
+import { i18n, t } from '../lib/i18n';
 import { useColor } from '@/hooks/useColor';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {
@@ -33,68 +34,15 @@ interface Slide {
     accentLight: string;
     icon: React.FC<{ size: number; color: string; strokeWidth: number }>;
     iconBg: string;
-    badge: string;
-    title: string;
-    subtitle: string;
-    bullets: string[];
 }
 
+// Visual config only — all copy lives in the i18n catalog under `onboarding.<key>`.
 const SLIDES: Slide[] = [
-    {
-        key: 'welcome',
-        accent: '#6366F1',
-        accentLight: '#EEF2FF',
-        icon: Zap,
-        iconBg: '#6366F118',
-        badge: 'Welcome to Shadow',
-        title: 'Your workplace,\nin your pocket',
-        subtitle: 'Everything you need to manage your work life — available anytime, anywhere.',
-        bullets: ['Submit requests in seconds', 'Track approvals in real time', 'Stay connected with your team'],
-    },
-    {
-        key: 'requests',
-        accent: '#0EA5E9',
-        accentLight: '#F0F9FF',
-        icon: Calendar,
-        iconBg: '#0EA5E918',
-        badge: 'Time Off & Requests',
-        title: 'Request time off\neffortlessly',
-        subtitle: 'Choose your leave type, pick your dates, and submit — your manager gets notified instantly.',
-        bullets: ['Annual, sick & unpaid leave', 'Date picker with day count', 'Attach supporting documents'],
-    },
-    {
-        key: 'expenses',
-        accent: '#10B981',
-        accentLight: '#ECFDF5',
-        icon: DollarSign,
-        iconBg: '#10B98118',
-        badge: 'Expenses',
-        title: 'Log expenses\non the go',
-        subtitle: 'Snap a receipt, pick a category, and submit your expense claim before you even leave the meeting.',
-        bullets: ['Snap & attach receipts', 'Select from expense categories', 'Track reimbursement status'],
-    },
-    {
-        key: 'timesheets',
-        accent: '#F59E0B',
-        accentLight: '#FFFBEB',
-        icon: Clock,
-        iconBg: '#F59E0B18',
-        badge: 'Timesheets',
-        title: 'Log your hours\nwith ease',
-        subtitle: 'Pick a project, add a task, enter your hours — your timesheet is always up to date.',
-        bullets: ['Browse projects & tasks', 'Log hours with a description', 'Review past entries anytime'],
-    },
-    {
-        key: 'notifications',
-        accent: '#8B5CF6',
-        accentLight: '#F5F3FF',
-        icon: Bell,
-        iconBg: '#8B5CF618',
-        badge: 'Stay in the loop',
-        title: 'Never miss\nan update',
-        subtitle: 'Get notified the moment your requests are approved, rejected, or need your attention.',
-        bullets: ['Real-time push notifications', 'In-app notification centre', 'Mark all as read in one tap'],
-    },
+    { key: 'welcome', accent: '#6366F1', accentLight: '#EEF2FF', icon: Zap, iconBg: '#6366F118' },
+    { key: 'requests', accent: '#0EA5E9', accentLight: '#F0F9FF', icon: Calendar, iconBg: '#0EA5E918' },
+    { key: 'expenses', accent: '#10B981', accentLight: '#ECFDF5', icon: DollarSign, iconBg: '#10B98118' },
+    { key: 'timesheets', accent: '#F59E0B', accentLight: '#FFFBEB', icon: Clock, iconBg: '#F59E0B18' },
+    { key: 'notifications', accent: '#8B5CF6', accentLight: '#F5F3FF', icon: Bell, iconBg: '#8B5CF618' },
 ];
 
 function SlideCard({ slide, isDark }: { slide: Slide; isDark: boolean }) {
@@ -103,6 +51,10 @@ function SlideCard({ slide, isDark }: { slide: Slide; isDark: boolean }) {
     const textPrimary = isDark ? '#FFFFFF' : '#0F172A';
     const textSecondary = isDark ? '#94A3B8' : '#64748B';
     const bulletBg = isDark ? slide.accent + '22' : slide.accentLight;
+    const badge = t(`onboarding.${slide.key}.badge`);
+    const title = t(`onboarding.${slide.key}.title`);
+    const subtitle = t(`onboarding.${slide.key}.subtitle`);
+    const bullets = (i18n.t(`onboarding.${slide.key}.bullets`) as unknown as string[]) ?? [];
 
     return (
         <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
@@ -121,7 +73,7 @@ function SlideCard({ slide, isDark }: { slide: Slide; isDark: boolean }) {
 
                 {/* Feature pills */}
                 <View style={styles.pillRow}>
-                    {slide.bullets.map((bullet, i) => (
+                    {bullets.map((bullet, i) => (
                         <View key={i} style={[styles.pill, { backgroundColor: bulletBg }]}>
                             <CheckCircle size={12} color={slide.accent} strokeWidth={2.5} />
                             <Text style={[styles.pillText, { color: slide.accent, fontFamily: 'DMSans_500Medium' }]}>
@@ -137,18 +89,18 @@ function SlideCard({ slide, isDark }: { slide: Slide; isDark: boolean }) {
                 {/* Badge */}
                 <View style={[styles.badge, { backgroundColor: slide.accent + '18' }]}>
                     <Text style={[styles.badgeText, { color: slide.accent, fontFamily: 'DMSans_700Bold' }]}>
-                        {slide.badge}
+                        {badge}
                     </Text>
                 </View>
 
                 {/* Title */}
                 <Text style={[styles.title, { color: textPrimary, fontFamily: 'Outfit_700Bold' }]}>
-                    {slide.title}
+                    {title}
                 </Text>
 
                 {/* Subtitle */}
                 <Text style={[styles.subtitle, { color: textSecondary, fontFamily: 'DMSans_400Regular' }]}>
-                    {slide.subtitle}
+                    {subtitle}
                 </Text>
             </View>
         </View>
@@ -219,7 +171,7 @@ export default function Onboarding() {
                 {!isLast && (
                     <TouchableOpacity onPress={handleSkip} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                         <Text style={[styles.skipText, { color: textMuted, fontFamily: 'DMSans_500Medium' }]}>
-                            Skip
+                            {t('onboarding.skip')}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -251,14 +203,14 @@ export default function Onboarding() {
                     style={[styles.ctaButton, { backgroundColor: currentSlide.accent }]}
                 >
                     <Text style={[styles.ctaText, { fontFamily: 'Outfit_700Bold' }]}>
-                        {isLast ? 'Get Started' : 'Continue'}
+                        {isLast ? t('onboarding.getStarted') : t('onboarding.continue')}
                     </Text>
                     <ChevronRight size={20} color="#fff" strokeWidth={2.5} />
                 </TouchableOpacity>
 
                 {/* Page counter */}
                 <Text style={[styles.pageCounter, { color: textMuted, fontFamily: 'DMSans_400Regular' }]}>
-                    {currentIndex + 1} of {SLIDES.length}
+                    {t('onboarding.pageCounter', { current: currentIndex + 1, total: SLIDES.length })}
                 </Text>
             </View>
         </SafeAreaView>

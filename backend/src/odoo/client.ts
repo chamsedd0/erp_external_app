@@ -169,7 +169,7 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
                     [
                         odoo_db, uid, odoo_password,
                         model, 'fields_get', [],
-                        { attributes: ['string', 'help', 'type', 'required', 'selection', 'relation'] }
+                        { attributes: ['string', 'help', 'type', 'required', 'selection', 'relation', 'readonly', 'store'] }
                     ],
                     (error, fields) => {
                         if (error) reject(error);
@@ -179,11 +179,13 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             });
         },
 
-        createRecord: async (uid: number, model: string, data: any) => {
+        createRecord: async (uid: number, model: string, data: any, context?: Record<string, any>) => {
+            const kwargs: Record<string, any> = {};
+            if (context && Object.keys(context).length > 0) kwargs.context = context;
             return new Promise((resolve, reject) => {
                 objectClient.methodCall(
                     'execute_kw',
-                    [odoo_db, uid, odoo_password, model, 'create', [data]],
+                    [odoo_db, uid, odoo_password, model, 'create', [data], kwargs],
                     (error, newId) => {
                         if (error) { console.error(`[${tenantId}] Create Error (${model}):`, error); reject(error); }
                         else resolve(newId);
@@ -192,11 +194,25 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             });
         },
 
-        searchRead: async (uid: number, model: string, domain: any[], fields: string[], silent = false) => {
+        // `opts` accepts a legacy boolean (silent) for backward compat, or an options
+        // object carrying an Odoo `context` (e.g. allowed_company_ids, lang).
+        searchRead: async (
+            uid: number,
+            model: string,
+            domain: any[],
+            fields: string[],
+            opts: boolean | { silent?: boolean; context?: Record<string, any>; limit?: number; offset?: number } = false,
+        ) => {
+            const { silent = false, context, limit, offset } =
+                typeof opts === 'boolean' ? { silent: opts, context: undefined, limit: undefined, offset: undefined } : opts;
+            const kwargs: Record<string, any> = { fields };
+            if (context && Object.keys(context).length > 0) kwargs.context = context;
+            if (typeof limit === 'number' && limit > 0) kwargs.limit = limit;
+            if (typeof offset === 'number' && offset > 0) kwargs.offset = offset;
             return new Promise((resolve, reject) => {
                 objectClient.methodCall(
                     'execute_kw',
-                    [odoo_db, uid, odoo_password, model, 'search_read', [domain], { fields }],
+                    [odoo_db, uid, odoo_password, model, 'search_read', [domain], kwargs],
                     (error, records) => {
                         if (error) {
                             if (!silent) console.error(`[${tenantId}] SearchRead Error (${model}):`, error);
@@ -207,11 +223,12 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             });
         },
 
-        callMethod: async (uid: number, model: string, method: string, recordIds: number[], args: any = {}) => {
+        callMethod: async (uid: number, model: string, method: string, recordIds: number[], args: any = {}, context?: Record<string, any>) => {
+            const kwargs = context && Object.keys(context).length > 0 ? { ...args, context } : args;
             return new Promise((resolve, reject) => {
                 objectClient.methodCall(
                     'execute_kw',
-                    [odoo_db, uid, odoo_password, model, method, [recordIds], args],
+                    [odoo_db, uid, odoo_password, model, method, [recordIds], kwargs],
                     (error, result) => {
                         if (error) { console.error(`[${tenantId}] CallMethod Error (${model}.${method}):`, error); reject(error); }
                         else resolve(result);
@@ -220,11 +237,13 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             });
         },
 
-        writeRecord: async (uid: number, model: string, recordIds: number[], data: Record<string, any>) => {
+        writeRecord: async (uid: number, model: string, recordIds: number[], data: Record<string, any>, context?: Record<string, any>) => {
+            const kwargs: Record<string, any> = {};
+            if (context && Object.keys(context).length > 0) kwargs.context = context;
             return new Promise<boolean>((resolve, reject) => {
                 objectClient.methodCall(
                     'execute_kw',
-                    [odoo_db, uid, odoo_password, model, 'write', [recordIds, data]],
+                    [odoo_db, uid, odoo_password, model, 'write', [recordIds, data], kwargs],
                     (error, result) => {
                         if (error) { console.error(`[${tenantId}] Write Error (${model}):`, error); reject(error); }
                         else resolve(result as boolean);
@@ -233,14 +252,17 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             });
         },
 
-        createAttachment: async (uid: number, name: string, datas: string, res_model: string, res_id: number, mimetype: string = 'image/jpeg') => {
+        createAttachment: async (uid: number, name: string, datas: string, res_model: string, res_id: number, mimetype: string = 'image/jpeg', context?: Record<string, any>) => {
+            const kwargs: Record<string, any> = {};
+            if (context && Object.keys(context).length > 0) kwargs.context = context;
             return new Promise((resolve, reject) => {
                 objectClient.methodCall(
                     'execute_kw',
                     [
                         odoo_db, uid, odoo_password,
                         'ir.attachment', 'create',
-                        [{ name, datas, res_model, res_id, mimetype, type: 'binary' }]
+                        [{ name, datas, res_model, res_id, mimetype, type: 'binary' }],
+                        kwargs,
                     ],
                     (error, attachmentId) => {
                         if (error) { console.error(`[${tenantId}] Create Attachment Error:`, error); reject(error); }
@@ -254,15 +276,21 @@ export function getOdooClient(tenantId: string, cfg: TenantConfig) {
             uid: number,
             attachments: Array<{ name: string; data: string; mimetype: string }>,
             res_model: string,
-            res_id: number
-        ) => {
+            res_id: number,
+            context?: Record<string, any>,
+        ): Promise<{ uploaded: number; failed: string[] }> => {
+            const failed: string[] = [];
+            let uploaded = 0;
             for (const att of attachments) {
                 try {
-                    await client.createAttachment(uid, att.name, att.data, res_model, res_id, att.mimetype);
+                    await client.createAttachment(uid, att.name, att.data, res_model, res_id, att.mimetype, context);
+                    uploaded++;
                 } catch (e) {
                     console.error(`[${tenantId}] Attachment upload failed (${att.name}):`, e);
+                    failed.push(att.name);
                 }
             }
+            return { uploaded, failed };
         },
     };
 

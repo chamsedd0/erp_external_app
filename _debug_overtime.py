@@ -1,7 +1,12 @@
-import urllib.request, json, ssl
+import urllib.request, json, ssl, os
 
-BASE = "https://erp-external-app.vercel.app"
+BASE = os.environ.get("SHADOW_BASE_URL", "https://erp-external-app.vercel.app")
 ctx = ssl._create_unverified_context()
+
+# Test login credentials — read from env, never hardcode real PINs.
+TENANT_CODE = os.environ.get("TEST_TENANT_CODE", "")
+EMPLOYEE_ID = os.environ.get("TEST_EMPLOYEE_ID", "")
+EMPLOYEE_PIN = os.environ.get("TEST_EMPLOYEE_PIN", "")
 
 def req(method, path, body=None, token=None):
     url = f"{BASE}{path}"
@@ -20,9 +25,9 @@ def req(method, path, body=None, token=None):
 
 # Login
 status, body = req("POST", "/auth/login", {
-    "tenant_slug": "isec-v17",
-    "employee_id": "45164705",
-    "pin": "4248"
+    "tenant_subscription_number": TENANT_CODE,
+    "employee_id": EMPLOYEE_ID,
+    "pin": EMPLOYEE_PIN
 })
 print(f"Login: {status}")
 token = body.get("token")

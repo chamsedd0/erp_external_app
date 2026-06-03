@@ -105,6 +105,87 @@ export interface DeviceEntry {
     registered_at: string;
 }
 
+export interface CustomFieldReport {
+    custom_fields: Record<string, any>;
+    schema_available: boolean;
+    unsupported_fields: Record<string, any>;
+    unsupported_required_fields: Record<string, any>;
+    schema_cached_at: string | null;
+    error?: string;
+}
+
+export interface TenantDiagnostics {
+    tenant: string;
+    odoo: { ok: boolean; version?: number | null; latency_ms?: number; error?: string };
+    schemas: Record<string, CustomFieldReport>;
+    monitor: {
+        last_run_at?: string;
+        employee_id?: number;
+        notifications_created?: number;
+        fetched?: Record<string, boolean>;
+    } | null;
+}
+
+export type CertificationMode = 'safe' | 'write';
+export type CertificationStatus = 'pass' | 'warn' | 'fail';
+export type ScenarioStatus = 'pass' | 'warn' | 'fail' | 'skipped';
+
+export interface CertificationEmployeeInput {
+    label?: string;
+    identifier: string;
+    pin?: string;
+    work_email?: string;
+    login_method: 'barcode_pin' | 'employee_id_pin' | 'work_email_pin' | 'activation_invite';
+}
+
+export interface CertificationScenarioResult {
+    id: string;
+    label: string;
+    group: 'connection' | 'employee' | 'company' | 'schema' | 'picker' | 'preflight' | 'write' | 'attachment' | 'security';
+    severity: 'blocking' | 'warning' | 'info';
+    status: ScenarioStatus;
+    employee_id?: number;
+    request_type?: string;
+    duration_ms: number;
+    message?: string;
+    details?: Record<string, unknown>;
+}
+
+export interface CertificationRun {
+    id: string;
+    tenantId: string;
+    mode: CertificationMode;
+    status: CertificationStatus;
+    started_at: string;
+    finished_at?: string;
+    odoo_version?: number | null;
+    summary: {
+        passed: number;
+        warnings: number;
+        failed: number;
+        skipped: number;
+        blocking_failures: number;
+    };
+    employees: Array<{
+        label: string;
+        employee_id?: number;
+        login_ok: boolean;
+        company_id?: number | null;
+    }>;
+    scenarios: CertificationScenarioResult[];
+    sanitized_errors: Array<{ scenario_id: string; message: string; details?: Record<string, unknown> }>;
+}
+
+export interface CertificationRunRequest {
+    mode: CertificationMode;
+    employees: CertificationEmployeeInput[];
+    options?: {
+        include_attachments?: boolean;
+        include_wrong_company_tests?: boolean;
+        include_optional_modules?: boolean;
+    };
+}
+
 export interface ActivationEntry {
     tenantId: string;
     employeeId: number;

@@ -8,21 +8,26 @@ import { AttachmentPicker } from '../../components/AttachmentPicker';
 import { useColor } from '../../hooks/useColor';
 import {
     Clock, DollarSign, ChevronLeft, Calendar, ArrowRight,
-    Timer, Monitor, Wrench, UserCheck, Star, RefreshCw,
+    Timer, Monitor, Wrench, UserCheck, Star,
 } from 'lucide-react-native';
 import { apiClient, type Attachment } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 import { useToast } from '../../providers/toast-context';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { currencySymbol } from '../../lib/currency';
+import { SearchableSelect } from '../../components/ui/searchable-select';
+import { DynamicFields, type OdooFieldDef } from '../../components/DynamicFields';
+import { t } from '../../lib/i18n';
 
 type ViewState = 'hub' | 'time-off' | 'expense' | 'helpdesk' | 'maintenance' | 'attendance';
 type AttSubType = 'correction' | 'overtime' | 'justification';
 type Priority = '0' | '1' | '2' | '3';
 
 export default function NewRequest() {
-    const { user } = useSession();
+    const { user, currency } = useSession();
     const toast = useToast();
     const router = useRouter();
+    const navigation = useNavigation();
     const [currentView, setCurrentView] = useState<ViewState>('hub');
     const [loading, setLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(false);
@@ -57,6 +62,8 @@ export default function NewRequest() {
     const [dateTo, setDateTo] = useState<Date | null>(null);
     const [reason, setReason] = useState('');
     const [timeOffAttachments, setTimeOffAttachments] = useState<Attachment[]>([]);
+    const [timeOffCustomFields, setTimeOffCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [timeOffCustomValues, setTimeOffCustomValues] = useState<Record<string, any>>({});
 
     // ── Expense Form State ─────────────────────────────────────────────────────
     const [amount, setAmount] = useState('');
@@ -66,6 +73,10 @@ export default function NewRequest() {
     const [expensePaymentMode, setExpensePaymentMode] = useState<'own_account' | 'company_account'>('own_account');
     const [expenseTaxIds, setExpenseTaxIds] = useState<number[]>([]);
     const [expenseAttachments, setExpenseAttachments] = useState<Attachment[]>([]);
+    const [analyticAccounts, setAnalyticAccounts] = useState<any[]>([]);
+    const [analyticAccountId, setAnalyticAccountId] = useState<number | null>(null);
+    const [expenseCustomFields, setExpenseCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [expenseCustomValues, setExpenseCustomValues] = useState<Record<string, any>>({});
 
     // ── IT Support Form State ──────────────────────────────────────────────────
     const [hdSubject, setHdSubject] = useState('');
@@ -79,6 +90,8 @@ export default function NewRequest() {
     const [hdPartnerEmail, setHdPartnerEmail] = useState('');
     const [hdPartnerPhone, setHdPartnerPhone] = useState('');
     const [hdAttachments, setHdAttachments] = useState<Attachment[]>([]);
+    const [hdCustomFields, setHdCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [hdCustomValues, setHdCustomValues] = useState<Record<string, any>>({});
 
     // ── Maintenance Form State ─────────────────────────────────────────────────
     const [mntTitle, setMntTitle] = useState('');
@@ -88,9 +101,12 @@ export default function NewRequest() {
     const [mntEquipmentId, setMntEquipmentId] = useState<number | null>(null);
     const [mntTeamId, setMntTeamId] = useState<number | null>(null);
     const [mntScheduleDate, setMntScheduleDate] = useState<Date | null>(null);
+    const [mntRequestDate, setMntRequestDate] = useState<Date | null>(null);
     const [mntDuration, setMntDuration] = useState('');
     const [mntPriority, setMntPriority] = useState<Priority>('0');
     const [mntAttachments, setMntAttachments] = useState<Attachment[]>([]);
+    const [mntCustomFields, setMntCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [mntCustomValues, setMntCustomValues] = useState<Record<string, any>>({});
 
     // ── Attendance Form State ──────────────────────────────────────────────────
     const [attSubType, setAttSubType] = useState<AttSubType>('correction');
@@ -105,10 +121,50 @@ export default function NewRequest() {
     const [attJustDateTo, setAttJustDateTo] = useState<Date | null>(null);
     const [attJustText, setAttJustText] = useState('');
     const [attAttachments, setAttAttachments] = useState<Attachment[]>([]);
+    const [attCustomFields, setAttCustomFields] = useState<Record<AttSubType, Record<string, OdooFieldDef>>>({
+        correction: {},
+        overtime: {},
+        justification: {},
+    });
+    const [attCustomValues, setAttCustomValues] = useState<Record<AttSubType, Record<string, any>>>({
+        correction: {},
+        overtime: {},
+        justification: {},
+    });
 
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        const visibleTabBarStyle = {
+            position: 'absolute' as const,
+            bottom: 0,
+            borderWidth: 0.1,
+            borderColor: 'rgba(255, 255, 255, 0.28)',
+            height: 115,
+            borderTopLeftRadius: 32,
+            borderTopRightRadius: 32,
+            backgroundColor: cardColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.1,
+            shadowRadius: 20,
+            elevation: 10,
+            paddingBottom: 0,
+            paddingTop: 15,
+            alignItems: 'center' as const,
+            justifyContent: 'center' as const,
+        };
+
+        navigation.setOptions({
+            tabBarStyle: currentView === 'hub' ? visibleTabBarStyle : { display: 'none' },
+        });
+
+        return () => {
+            navigation.setOptions({ tabBarStyle: visibleTabBarStyle });
+        };
+    }, [navigation, currentView, cardColor]);
 
     const requestableItems = (items: any[]) => items.filter((item: any) => item?.requestable !== false);
 
@@ -116,7 +172,7 @@ export default function NewRequest() {
         setDataLoading(true);
         setProductsLoadError(false);
         try {
-            const [typesData, productsData, taxesData, teamsData, categoriesData, equipmentData, mntTeamsData, hdTypesData, hdTagsData, hdAgentsData] = await Promise.all([
+            const [typesData, productsData, taxesData, teamsData, categoriesData, equipmentData, mntTeamsData, hdTypesData, hdTagsData, hdAgentsData, analyticData, expenseSchemaData, mntSchemaData, timeOffSchemaData, helpdeskSchemaData, attendanceSchemaData] = await Promise.all([
                 apiClient.getTimeOffTypes().catch(() => ({ types: [] as any[] })),
                 apiClient.getExpenseProducts().catch(() => ({ products: [] as any[], _error: true })),
                 apiClient.getExpenseTaxes().catch(() => ({ taxes: [] as any[] })),
@@ -127,6 +183,16 @@ export default function NewRequest() {
                 apiClient.getHelpdeskTicketTypes().catch(() => ({ types: [] as any[] })),
                 apiClient.getHelpdeskTags().catch(() => ({ tags: [] as any[] })),
                 apiClient.getHelpdeskAgents().catch(() => ({ agents: [] as any[] })),
+                apiClient.getExpenseAnalyticAccounts().catch(() => ({ accounts: [] as any[] })),
+                apiClient.getExpenseFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
+                apiClient.getMaintenanceFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
+                apiClient.getTimeOffFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
+                apiClient.getHelpdeskFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
+                apiClient.getAttendanceFormSchema().catch(() => ({
+                    correction: { custom_fields: {} as Record<string, any> },
+                    overtime: { custom_fields: {} as Record<string, any> },
+                    justification: { custom_fields: {} as Record<string, any> },
+                })),
             ]);
 
             const types = requestableItems((typesData as any).types || []);
@@ -153,6 +219,16 @@ export default function NewRequest() {
             setHelpdeskTicketTypes(hdTypes);
             setHelpdeskTags(hdTags);
             setHelpdeskAgents(hdAgents);
+            setAnalyticAccounts((analyticData as any).accounts || []);
+            setExpenseCustomFields((expenseSchemaData as any).custom_fields || {});
+            setMntCustomFields((mntSchemaData as any).custom_fields || {});
+            setTimeOffCustomFields((timeOffSchemaData as any).custom_fields || {});
+            setHdCustomFields((helpdeskSchemaData as any).custom_fields || {});
+            setAttCustomFields({
+                correction: (attendanceSchemaData as any).correction?.custom_fields || {},
+                overtime: (attendanceSchemaData as any).overtime?.custom_fields || {},
+                justification: (attendanceSchemaData as any).justification?.custom_fields || {},
+            });
 
             setProductsLoadError(Boolean((productsData as any)._error));
         } catch (error) {
@@ -183,12 +259,13 @@ export default function NewRequest() {
                 date_from: dateFrom.toISOString().split('T')[0],
                 date_to: dateTo.toISOString().split('T')[0],
                 name: reason,
+                custom_values: Object.keys(timeOffCustomValues).length > 0 ? timeOffCustomValues : undefined,
                 attachments: timeOffAttachments.length > 0 ? timeOffAttachments : undefined,
             });
             toast.success('Time off request submitted!');
             setCurrentView('hub');
             setHolidayStatusId(null); setDateFrom(null); setDateTo(null);
-            setReason(''); setTimeOffAttachments([]);
+            setReason(''); setTimeOffAttachments([]); setTimeOffCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit request');
         } finally {
@@ -217,6 +294,8 @@ export default function NewRequest() {
                 date: date.toISOString().split('T')[0],
                 payment_mode: expensePaymentMode,
                 tax_ids: expenseTaxIds.length > 0 ? expenseTaxIds : undefined,
+                analytic_account_id: analyticAccountId ?? undefined,
+                custom_values: Object.keys(expenseCustomValues).length > 0 ? expenseCustomValues : undefined,
                 attachments: expenseAttachments.length > 0 ? expenseAttachments : undefined,
             });
             toast.success('Expense claim submitted!');
@@ -224,6 +303,7 @@ export default function NewRequest() {
             setProductId(null); setAmount(''); setDescription('');
             setDate(null); setExpensePaymentMode('own_account');
             setExpenseTaxIds([]); setExpenseAttachments([]);
+            setAnalyticAccountId(null); setExpenseCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit expense');
         } finally {
@@ -251,6 +331,7 @@ export default function NewRequest() {
                 partner_name: hdPartnerName.trim() || undefined,
                 partner_email: hdPartnerEmail.trim() || undefined,
                 partner_phone: hdPartnerPhone.trim() || undefined,
+                custom_values: Object.keys(hdCustomValues).length > 0 ? hdCustomValues : undefined,
                 attachments: hdAttachments.length > 0 ? hdAttachments : undefined,
             });
             toast.success('IT support ticket submitted!');
@@ -258,7 +339,7 @@ export default function NewRequest() {
             setHdSubject(''); setHdDescription(''); setHdTeamId(null);
             setHdUserId(null); setHdPriority('0'); setHdTypeId(null);
             setHdTagIds([]); setHdPartnerName(''); setHdPartnerEmail('');
-            setHdPartnerPhone(''); setHdAttachments([]);
+            setHdPartnerPhone(''); setHdAttachments([]); setHdCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit ticket');
         } finally {
@@ -282,17 +363,19 @@ export default function NewRequest() {
                 maintenance_type: mntType,
                 equipment_id: mntEquipmentId ?? undefined,
                 maintenance_team_id: mntTeamId ?? undefined,
-                schedule_date: mntScheduleDate ? mntScheduleDate.toISOString() : undefined,
+                schedule_date: mntType === 'preventive' && mntScheduleDate ? mntScheduleDate.toISOString() : undefined,
+                request_date: mntType === 'corrective' && mntRequestDate ? mntRequestDate.toISOString() : undefined,
                 duration: mntDuration ? parseFloat(mntDuration) : undefined,
                 priority: mntPriority !== '0' ? mntPriority : undefined,
+                custom_values: Object.keys(mntCustomValues).length > 0 ? mntCustomValues : undefined,
                 attachments: mntAttachments.length > 0 ? mntAttachments : undefined,
             });
             toast.success('Maintenance request submitted!');
             setCurrentView('hub');
             setMntTitle(''); setMntDescription(''); setMntCategoryId(null);
             setMntType('corrective'); setMntEquipmentId(null); setMntTeamId(null);
-            setMntScheduleDate(null); setMntDuration(''); setMntPriority('0');
-            setMntAttachments([]);
+            setMntScheduleDate(null); setMntRequestDate(null); setMntDuration(''); setMntPriority('0');
+            setMntAttachments([]); setMntCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit maintenance request');
         } finally {
@@ -311,6 +394,7 @@ export default function NewRequest() {
                     check_in: attCheckIn.toISOString(),
                     check_out: attCheckOut ? attCheckOut.toISOString() : undefined,
                     reason: attReason.trim() || undefined,
+                    custom_values: Object.keys(attCustomValues.correction).length > 0 ? attCustomValues.correction : undefined,
                     attachments: attAttachments.length > 0 ? attAttachments : undefined,
                 });
                 toast.success('Attendance correction submitted!');
@@ -324,6 +408,7 @@ export default function NewRequest() {
                     date: attOvertimeDate.toISOString().split('T')[0],
                     duration: parseFloat(attOvertimeDuration),
                     reason: attOvertimeReason.trim() || undefined,
+                    custom_values: Object.keys(attCustomValues.overtime).length > 0 ? attCustomValues.overtime : undefined,
                 });
                 toast.success('Overtime request submitted!');
             } else {
@@ -341,6 +426,7 @@ export default function NewRequest() {
                     date_from: attJustDateFrom.toISOString().split('T')[0],
                     date_to: attJustDateTo.toISOString().split('T')[0],
                     justification: attJustText.trim(),
+                    custom_values: Object.keys(attCustomValues.justification).length > 0 ? attCustomValues.justification : undefined,
                     attachments: attAttachments.length > 0 ? attAttachments : undefined,
                 });
                 toast.success('Absence justification submitted!');
@@ -350,6 +436,7 @@ export default function NewRequest() {
             setAttOvertimeDate(null); setAttOvertimeDuration(''); setAttOvertimeReason('');
             setAttJustLeaveTypeId(null); setAttJustDateFrom(null); setAttJustDateTo(null);
             setAttJustText(''); setAttAttachments([]);
+            setAttCustomValues({ correction: {}, overtime: {}, justification: {} });
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit attendance request');
         } finally {
@@ -380,35 +467,13 @@ export default function NewRequest() {
         </View>
     );
 
-    const renderTagPills = (
-        items: any[],
-        selected: number[],
-        onToggle: (id: number) => void,
-        color: string
-    ) => (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-            {items.map((item: any) => {
-                const isSelected = selected.includes(item.id);
-                return (
-                    <TouchableOpacity key={item.id} onPress={() => onToggle(item.id)} activeOpacity={0.7}
-                        style={{ backgroundColor: isSelected ? color + '25' : cardColor,
-                            paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 80, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: isSelected ? color : text }}>
-                            {item.name}
-                        </Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </ScrollView>
-    );
-
     // ── Render: Hub ────────────────────────────────────────────────────────────
 
     const renderHub = () => (
         <View style={{ gap: 16, paddingVertical: 10 }}>
             <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text }}>New Request</Text>
-                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted, marginTop: 8 }}>What would you like to submit today?</Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text }}>{t('newRequest.title')}</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted, marginTop: 8 }}>{t('newRequest.prompt')}</Text>
             </View>
 
             {/* Time Off */}
@@ -421,8 +486,8 @@ export default function NewRequest() {
                     <Clock size={28} color={semanticInfo} strokeWidth={2} />
                 </View>
                 <View>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticInfo, marginBottom: 8 }}>Time Off</Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>Vacation, Sick Leave & More</Text>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticInfo, marginBottom: 8 }}>{t('newRequest.timeOff')}</Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>{t('newRequest.timeOffSub')}</Text>
                 </View>
                 <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticInfo + '28' }}>
                     <ArrowRight size={24} color={semanticInfo} />
@@ -439,8 +504,8 @@ export default function NewRequest() {
                     <DollarSign size={28} color={semanticSuccess} strokeWidth={2} />
                 </View>
                 <View>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticSuccess, marginBottom: 8 }}>Expense Claim</Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>Reimbursements & Purchases</Text>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticSuccess, marginBottom: 8 }}>{t('newRequest.expense')}</Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>{t('newRequest.expenseSub')}</Text>
                 </View>
                 <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticSuccess + '28' }}>
                     <ArrowRight size={24} color={semanticSuccess} />
@@ -457,15 +522,15 @@ export default function NewRequest() {
                     <UserCheck size={28} color={semanticWarning} strokeWidth={2} />
                 </View>
                 <View>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticWarning, marginBottom: 8 }}>Attendance</Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>Corrections, Overtime & Absences</Text>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticWarning, marginBottom: 8 }}>{t('newRequest.attendance')}</Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>{t('newRequest.attendanceSub')}</Text>
                 </View>
                 <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticWarning + '28' }}>
                     <ArrowRight size={24} color={semanticWarning} />
                 </View>
             </TouchableOpacity>
 
-            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, paddingHorizontal: 4 }}>More Options</Text>
+            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, paddingHorizontal: 4 }}>{t('newRequest.moreOptions')}</Text>
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 {/* Timesheet → dedicated screen */}
@@ -478,8 +543,8 @@ export default function NewRequest() {
                         <Timer size={22} color={semanticSuccess} />
                     </View>
                     <View>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: semanticSuccess, marginBottom: 4 }}>Timesheet</Text>
-                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted }}>Log your hours</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: semanticSuccess, marginBottom: 4 }}>{t('newRequest.timesheet')}</Text>
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted }}>{t('newRequest.timesheetSub')}</Text>
                     </View>
                 </TouchableOpacity>
 
@@ -494,8 +559,8 @@ export default function NewRequest() {
                         <Monitor size={22} color={helpdeskAvailable ? semanticError : muted} />
                     </View>
                     <View>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: helpdeskAvailable ? semanticError : muted, marginBottom: 4 }}>IT Support</Text>
-                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted }}>Report an issue</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: helpdeskAvailable ? semanticError : muted, marginBottom: 4 }}>{t('newRequest.itSupport')}</Text>
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted }}>{t('newRequest.itSupportSub')}</Text>
                     </View>
                 </TouchableOpacity>
             </View>
@@ -511,8 +576,8 @@ export default function NewRequest() {
                         <Wrench size={24} color={semanticInfo} />
                     </View>
                     <View>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: semanticInfo }}>Maintenance</Text>
-                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted }}>Equipment & facility issues</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: semanticInfo }}>{t('newRequest.maintenance')}</Text>
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: muted }}>{t('newRequest.maintenanceSub')}</Text>
                     </View>
                 </View>
                 <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticInfo + '28' }}>
@@ -533,22 +598,16 @@ export default function NewRequest() {
 
             <View style={{ gap: 16 }}>
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
-                {dataLoading ? (
-                    <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="small" color={muted} /></View>
-                ) : leaveTypes.length === 0 ? (
-                    <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>No available leave types</Text>
-                    </View>
-                ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {leaveTypes.map((type: any) => (
-                            <TouchableOpacity key={type.id} onPress={() => setHolidayStatusId(type.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: holidayStatusId === type.id ? semanticInfo + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: holidayStatusId === type.id ? semanticInfo : text }}>{type.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                )}
+                <SearchableSelect
+                    options={leaveTypes.map((type: any) => ({ id: type.id, name: type.name }))}
+                    value={holidayStatusId}
+                    onChange={(id) => setHolidayStatusId(id as number | null)}
+                    loading={dataLoading}
+                    placeholder={t('common.select')}
+                    searchPlaceholder={t('common.search')}
+                    label="Leave Type"
+                    accent={semanticInfo}
+                />
             </View>
 
             <View style={{ gap: 16 }}>
@@ -574,6 +633,16 @@ export default function NewRequest() {
                     multiline textAlignVertical="top" />
             </View>
 
+            {Object.keys(timeOffCustomFields).length > 0 && (
+                <DynamicFields
+                    sourceModel="hr.leave"
+                    fields={timeOffCustomFields}
+                    values={timeOffCustomValues}
+                    onChange={(name, value) => setTimeOffCustomValues(prev => ({ ...prev, [name]: value }))}
+                    accent={semanticInfo}
+                />
+            )}
+
             <AttachmentPicker attachments={timeOffAttachments} onChange={setTimeOffAttachments} label="Supporting Documents" />
 
             <Button size="lg" onPress={handleCreateTimeOff} disabled={loading}
@@ -588,14 +657,14 @@ export default function NewRequest() {
     const renderExpenseForm = () => (
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>New Expense</Text>
-                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Enter the amount and details</Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>{t('expense.title')}</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>{t('expense.subtitle')}</Text>
             </View>
 
             <View style={{ alignItems: 'center', paddingVertical: 32, backgroundColor: cardColor, borderRadius: 32 }}>
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>Total Amount</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: text, marginRight: 4 }}>$</Text>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: text, marginRight: 4 }}>{currencySymbol(currency)}</Text>
                     <Input placeholder="0.00" value={amount} onChangeText={setAmount}
                         containerStyle={{ borderWidth: 0, backgroundColor: 'transparent', width: 200, paddingHorizontal: 0 }}
                         inputStyle={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: text, textAlign: 'left', height: 60, padding: 0 }}
@@ -605,36 +674,40 @@ export default function NewRequest() {
 
             <View style={{ gap: 16 }}>
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Category</Text>
-                {dataLoading ? (
-                    <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="small" color={muted} /></View>
-                ) : productsLoadError && expenseProducts.length === 0 ? (
-                    <View style={{ backgroundColor: semanticError + '18', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: semanticError, flex: 1 }}>
-                            Could not load categories. Tap to retry.
-                        </Text>
-                        <TouchableOpacity onPress={fetchData} activeOpacity={0.7}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: semanticError + '25', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 }}>
-                            <RefreshCw size={16} color={semanticError} />
-                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 13, color: semanticError }}>Retry</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : expenseProducts.length === 0 ? (
-                    <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>
-                            No compatible expense categories available
-                        </Text>
-                    </View>
-                ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {expenseProducts.map((prod: any) => (
-                            <TouchableOpacity key={prod.id} onPress={() => setProductId(prod.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: productId === prod.id ? semanticSuccess + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: productId === prod.id ? semanticSuccess : text }}>{prod.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                )}
+                <SearchableSelect
+                    options={expenseProducts.map((prod: any) => ({ id: prod.id, name: prod.name, disabled: prod.requestable === false, disabledReason: prod.unavailable_reason }))}
+                    value={productId}
+                    onChange={(id) => setProductId(id as number | null)}
+                    loading={dataLoading}
+                    error={
+                        productsLoadError && expenseProducts.length === 0
+                            ? 'Could not load categories.'
+                            : !dataLoading && expenseProducts.length === 0
+                                ? 'No expense categories are configured for this company. Contact your administrator.'
+                                : undefined
+                    }
+                    onRetry={fetchData}
+                    placeholder={t('common.select')}
+                    searchPlaceholder={t('common.search')}
+                    label={t('expense.category')}
+                    accent={semanticSuccess}
+                />
             </View>
+
+            {analyticAccounts.length > 0 && (
+                <View style={{ gap: 16 }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Analytic Account (Optional)</Text>
+                    <SearchableSelect
+                        options={analyticAccounts.map((a: any) => ({ id: a.id, name: a.name }))}
+                        value={analyticAccountId}
+                        onChange={(id) => setAnalyticAccountId(id as number | null)}
+                        placeholder="Select analytic account"
+                        searchPlaceholder="Search accounts…"
+                        label="Analytic Account"
+                        accent={semanticSuccess}
+                    />
+                </View>
+            )}
 
             <View style={{ gap: 16 }}>
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Paid By</Text>
@@ -654,13 +727,27 @@ export default function NewRequest() {
             {expenseTaxes.length > 0 && (
                 <View style={{ gap: 16 }}>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Included Taxes (Optional)</Text>
-                    {renderTagPills(
-                        expenseTaxes.map((t: any) => ({ id: t.id, name: `${t.name} (${t.amount}%)` })),
-                        expenseTaxIds,
-                        (id) => setExpenseTaxIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]),
-                        semanticSuccess
-                    )}
+                    <SearchableSelect
+                        multiple
+                        options={expenseTaxes.map((tax: any) => ({ id: tax.id, name: `${tax.name} (${tax.amount}%)` }))}
+                        value={expenseTaxIds}
+                        onChange={(ids) => setExpenseTaxIds(ids as number[])}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('expense.taxes')}
+                        accent={semanticSuccess}
+                    />
                 </View>
+            )}
+
+            {Object.keys(expenseCustomFields).length > 0 && (
+                <DynamicFields
+                    sourceModel="hr.expense"
+                    fields={expenseCustomFields}
+                    values={expenseCustomValues}
+                    onChange={(n, v) => setExpenseCustomValues((prev) => ({ ...prev, [n]: v }))}
+                    accent={semanticSuccess}
+                />
             )}
 
             <View style={{ gap: 16 }}>
@@ -684,7 +771,7 @@ export default function NewRequest() {
 
             <Button size="lg" onPress={handleCreateExpense} disabled={loading || expenseProducts.length === 0}
                 style={{ borderRadius: 20, marginTop: 8, backgroundColor: semanticSuccess, height: 56, shadowColor: semanticSuccess, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 6 }}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>Submit Claim</Text>}
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>{t('expense.submitClaim')}</Text>}
             </Button>
         </View>
     );
@@ -707,29 +794,31 @@ export default function NewRequest() {
 
             {helpdeskTeams.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Team (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {helpdeskTeams.map((team: any) => (
-                            <TouchableOpacity key={team.id} onPress={() => setHdTeamId(hdTeamId === team.id ? null : team.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: hdTeamId === team.id ? semanticError + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: hdTeamId === team.id ? semanticError : text }}>{team.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Team ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={helpdeskTeams.map((team: any) => ({ id: team.id, name: team.name }))}
+                        value={hdTeamId}
+                        onChange={(id) => setHdTeamId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label="Team"
+                        accent={semanticError}
+                    />
                 </View>
             )}
 
             {helpdeskAgents.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Assigned To (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {helpdeskAgents.map((agent: any) => (
-                            <TouchableOpacity key={agent.id} onPress={() => setHdUserId(hdUserId === agent.id ? null : agent.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: hdUserId === agent.id ? semanticError + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: hdUserId === agent.id ? semanticError : text }}>{agent.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Assigned To ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={helpdeskAgents.map((agent: any) => ({ id: agent.id, name: agent.name }))}
+                        value={hdUserId}
+                        onChange={(id) => setHdUserId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label="Assigned To"
+                        accent={semanticError}
+                    />
                 </View>
             )}
 
@@ -740,25 +829,32 @@ export default function NewRequest() {
 
             {helpdeskTicketTypes.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Type (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {helpdeskTicketTypes.map((t: any) => (
-                            <TouchableOpacity key={t.id} onPress={() => setHdTypeId(hdTypeId === t.id ? null : t.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: hdTypeId === t.id ? semanticError + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: hdTypeId === t.id ? semanticError : text }}>{t.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Type ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={helpdeskTicketTypes.map((tt: any) => ({ id: tt.id, name: tt.name }))}
+                        value={hdTypeId}
+                        onChange={(id) => setHdTypeId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label="Type"
+                        accent={semanticError}
+                    />
                 </View>
             )}
 
             {helpdeskTags.length > 0 && (
                 <View style={{ gap: 16 }}>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Tags (Optional)</Text>
-                    {renderTagPills(helpdeskTags, hdTagIds,
-                        (id) => setHdTagIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]),
-                        semanticError
-                    )}
+                    <SearchableSelect
+                        multiple
+                        options={helpdeskTags.map((tag: any) => ({ id: tag.id, name: tag.name }))}
+                        value={hdTagIds}
+                        onChange={(ids) => setHdTagIds(ids as number[])}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label="Tags"
+                        accent={semanticError}
+                    />
                 </View>
             )}
 
@@ -787,6 +883,16 @@ export default function NewRequest() {
                 </View>
             </View>
 
+            {Object.keys(hdCustomFields).length > 0 && (
+                <DynamicFields
+                    sourceModel="helpdesk.ticket"
+                    fields={hdCustomFields}
+                    values={hdCustomValues}
+                    onChange={(name, value) => setHdCustomValues(prev => ({ ...prev, [name]: value }))}
+                    accent={semanticError}
+                />
+            )}
+
             <AttachmentPicker attachments={hdAttachments} onChange={setHdAttachments} label="Screenshots" />
 
             <Button size="lg" onPress={handleCreateHelpdesk} disabled={loading}
@@ -801,8 +907,8 @@ export default function NewRequest() {
     const renderMaintenanceForm = () => (
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>Maintenance Request</Text>
-                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Report equipment or facility issues</Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>{t('maintenance.title')}</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>{t('maintenance.subtitle')}</Text>
             </View>
 
             <View style={{ gap: 16 }}>
@@ -828,43 +934,46 @@ export default function NewRequest() {
 
             {maintenanceCategories.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Category (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {maintenanceCategories.map((cat: any) => (
-                            <TouchableOpacity key={cat.id} onPress={() => setMntCategoryId(mntCategoryId === cat.id ? null : cat.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: mntCategoryId === cat.id ? semanticInfo + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: mntCategoryId === cat.id ? semanticInfo : text }}>{cat.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.category')} ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={maintenanceCategories.map((cat: any) => ({ id: cat.id, name: cat.name }))}
+                        value={mntCategoryId}
+                        onChange={(id) => setMntCategoryId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('maintenance.category')}
+                        accent={semanticInfo}
+                    />
                 </View>
             )}
 
             {maintenanceEquipment.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Equipment (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {maintenanceEquipment.map((eq: any) => (
-                            <TouchableOpacity key={eq.id} onPress={() => setMntEquipmentId(mntEquipmentId === eq.id ? null : eq.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: mntEquipmentId === eq.id ? semanticInfo + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: mntEquipmentId === eq.id ? semanticInfo : text }}>{eq.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.equipment')} ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={maintenanceEquipment.map((eq: any) => ({ id: eq.id, name: eq.name }))}
+                        value={mntEquipmentId}
+                        onChange={(id) => setMntEquipmentId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('maintenance.equipment')}
+                        accent={semanticInfo}
+                    />
                 </View>
             )}
 
             {maintenanceTeams.length > 0 && (
                 <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Team (Optional)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {maintenanceTeams.map((team: any) => (
-                            <TouchableOpacity key={team.id} onPress={() => setMntTeamId(mntTeamId === team.id ? null : team.id)} activeOpacity={0.7}
-                                style={{ backgroundColor: mntTeamId === team.id ? semanticInfo + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: mntTeamId === team.id ? semanticInfo : text }}>{team.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.team')} ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={maintenanceTeams.map((team: any) => ({ id: team.id, name: team.name }))}
+                        value={mntTeamId}
+                        onChange={(id) => setMntTeamId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('maintenance.team')}
+                        accent={semanticInfo}
+                    />
                 </View>
             )}
 
@@ -877,8 +986,14 @@ export default function NewRequest() {
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Schedule & Duration (Optional)</Text>
                 <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
                     <View style={{ gap: 12 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Scheduled Date</Text>
-                        <DatePicker value={mntScheduleDate} onChange={setMntScheduleDate} placeholder="Select scheduled date" />
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>
+                            {mntType === 'preventive' ? 'Scheduled Date' : 'Request Date'}
+                        </Text>
+                        {mntType === 'preventive' ? (
+                            <DatePicker value={mntScheduleDate} onChange={setMntScheduleDate} placeholder="Select scheduled date" />
+                        ) : (
+                            <DatePicker value={mntRequestDate} onChange={setMntRequestDate} placeholder="Select request date" />
+                        )}
                     </View>
                     <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
                     <View style={{ gap: 12 }}>
@@ -898,6 +1013,16 @@ export default function NewRequest() {
                     inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
                     multiline textAlignVertical="top" />
             </View>
+
+            {Object.keys(mntCustomFields).length > 0 && (
+                <DynamicFields
+                    sourceModel="maintenance.request"
+                    fields={mntCustomFields}
+                    values={mntCustomValues}
+                    onChange={(n, v) => setMntCustomValues((prev) => ({ ...prev, [n]: v }))}
+                    accent={semanticInfo}
+                />
+            )}
 
             <AttachmentPicker attachments={mntAttachments} onChange={setMntAttachments} label="Photos of Issue" />
 
@@ -958,6 +1083,15 @@ export default function NewRequest() {
                             inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
                             multiline textAlignVertical="top" />
                     </View>
+                    {Object.keys(attCustomFields.correction).length > 0 && (
+                        <DynamicFields
+                            sourceModel="hr.attendance"
+                            fields={attCustomFields.correction}
+                            values={attCustomValues.correction}
+                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, correction: { ...prev.correction, [name]: value } }))}
+                            accent={semanticWarning}
+                        />
+                    )}
                     <AttachmentPicker attachments={attAttachments} onChange={setAttAttachments} label="Supporting Documents" />
                 </View>
             )}
@@ -986,6 +1120,15 @@ export default function NewRequest() {
                             inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
                             multiline textAlignVertical="top" />
                     </View>
+                    {Object.keys(attCustomFields.overtime).length > 0 && (
+                        <DynamicFields
+                            sourceModel="hr.attendance.overtime"
+                            fields={attCustomFields.overtime}
+                            values={attCustomValues.overtime}
+                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, overtime: { ...prev.overtime, [name]: value } }))}
+                            accent={semanticWarning}
+                        />
+                    )}
                 </View>
             )}
 
@@ -994,22 +1137,16 @@ export default function NewRequest() {
                 <View style={{ gap: 24 }}>
                     <View style={{ gap: 16 }}>
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
-                        {dataLoading ? (
-                            <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="small" color={muted} /></View>
-                        ) : leaveTypes.length === 0 ? (
-                            <View style={{ padding: 16, backgroundColor: cardColor, borderRadius: 16 }}>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>No available leave types</Text>
-                            </View>
-                        ) : (
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                                {leaveTypes.map((type: any) => (
-                                    <TouchableOpacity key={type.id} onPress={() => setAttJustLeaveTypeId(type.id)} activeOpacity={0.7}
-                                        style={{ backgroundColor: attJustLeaveTypeId === type.id ? semanticWarning + '25' : cardColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16, minWidth: 100, alignItems: 'center' }}>
-                                        <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: attJustLeaveTypeId === type.id ? semanticWarning : text }}>{type.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        )}
+                        <SearchableSelect
+                            options={leaveTypes.map((type: any) => ({ id: type.id, name: type.name }))}
+                            value={attJustLeaveTypeId}
+                            onChange={(id) => setAttJustLeaveTypeId(id as number | null)}
+                            loading={dataLoading}
+                            placeholder={t('common.select')}
+                            searchPlaceholder={t('common.search')}
+                            label="Leave Type"
+                            accent={semanticWarning}
+                        />
                     </View>
                     <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
                         <View style={{ gap: 12 }}>
@@ -1029,6 +1166,15 @@ export default function NewRequest() {
                             inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
                             multiline textAlignVertical="top" />
                     </View>
+                    {Object.keys(attCustomFields.justification).length > 0 && (
+                        <DynamicFields
+                            sourceModel="hr.leave"
+                            fields={attCustomFields.justification}
+                            values={attCustomValues.justification}
+                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, justification: { ...prev.justification, [name]: value } }))}
+                            accent={semanticWarning}
+                        />
+                    )}
                     <AttachmentPicker attachments={attAttachments} onChange={setAttAttachments} label="Supporting Documents" />
                 </View>
             )}
@@ -1045,7 +1191,7 @@ export default function NewRequest() {
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: background }}
-            contentContainerStyle={{ padding: 24, paddingBottom: 180, paddingTop: 24 }}
+            contentContainerStyle={{ padding: 24, paddingBottom: currentView === 'hub' ? 180 : 40, paddingTop: 24 }}
         >
             {currentView !== 'hub' && (
                 <TouchableOpacity onPress={() => setCurrentView('hub')}

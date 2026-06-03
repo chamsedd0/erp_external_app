@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Tenant, TenantStats, DeviceEntry, NotificationEntry, ErrorLogEntry, ActivationEntry, InviteResult } from '@/lib/types';
+import type { Tenant, TenantStats, DeviceEntry, NotificationEntry, ErrorLogEntry, ActivationEntry, InviteResult, TenantDiagnostics, CertificationEmployeeInput, CertificationMode, CertificationRun, CertificationScenarioResult } from '@/lib/types';
 import {
     DSTabs,
     DSCard,
@@ -18,6 +18,7 @@ import {
     DSRenewalBadge,
     DSField,
     DSTextInput,
+    DSSelectInput,
 } from '@/components/ui/primitives';
 import { HealthCheck } from '@/components/health-check';
 import { deleteTenantAction, toggleEnabledAction, updateStatusAction, clearErrorsAction, activateTenantAction } from '@/lib/actions';
@@ -39,6 +40,12 @@ import {
     Fingerprint,
     Zap,
     UserPlus,
+    Activity,
+    RefreshCw,
+    ClipboardCheck,
+    ShieldCheck,
+    Plus,
+    Minus,
 } from 'lucide-react';
 
 interface Props {
@@ -51,6 +58,8 @@ const TAB_ITEMS = [
     { value: 'billing',       label: 'Billing',       icon: <CreditCard size={14} /> },
     { value: 'devices',       label: 'Devices',       icon: <Smartphone size={14} /> },
     { value: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
+    { value: 'certification', label: 'Certification', icon: <ClipboardCheck size={14} /> },
+    { value: 'diagnostics',   label: 'Diagnostics',   icon: <Activity size={14} /> },
     { value: 'errors',        label: 'Errors',        icon: <AlertTriangle size={14} /> },
     { value: 'danger',        label: 'Danger Zone',   icon: <ShieldAlert size={14} /> },
 ];
@@ -243,6 +252,14 @@ export function ClientDetailTabs({ tenant, stats }: Props) {
                     <NotificationsTab slug={tenant.slug} />
                 )}
 
+                {tab === 'certification' && (
+                    <CertificationTab slug={tenant.slug} />
+                )}
+
+                {tab === 'diagnostics' && (
+                    <DiagnosticsTab slug={tenant.slug} />
+                )}
+
                 {/* ── Errors ───────────────────────────────────────────────────── */}
                 {tab === 'errors' && (
                     <ErrorsTab slug={tenant.slug} />
@@ -428,6 +445,125 @@ function ActivationInviteCard({ slug }: { slug: string }) {
     );
 }
 
+function DiagnosticsTab({ slug }: { slug: string }) {
+    const [data, setData] = useState<TenantDiagnostics | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch(`/api/admin/diagnostics/${slug}`);
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to load diagnostics');
+            setData(json);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [slug]);
+
+    useEffect(() => { load(); }, [load]);
+
+    async function refreshSchema(model?: string) {
+        setRefreshing(true);
+        setError('');
+        try {
+            const res = await fetch(`/api/admin/schema-refresh/${slug}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(model ? { model } : {}),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Schema refresh failed');
+            await load();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setRefreshing(false);
+        }
+    }
+
+    const rows = Object.entries(data?.schemas ?? {});
+    const unsupportedRequiredCount = rows.reduce(
+        (sum, [, report]) => sum + Object.keys(report.unsupported_required_fields ?? {}).length,
+        0
+    );
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <DSCard>
+                <DSCardHeader
+                    title="Tenant Diagnostics"
+                    subtitle="Odoo compatibility, schema state, unsupported custom fields, and monitor health."
+                    action={<Btn variant="outline" leftIcon={<RefreshCw size={14} />} onClick={() => refreshSchema()} disabled={refreshing}>Refresh all schemas</Btn>}
+                />
+                <DSCardContent>
+                    {loading && <div style={{ fontSize: 13, color: '#64748B' }}>Loading diagnostics...</div>}
+                    {error && <div style={{ fontSize: 13, color: '#DC2626' }}>{error}</div>}
+                    {data && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                            <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 12 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Odoo</div>
+                                <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, color: data.odoo.ok ? '#047857' : '#DC2626' }}>
+                                    {data.odoo.ok ? `v${data.odoo.version ?? 'unknown'}` : 'Offline'}
+                                </div>
+                            </div>
+                            <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 12 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Unsupported required</div>
+                                <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, color: unsupportedRequiredCount ? '#DC2626' : '#0F172A' }}>{unsupportedRequiredCount}</div>
+                            </div>
+                            <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 12 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Last monitor run</div>
+                                <div style={{ marginTop: 6, fontSize: 13, fontWeight: 600, color: '#0F172A' }}>
+                                    {data.monitor?.last_run_at ? new Date(data.monitor.last_run_at).toLocaleString() : 'Never'}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DSCardContent>
+            </DSCard>
+
+            {rows.length > 0 && (
+                <DSCard>
+                    <DSCardHeader title="Custom field compatibility" />
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr>
+                                    <Th label="Model" />
+                                    <Th label="Schema" />
+                                    <Th label="Supported" />
+                                    <Th label="Unsupported" />
+                                    <Th label="Required unsupported" />
+                                    <Th label="Cached" />
+                                    <Th label="Action" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map(([model, report]) => (
+                                    <tr key={model} className="row-hover">
+                                        <td style={{ padding: 12 }}><MonoChip>{model}</MonoChip></td>
+                                        <td style={{ padding: 12, fontSize: 13, color: report.schema_available ? '#047857' : '#DC2626' }}>{report.schema_available ? 'Available' : 'Missing'}</td>
+                                        <td style={{ padding: 12, fontSize: 13 }}>{Object.keys(report.custom_fields ?? {}).length}</td>
+                                        <td style={{ padding: 12, fontSize: 13 }}>{Object.keys(report.unsupported_fields ?? {}).length}</td>
+                                        <td style={{ padding: 12, fontSize: 13, color: Object.keys(report.unsupported_required_fields ?? {}).length ? '#DC2626' : '#475569' }}>{Object.keys(report.unsupported_required_fields ?? {}).length}</td>
+                                        <td style={{ padding: 12, fontSize: 12, color: '#64748B' }}>{report.schema_cached_at ? new Date(report.schema_cached_at).toLocaleString() : 'No cache'}</td>
+                                        <td style={{ padding: 12 }}><Btn size="sm" variant="ghost" disabled={refreshing} onClick={() => refreshSchema(model)}>Refresh</Btn></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </DSCard>
+            )}
+        </div>
+    );
+}
+
 function DevicesTab({ slug, statCount }: { slug: string; statCount: number }) {
     const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
     const [loading, setLoading] = useState(true);
@@ -606,6 +742,352 @@ function InvoiceCard({ slug, contactEmail }: { slug: string; contactEmail: strin
 // ─── Notifications tab ────────────────────────────────────────────────────────
 
 // ─── Errors tab ───────────────────────────────────────────────────────────────
+
+const CERT_STATUS_META: Record<string, { bg: string; color: string; label: string }> = {
+    pass: { bg: '#D1FAE5', color: '#047857', label: 'PASS' },
+    warn: { bg: '#FEF3C7', color: '#B45309', label: 'WARN' },
+    fail: { bg: '#FEE2E2', color: '#DC2626', label: 'FAIL' },
+    skipped: { bg: '#F1F5F9', color: '#64748B', label: 'SKIP' },
+};
+
+const LOGIN_METHODS = [
+    { value: 'barcode_pin', label: 'Barcode + PIN' },
+    { value: 'employee_id_pin', label: 'Employee ID + PIN' },
+    { value: 'work_email_pin', label: 'Work Email + PIN' },
+    { value: 'activation_invite', label: 'Activation PIN' },
+];
+
+function CertificationTab({ slug }: { slug: string }) {
+    const [latest, setLatest] = useState<CertificationRun | null>(null);
+    const [history, setHistory] = useState<CertificationRun[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [running, setRunning] = useState(false);
+    const [error, setError] = useState('');
+    const [overrideNote, setOverrideNote] = useState('');
+    const [mode, setMode] = useState<CertificationMode>('safe');
+    const [includeAttachments, setIncludeAttachments] = useState(true);
+    const [includeWrongCompany, setIncludeWrongCompany] = useState(true);
+    const [includeOptionalModules, setIncludeOptionalModules] = useState(true);
+    const [employees, setEmployees] = useState<CertificationEmployeeInput[]>([
+        { label: 'Employee 1', identifier: '', pin: '', work_email: '', login_method: 'barcode_pin' },
+    ]);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        Promise.all([
+            fetch(`/api/admin/certification/${slug}/latest`).then(r => r.json()),
+            fetch(`/api/admin/certification/${slug}/runs`).then(r => r.json()),
+        ])
+            .then(([latestRes, runsRes]) => {
+                setLatest(latestRes.run ?? null);
+                setHistory(runsRes.runs ?? []);
+                setError('');
+            })
+            .catch(() => setError('Failed to load certification reports'))
+            .finally(() => setLoading(false));
+    }, [slug]);
+
+    useEffect(() => { load(); }, [load]);
+
+    function updateEmployee(index: number, patch: Partial<CertificationEmployeeInput>) {
+        setEmployees(current => current.map((employee, i) => i === index ? { ...employee, ...patch } : employee));
+    }
+
+    function addEmployee() {
+        if (employees.length >= 3) return;
+        setEmployees(current => [...current, {
+            label: `Employee ${current.length + 1}`,
+            identifier: '',
+            pin: '',
+            work_email: '',
+            login_method: 'barcode_pin',
+        }]);
+    }
+
+    function removeEmployee(index: number) {
+        setEmployees(current => current.length === 1 ? current : current.filter((_, i) => i !== index));
+    }
+
+    async function runCertification() {
+        setRunning(true);
+        setError('');
+        try {
+            const payload = {
+                mode,
+                employees: employees.map(employee => ({
+                    ...employee,
+                    identifier: employee.identifier.trim(),
+                    work_email: employee.work_email?.trim() || undefined,
+                    pin: employee.pin || undefined,
+                })),
+                options: {
+                    include_attachments: includeAttachments,
+                    include_wrong_company_tests: includeWrongCompany,
+                    include_optional_modules: includeOptionalModules,
+                },
+            };
+            const res = await fetch(`/api/admin/certification/${slug}/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? 'Certification failed');
+            setLatest(data);
+            load();
+        } catch (err: any) {
+            setError(err.message ?? 'Certification failed');
+        } finally {
+            setRunning(false);
+        }
+    }
+
+    async function approveOverride() {
+        if (!latest) return;
+        setError('');
+        try {
+            const res = await fetch(`/api/admin/certification/${slug}/override`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ run_id: latest.id, note: overrideNote }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? 'Override failed');
+            setOverrideNote('');
+            load();
+        } catch (err: any) {
+            setError(err.message ?? 'Override failed');
+        }
+    }
+
+    const blocking = latest?.scenarios.filter(s => s.status === 'fail' && s.severity === 'blocking') ?? [];
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <DSCard>
+                <DSCardHeader
+                    title="Tenant Certification"
+                    subtitle="Run production-readiness checks against this tenant's live Odoo configuration"
+                    action={<Btn variant="outline" leftIcon={<RefreshCw size={14} />} onClick={load} disabled={loading}>Refresh</Btn>}
+                />
+                <DSCardContent>
+                    {loading ? (
+                        <div style={{ fontSize: 13, color: '#94A3B8' }}>Loading certification status...</div>
+                    ) : !latest ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 10, background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                            <ShieldCheck size={20} color="#B45309" />
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#78350F' }}>No certification run yet</div>
+                                <div style={{ fontSize: 13, color: '#92400E', marginTop: 2 }}>
+                                    Activation is blocked until this tenant has a PASS or WARN certification run.
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div style={{ padding: 16, borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                    <span style={{
+                                        display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999,
+                                        fontSize: 12, fontWeight: 800, letterSpacing: 0.5,
+                                        background: CERT_STATUS_META[latest.status].bg,
+                                        color: CERT_STATUS_META[latest.status].color,
+                                    }}>
+                                        {CERT_STATUS_META[latest.status].label}
+                                    </span>
+                                    <MonoChip>{latest.mode.toUpperCase()}</MonoChip>
+                                    {latest.odoo_version && <MonoChip>Odoo {latest.odoo_version}</MonoChip>}
+                                </div>
+                                <DetailRow label="Run ID" value={<MonoChip>{latest.id.slice(0, 8)}</MonoChip>} />
+                                <DetailRow label="Finished" value={<span style={{ fontSize: 13, color: '#475569' }}>{latest.finished_at ? new Date(latest.finished_at).toLocaleString() : 'Running'}</span>} />
+                                <DetailRow label="Employees tested" value={<span style={{ fontSize: 13, color: '#0F172A' }}>{latest.employees.length}</span>} last />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                                {([
+                                    ['Pass', latest.summary.passed, '#047857'],
+                                    ['Warn', latest.summary.warnings, '#B45309'],
+                                    ['Fail', latest.summary.failed, '#DC2626'],
+                                    ['Skip', latest.summary.skipped, '#64748B'],
+                                    ['Blocking', latest.summary.blocking_failures, '#991B1B'],
+                                ] as Array<[string, number, string]>).map(([label, value, color]) => (
+                                    <div key={label} style={{ padding: 12, borderRadius: 10, background: '#fff', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>{label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {error && <div style={{ marginTop: 12, fontSize: 13, color: '#991B1B', padding: 10, borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA' }}>{error}</div>}
+                </DSCardContent>
+            </DSCard>
+
+            <DSCard>
+                <DSCardHeader title="Run Certification" subtitle="Credentials are used for this run only and are never stored in the report" />
+                <DSCardContent>
+                    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 14, marginBottom: 16 }}>
+                        <DSField label="Mode">
+                            <DSSelectInput value={mode} onChange={e => setMode(e.target.value as CertificationMode)} options={[
+                                { value: 'safe', label: 'Safe - no Odoo records' },
+                                { value: 'write', label: 'Write - creates labeled records' },
+                            ]} />
+                        </DSField>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
+                            {[
+                                ['Attachments', includeAttachments, setIncludeAttachments],
+                                ['Wrong-company tests', includeWrongCompany, setIncludeWrongCompany],
+                                ['Optional modules', includeOptionalModules, setIncludeOptionalModules],
+                            ].map(([label, checked, setter]) => (
+                                <label key={label as string} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#475569', height: 36 }}>
+                                    <input type="checkbox" checked={checked as boolean} onChange={e => (setter as (v: boolean) => void)(e.target.checked)} />
+                                    {label as string}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {employees.map((employee, index) => (
+                            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 170px 1fr 1fr 120px 36px', gap: 8, alignItems: 'end', padding: 10, border: '1px solid #E2E8F0', borderRadius: 10 }}>
+                                <DSField label="Label">
+                                    <DSTextInput value={employee.label ?? ''} onChange={e => updateEmployee(index, { label: e.target.value })} />
+                                </DSField>
+                                <DSField label="Login method">
+                                    <DSSelectInput value={employee.login_method} onChange={e => updateEmployee(index, { login_method: e.target.value as CertificationEmployeeInput['login_method'] })} options={LOGIN_METHODS} />
+                                </DSField>
+                                <DSField label="Identifier">
+                                    <DSTextInput value={employee.identifier} onChange={e => updateEmployee(index, { identifier: e.target.value })} placeholder="barcode, id, or email" />
+                                </DSField>
+                                <DSField label="Work email">
+                                    <DSTextInput value={employee.work_email ?? ''} onChange={e => updateEmployee(index, { work_email: e.target.value })} />
+                                </DSField>
+                                <DSField label="PIN">
+                                    <DSTextInput type="password" value={employee.pin ?? ''} onChange={e => updateEmployee(index, { pin: e.target.value })} />
+                                </DSField>
+                                <Btn variant="ghost" onClick={() => removeEmployee(index)} disabled={employees.length === 1} aria-label="Remove employee">
+                                    <Minus size={14} />
+                                </Btn>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                        <Btn variant="outline" leftIcon={<Plus size={14} />} onClick={addEmployee} disabled={employees.length >= 3}>Add employee</Btn>
+                        <Btn leftIcon={<ClipboardCheck size={14} />} onClick={runCertification} disabled={running || employees.some(e => !e.identifier.trim())}>
+                            {running ? 'Running certification...' : 'Run Certification'}
+                        </Btn>
+                    </div>
+                </DSCardContent>
+            </DSCard>
+
+            {blocking.length > 0 && (
+                <DSCard style={{ borderColor: '#FECACA', background: '#FEF7F7' }}>
+                    <DSCardHeader title="Blocking Issues" subtitle="These failures block activation unless explicitly overridden" />
+                    <DSCardContent>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {blocking.map(issue => (
+                                <div key={issue.id} style={{ padding: 10, borderRadius: 8, background: '#fff', border: '1px solid #FECACA' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#991B1B' }}>{issue.label}</div>
+                                    <div style={{ fontSize: 12, color: '#7F1D1D', marginTop: 3 }}>{issue.message}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </DSCardContent>
+                </DSCard>
+            )}
+
+            {latest?.status === 'fail' && (
+                <DSCard style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}>
+                    <DSCardHeader title="Force Approval Override" subtitle="Allows activation despite the failed certification. This is audited." />
+                    <DSCardContent>
+                        <DSField label="Override note" hint="Minimum 10 characters. Include the business reason and accepted risk.">
+                            <DSTextInput value={overrideNote} onChange={e => setOverrideNote(e.target.value)} placeholder="Example: Tenant accepts missing helpdesk module for phase 1" />
+                        </DSField>
+                        <div style={{ marginTop: 10 }}>
+                            <Btn variant="outline" onClick={approveOverride} disabled={overrideNote.trim().length < 10}>Approve Override</Btn>
+                        </div>
+                    </DSCardContent>
+                </DSCard>
+            )}
+
+            {latest && (
+                <CertificationResultsTable scenarios={latest.scenarios} />
+            )}
+
+            {history.length > 1 && (
+                <DSCard>
+                    <DSCardHeader title="Recent Runs" subtitle={`${history.length} reports stored`} />
+                    <DSCardContent>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {history.slice(0, 10).map(run => (
+                                <span key={run.id} style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999,
+                                    background: CERT_STATUS_META[run.status].bg, color: CERT_STATUS_META[run.status].color,
+                                    fontSize: 12, fontWeight: 700,
+                                }}>
+                                    {run.status.toUpperCase()} <span style={{ opacity: 0.75 }}>{new Date(run.started_at).toLocaleDateString()}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </DSCardContent>
+                </DSCard>
+            )}
+        </div>
+    );
+}
+
+function CertificationResultsTable({ scenarios }: { scenarios: CertificationScenarioResult[] }) {
+    return (
+        <DSCard>
+            <DSCardHeader title="Scenario Results" subtitle={`${scenarios.length} checks`} />
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                    <thead>
+                        <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                            <Th label="Group" />
+                            <Th label="Scenario" />
+                            <Th label="Status" />
+                            <Th label="Severity" />
+                            <Th label="Employee" />
+                            <Th label="Duration" align="right" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {scenarios.map(scenario => {
+                            const meta = CERT_STATUS_META[scenario.status];
+                            return (
+                                <tr key={scenario.id} className="row-hover" style={{ borderTop: '1px solid #F1F5F9' }}>
+                                    <td style={{ padding: '12px 16px' }}><MonoChip>{scenario.group}</MonoChip></td>
+                                    <td style={{ padding: '12px 16px', maxWidth: 420 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{scenario.label}</div>
+                                        {scenario.message && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{scenario.message}</div>}
+                                    </td>
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <span style={{
+                                            display: 'inline-flex', padding: '3px 8px', borderRadius: 999,
+                                            background: meta.bg, color: meta.color, fontSize: 11, fontWeight: 800,
+                                        }}>
+                                            {meta.label}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '12px 16px', fontSize: 12, color: scenario.severity === 'blocking' ? '#991B1B' : '#475569', fontWeight: 700 }}>
+                                        {scenario.severity}
+                                    </td>
+                                    <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748B' }}>
+                                        {scenario.employee_id ? `#${scenario.employee_id}` : '-'}
+                                    </td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, color: '#94A3B8' }}>
+                                        {scenario.duration_ms}ms
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </DSCard>
+    );
+}
 
 const STATUS_COLOR: Record<number, string> = {
     500: '#DC2626',

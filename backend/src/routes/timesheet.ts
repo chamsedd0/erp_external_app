@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
-import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, getAuthenticatedEmployeeId, getOdooContext } from '../lib/authContext';
 
 const router = Router();
 const TIME_OFF_TASK_ERROR = 'This task is linked to a time off type. Please choose a different task or leave task blank.';
@@ -18,6 +18,7 @@ const createTimesheetSchema = z.object({
     date: z.string(),          // YYYY-MM-DD
     unit_amount: z.number(),   // hours, e.g. 2.5
     name: z.string(),          // description of work done
+    custom_values: z.record(z.string(), z.any()).optional(), // tenant-specific x_ custom fields
 });
 
 function taskIsLinkedToTimeOff(task: any): boolean {
@@ -82,7 +83,8 @@ router.get('/projects', async (req, res) => {
         let projects: any;
         try {
             projects = await client.searchRead(
-                uid, 'project.project', [['active', '=', true]], ['id', 'name']
+                uid, 'project.project', [['active', '=', true]], ['id', 'name'],
+                { context: getOdooContext(req) }
             );
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '').toLowerCase();
@@ -121,7 +123,7 @@ router.get('/tasks', async (req, res) => {
                 uid, 'project.task',
                 [['project_id', '=', parsedProjectId], ['active', '=', true]],
                 ['id', 'name', 'leave_type_id', 'time_off_type_id', 'holiday_status_id'],
-                true
+                { silent: true, context: getOdooContext(req) }
             );
         } catch {
             tasks = await client.searchRead(
@@ -143,6 +145,20 @@ router.get('/tasks', async (req, res) => {
     } catch (error: any) {
         console.error('Fetch Tasks Error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await getCustomFieldReport(tenantId, client, uid, 'account.analytic.line'));
+    } catch (error: any) {
+        console.error('Fetch Timesheet Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
     }
 });
 
@@ -188,6 +204,16 @@ router.post('/', async (req, res) => {
 
         if (analyticAccountId) recordData.account_id = analyticAccountId;
         if (body.task_id) recordData.task_id = body.task_id;
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(recordData, body.custom_values);
+        }
+
+        // Enforce required custom fields up-front for a clear error message.
+        const tsCustomFields = await getCustomFields(tenantId, client, uid, 'account.analytic.line');
+        const missingCustom = validateRequiredCustomFields(tsCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
 
         // Pre-validate payload against live Odoo schema
         const validation = await validatePayload(tenantId, client, uid, 'account.analytic.line', recordData);
@@ -200,8 +226,9 @@ router.post('/', async (req, res) => {
         }
 
         let newId: number;
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
         try {
-            newId = await client.createRecord(uid, 'account.analytic.line', recordData) as number;
+            newId = await client.createRecord(uid, 'account.analytic.line', recordData, ctx) as number;
         } catch (createErr: any) {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
             if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('invalid field') || msg.includes('object')) {

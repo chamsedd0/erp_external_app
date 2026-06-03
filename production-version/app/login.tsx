@@ -8,6 +8,7 @@ import { useToast } from '../providers/toast-context';
 import { apiClient } from '../api/client';
 import { useRouter } from 'expo-router';
 import { Building2, X } from 'lucide-react-native';
+import { t } from '../lib/i18n';
 
 export default function Login() {
     const [employeeId, setEmployeeId] = useState('');
@@ -37,7 +38,7 @@ export default function Login() {
     const handleCompanyContinue = async () => {
         const slug = companyCode.trim().toUpperCase();
         if (!slug) {
-            toast.warning('Please enter your company code');
+            toast.warning(t('auth.warnCompanyCode'));
             return;
         }
         setCompanyLoading(true);
@@ -47,7 +48,7 @@ export default function Login() {
             await setTenant(data.subscription_number ?? slug, data.name, data.hr_email);
             setCompanyCode('');
         } catch {
-            toast.error('Company code not found. Please check with your HR department.');
+            toast.error(t('auth.errCompanyNotFound'));
         } finally {
             setCompanyLoading(false);
         }
@@ -70,10 +71,10 @@ export default function Login() {
                             <Building2 size={36} color={primary} />
                         </View>
                         <Text style={{ fontSize: 36, fontFamily: 'Outfit_700Bold', color: text, marginBottom: 10 }}>
-                            Welcome
+                            {t('auth.welcome')}
                         </Text>
                         <Text style={{ fontSize: 16, color: muted, textAlign: 'center', fontFamily: 'DMSans_400Regular' }}>
-                            Enter your company code to get started
+                            {t('auth.enterCompanyCode')}
                         </Text>
                     </View>
 
@@ -81,12 +82,12 @@ export default function Login() {
                     <View style={{ gap: 16 }}>
                         <View>
                             <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                                Company Code
+                                {t('auth.companyCode')}
                             </Text>
                             <TextInput
                                 value={companyCode}
                                 onChangeText={setCompanyCode}
-                                placeholder="e.g. SP-00001"
+                                placeholder={t('auth.companyCodePlaceholder')}
                                 placeholderTextColor={muted}
                                 autoCapitalize="none"
                                 autoCorrect={false}
@@ -115,7 +116,7 @@ export default function Login() {
                             {companyLoading
                                 ? <ActivityIndicator size="small" color="#1a1a1a" />
                                 : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#1a1a1a' }}>
-                                    Continue
+                                    {t('auth.continue')}
                                 </Text>
                             }
                         </Button>
@@ -129,7 +130,7 @@ export default function Login() {
 
     const handleLogin = async () => {
         if (!employeeId || !pin) {
-            toast.warning('Please enter both Employee ID and PIN');
+            toast.warning(t('auth.warnEnterBoth'));
             return;
         }
 
@@ -141,9 +142,9 @@ export default function Login() {
         } catch (error: any) {
             const msg: string = error?.message || '';
             if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('failed to fetch')) {
-                toast.error('Connection error. Please check your internet connection.');
+                toast.error(t('auth.errConnection'));
             } else {
-                toast.error('Login failed. Please check your Employee ID and PIN.');
+                toast.error(t('auth.errLoginFailed'));
             }
         } finally {
             setLoading(false);
@@ -152,16 +153,16 @@ export default function Login() {
 
     const handleActivationStart = async () => {
         if (!tenantCode || !activationEmail.trim()) {
-            toast.warning('Please enter your work email');
+            toast.warning(t('auth.warnWorkEmail'));
             return;
         }
         setLoading(true);
         try {
             await apiClient.startActivation(tenantCode, activationEmail.trim());
             setMode('otp');
-            toast.success('Check your email for an activation code');
+            toast.success(t('auth.okCheckEmail'));
         } catch (error: any) {
-            toast.error(error?.message || 'Could not start activation');
+            toast.error(error?.message || t('auth.errStartActivation'));
         } finally {
             setLoading(false);
         }
@@ -169,7 +170,7 @@ export default function Login() {
 
     const handleActivationVerify = async () => {
         if (!tenantCode || !activationEmail.trim() || !otp.trim() || !pin.trim()) {
-            toast.warning('Please enter your email, code, and new PIN');
+            toast.warning(t('auth.warnEmailCodePin'));
             return;
         }
         setLoading(true);
@@ -178,7 +179,7 @@ export default function Login() {
             await signIn(data.token, data.user);
             router.replace('/(app)/dashboard');
         } catch (error: any) {
-            toast.error(error?.message || 'Activation failed');
+            toast.error(error?.message || t('auth.errActivationFailed'));
         } finally {
             setLoading(false);
         }
@@ -186,7 +187,7 @@ export default function Login() {
 
     const handleInviteActivation = async () => {
         if (!tenantCode || !inviteCode.trim() || !pin.trim()) {
-            toast.warning('Please enter your invite code and new PIN');
+            toast.warning(t('auth.warnInviteCodePin'));
             return;
         }
         setLoading(true);
@@ -195,7 +196,7 @@ export default function Login() {
             await signIn(data.token, data.user);
             router.replace('/(app)/dashboard');
         } catch (error: any) {
-            toast.error(error?.message || 'Invite activation failed');
+            toast.error(error?.message || t('auth.errInviteFailed'));
         } finally {
             setLoading(false);
         }
@@ -227,14 +228,14 @@ export default function Login() {
                 {/* Header */}
                 <View style={{ marginBottom: 40, alignItems: 'center' }}>
                     <Text style={{ fontSize: 42, fontFamily: 'Outfit_700Bold', color: text, marginBottom: 12 }}>
-                        {mode === 'login' ? 'Sign In' : 'Activate'}
+                        {mode === 'login' ? t('auth.signIn') : t('auth.activate')}
                     </Text>
                     <Text style={{ fontSize: 17, color: muted, textAlign: 'center', fontFamily: 'DMSans_400Regular' }}>
                         {mode === 'login'
-                            ? 'Enter your Employee ID or email and PIN'
+                            ? t('auth.signInSubtitle')
                             : mode === 'invite'
-                                ? 'Enter your invite code and choose a PIN'
-                                : 'Use your work email to set up your PIN'}
+                                ? t('auth.inviteSubtitle')
+                                : t('auth.emailSubtitle')}
                     </Text>
                 </View>
 
@@ -242,12 +243,12 @@ export default function Login() {
                 <View style={{ gap: 20 }}>
                     {mode === 'login' && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            Employee ID or email
+                            {t('auth.employeeIdOrEmail')}
                         </Text>
                         <TextInput
                             value={employeeId}
                             onChangeText={setEmployeeId}
-                            placeholder="Enter your employee ID or email"
+                            placeholder={t('auth.employeeIdPlaceholder')}
                             placeholderTextColor={muted}
                             autoCapitalize="none"
                             style={{
@@ -266,12 +267,12 @@ export default function Login() {
 
                     {(mode === 'email' || mode === 'otp') && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            Work email
+                            {t('auth.workEmail')}
                         </Text>
                         <TextInput
                             value={activationEmail}
                             onChangeText={setActivationEmail}
-                            placeholder="name@company.com"
+                            placeholder={t('auth.workEmailPlaceholder')}
                             placeholderTextColor={muted}
                             autoCapitalize="none"
                             keyboardType="email-address"
@@ -291,12 +292,12 @@ export default function Login() {
 
                     {mode === 'otp' && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            Activation code
+                            {t('auth.activationCode')}
                         </Text>
                         <TextInput
                             value={otp}
                             onChangeText={setOtp}
-                            placeholder="Enter the email code"
+                            placeholder={t('auth.activationCodePlaceholder')}
                             placeholderTextColor={muted}
                             keyboardType="numeric"
                             style={{
@@ -315,12 +316,12 @@ export default function Login() {
 
                     {mode === 'invite' && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            Invite code
+                            {t('auth.inviteCode')}
                         </Text>
                         <TextInput
                             value={inviteCode}
                             onChangeText={setInviteCode}
-                            placeholder="Enter your invite code"
+                            placeholder={t('auth.inviteCodePlaceholder')}
                             placeholderTextColor={muted}
                             autoCapitalize="characters"
                             style={{
@@ -339,12 +340,12 @@ export default function Login() {
 
                     {(mode === 'login' || mode === 'otp' || mode === 'invite') && <View>
                         <Text style={{ fontSize: 14, fontFamily: 'DMSans_700Bold', color: muted, marginBottom: 8 }}>
-                            {mode === 'login' ? 'PIN' : 'New PIN'}
+                            {mode === 'login' ? t('auth.pin') : t('auth.newPin')}
                         </Text>
                         <TextInput
                             value={pin}
                             onChangeText={setPin}
-                            placeholder="Enter your PIN"
+                            placeholder={t('auth.pinPlaceholder')}
                             placeholderTextColor={muted}
                             secureTextEntry
                             keyboardType="numeric"
@@ -369,20 +370,20 @@ export default function Login() {
                         style={{ marginTop: 12, borderRadius: 100 }}
                     >
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#1a1a1a' }}>
-                            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'email' ? 'Send Code' : 'Activate'}
+                            {loading ? t('auth.pleaseWait') : mode === 'login' ? t('auth.signIn') : mode === 'email' ? t('auth.sendCode') : t('auth.activate')}
                         </Text>
                     </Button>
 
                     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18 }}>
                         <TouchableOpacity onPress={() => setMode(mode === 'login' ? 'email' : 'login')} style={{ paddingVertical: 6 }}>
                             <Text style={{ color: primary, fontFamily: 'DMSans_700Bold', fontSize: 14 }}>
-                                {mode === 'login' ? 'First time?' : 'Back to sign in'}
+                                {mode === 'login' ? t('auth.firstTime') : t('auth.backToSignIn')}
                             </Text>
                         </TouchableOpacity>
                         {mode !== 'login' && (
                             <TouchableOpacity onPress={() => setMode('invite')} style={{ paddingVertical: 6 }}>
                                 <Text style={{ color: muted, fontFamily: 'DMSans_500Medium', fontSize: 14 }}>
-                                    Use invite code
+                                    {t('auth.useInviteCode')}
                                 </Text>
                             </TouchableOpacity>
                         )}
@@ -392,12 +393,12 @@ export default function Login() {
                     <TouchableOpacity
                         onPress={() =>
                             Alert.alert(
-                                'Locked Out?',
-                                'To reset your PIN, please contact your HR department.',
+                                t('auth.lockedOutTitle'),
+                                t('auth.lockedOutBody'),
                                 [
-                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: t('common.cancel'), style: 'cancel' },
                                     {
-                                        text: 'Email HR',
+                                        text: t('auth.emailHr'),
                                         onPress: () =>
                                             Linking.openURL(
                                                 `mailto:${hrEmail ?? ''}?subject=PIN%20Reset%20Request`
@@ -409,9 +410,9 @@ export default function Login() {
                         style={{ alignItems: 'center', marginTop: 20, paddingVertical: 8 }}
                     >
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted }}>
-                            Locked out?{' '}
+                            {t('auth.lockedOut')}{' '}
                             <Text style={{ color: primary, fontFamily: 'DMSans_700Bold' }}>
-                                Contact HR
+                                {t('auth.contactHr')}
                             </Text>
                         </Text>
                     </TouchableOpacity>

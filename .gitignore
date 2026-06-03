@@ -1,1 +1,38 @@
+# Secrets / env
+.env
+*.env
 backend/.env
+!**/.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output / caches
+dist/
+**/dist/
+.next/
+**/.next/
+.expo/
+**/.expo/
+coverage/
+**/coverage/
+
+# Generated analysis/docs output
+graphify-out/
+
+# Local credential-bearing dev/test fixtures (untracked; read secrets from env)
+_full_test_suite.py
+_setup_employees.py
+_debug_overtime.py
+_gather_test_data.py
+_check_redis_tenants.py
+_check_v16.py
+_find_v17_employees.py
+
+# Smoke/test output
+*_smoke_report.*
+backend/smoke-reports/
+backend/src/__tests__/smoke/credentials*.json
+!backend/src/__tests__/smoke/credentials.example.json
+backend/src/__tests__/smoke/*.local.*

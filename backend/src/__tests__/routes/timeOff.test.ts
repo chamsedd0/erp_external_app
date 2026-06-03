@@ -207,7 +207,7 @@ describe('POST /time-off', () => {
                 attachments: [{ name: 'doc.pdf', data: 'base64data==', mimetype: 'application/pdf' }],
             });
 
-        expect(mockClient.uploadAttachments).toHaveBeenCalledWith(1, expect.any(Array), 'hr.leave', 55);
+        expect(mockClient.uploadAttachments).toHaveBeenCalledWith(1, expect.any(Array), 'hr.leave', 55, expect.any(Object));
     });
 
     it('probe tries holiday_status_id when work_entry_type_id raises Invalid field', async () => {

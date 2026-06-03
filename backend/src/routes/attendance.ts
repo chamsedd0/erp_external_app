@@ -2,11 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
-import { attachmentSchema } from './helpdesk';
+import { attachmentsSchema } from '../lib/attachments';
 import { getLeaveTypeField } from './time_off';
-import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
 
 const router = Router();
 
@@ -32,7 +32,8 @@ const correctionSchema = z.object({
     check_in: z.string(),          // ISO datetime
     check_out: z.string().optional(),
     reason: z.string().optional(),
-    attachments: z.array(attachmentSchema).max(3).optional(),
+    custom_values: z.record(z.string(), z.any()).optional(),
+    attachments: attachmentsSchema,
 });
 
 const overtimeSchema = z.object({
@@ -40,6 +41,7 @@ const overtimeSchema = z.object({
     date: z.string(),              // YYYY-MM-DD
     duration: z.number().positive(),
     reason: z.string().optional(),
+    custom_values: z.record(z.string(), z.any()).optional(),
 });
 
 const justificationSchema = z.object({
@@ -48,7 +50,8 @@ const justificationSchema = z.object({
     date_from: z.string(),         // ISO date or datetime
     date_to: z.string(),
     justification: z.string().min(1, 'Justification text is required'),
-    attachments: z.array(attachmentSchema).max(3).optional(),
+    custom_values: z.record(z.string(), z.any()).optional(),
+    attachments: attachmentsSchema,
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -146,6 +149,27 @@ router.get('/overtime', async (req, res) => {
     }
 });
 
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        const empty = { custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null };
+        const [correction, overtime, justification] = await Promise.all([
+            getCustomFieldReport(tenantId, client, uid, 'hr.attendance').catch(() => empty),
+            getCustomFieldReport(tenantId, client, uid, 'hr.attendance.overtime').catch(() => empty),
+            getCustomFieldReport(tenantId, client, uid, 'hr.leave').catch(() => empty),
+        ]);
+        res.json({ correction, overtime, justification });
+    } catch (error: any) {
+        console.error('Fetch Attendance Form Schema Error:', error);
+        const empty = { custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null };
+        res.json({ correction: empty, overtime: empty, justification: empty });
+    }
+});
+
 // POST /attendance/correction — create or correct an attendance check-in/out record
 router.post('/correction', async (req, res) => {
     try {
@@ -156,6 +180,7 @@ router.post('/correction', async (req, res) => {
 
         const body = { ...correctionSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
 
         const recordData: Record<string, any> = {
             employee_id: body.employee_id,
@@ -164,6 +189,15 @@ router.post('/correction', async (req, res) => {
 
         if (body.check_out) {
             recordData.check_out = toOdooDatetime(body.check_out);
+        }
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(recordData, body.custom_values);
+        }
+
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.attendance');
+        const missingCustom = validateRequiredCustomFields(customFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
         }
 
         // Pre-validate payload against live Odoo schema
@@ -178,7 +212,7 @@ router.post('/correction', async (req, res) => {
 
         let newId: number;
         try {
-            newId = await client.createRecord(uid, 'hr.attendance', recordData) as number;
+            newId = await client.createRecord(uid, 'hr.attendance', recordData, ctx) as number;
         } catch (createErr: any) {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
             if (msg.includes("doesn't exist") || msg.includes('does not exist') || msg.includes('object')) {
@@ -193,21 +227,28 @@ router.post('/correction', async (req, res) => {
                 await client.callMethod(uid, 'hr.attendance', 'message_post', [newId], {
                     body: `Correction reason: ${body.reason}`,
                     message_type: 'comment',
-                });
+                }, ctx);
             } catch {
                 // Chatter may not be accessible via XML-RPC — skip silently
             }
         }
 
+        let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await client.uploadAttachments(uid, body.attachments, 'hr.attendance', newId);
+                const result = await client.uploadAttachments(uid, body.attachments, 'hr.attendance', newId, ctx);
+                failedAttachments = result?.failed ?? [];
             } catch (e: any) {
                 console.error('Attendance attachment upload error:', e);
+                failedAttachments = body.attachments.map(a => a.name);
             }
         }
 
-        res.json({ status: 'success', id: newId });
+        res.json({
+            status: 'success',
+            id: newId,
+            ...(failedAttachments.length > 0 ? { partial_success: true, failed_attachments: failedAttachments } : {}),
+        });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });
@@ -233,12 +274,22 @@ router.post('/overtime', async (req, res) => {
                 message: 'Overtime requests require Odoo 16+. This feature is not available on your Odoo instance.',
             });
         }
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
 
         // Probe which duration field name is used on this instance
         const recordData: Record<string, any> = {
             employee_id: body.employee_id,
             date: body.date,
         };
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(recordData, body.custom_values);
+        }
+
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.attendance.overtime');
+        const missingCustom = validateRequiredCustomFields(customFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
 
         // Pre-validate base payload against live Odoo schema
         const overtimeValidation = await validatePayload(tenantId, client, uid, 'hr.attendance.overtime', recordData);
@@ -256,13 +307,13 @@ router.post('/overtime', async (req, res) => {
             newId = await client.createRecord(uid, 'hr.attendance.overtime', {
                 ...recordData,
                 duration: body.duration,
-            }) as number;
+            }, ctx) as number;
         } catch (err: any) {
             const msg = String(err?.faultString || err?.message || '').toLowerCase();
             if (msg.includes('duration') || msg.includes('invalid field')) {
                 // Retry without duration — at minimum log the request
                 console.warn('[attendance] overtime duration field rejected:', msg);
-                newId = await client.createRecord(uid, 'hr.attendance.overtime', recordData) as number;
+                newId = await client.createRecord(uid, 'hr.attendance.overtime', recordData, ctx) as number;
             } else {
                 throw err;
             }
@@ -274,7 +325,7 @@ router.post('/overtime', async (req, res) => {
                 await client.callMethod(uid, 'hr.attendance.overtime', 'message_post', [newId], {
                     body: `Overtime reason: ${body.reason}`,
                     message_type: 'comment',
-                });
+                }, ctx);
             } catch {
                 // Skip silently
             }
@@ -299,6 +350,7 @@ router.post('/justification', async (req, res) => {
 
         const body = { ...justificationSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
 
         // Detect the correct leave type field name for this Odoo version
         const leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
@@ -318,6 +370,15 @@ router.post('/justification', async (req, res) => {
             request_date_from: formatDate(body.date_from),
             request_date_to: formatDate(body.date_to),
         };
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(payload, body.custom_values);
+        }
+
+        const customFields = await getCustomFields(tenantId, client, uid, 'hr.leave');
+        const missingCustom = validateRequiredCustomFields(customFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
 
         // Pre-validate payload against live Odoo schema
         const justificationValidation = await validatePayload(tenantId, client, uid, 'hr.leave', payload);
@@ -331,7 +392,7 @@ router.post('/justification', async (req, res) => {
 
         let newId: number;
         try {
-            newId = await client.createRecord(uid, 'hr.leave', payload) as number;
+            newId = await client.createRecord(uid, 'hr.leave', payload, ctx) as number;
         } catch (err: any) {
             const msg = String(err?.faultString || err?.message || '').toLowerCase();
             if (msg.includes('keyerror') || msg.includes('invalid field')) {
@@ -340,21 +401,28 @@ router.post('/justification', async (req, res) => {
                 // (guard handles the case where leaveTypeField is already holiday_status_id)
                 delete payload[leaveTypeField];
                 payload['holiday_status_id'] = body.leave_type_id;
-                newId = await client.createRecord(uid, 'hr.leave', payload) as number;
+                newId = await client.createRecord(uid, 'hr.leave', payload, ctx) as number;
             } else {
                 throw err;
             }
         }
 
+        let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await client.uploadAttachments(uid, body.attachments, 'hr.leave', newId);
+                const result = await client.uploadAttachments(uid, body.attachments, 'hr.leave', newId, ctx);
+                failedAttachments = result?.failed ?? [];
             } catch (e: any) {
                 console.error('Justification attachment upload error:', e);
+                failedAttachments = body.attachments.map(a => a.name);
             }
         }
 
-        res.json({ status: 'success', id: newId });
+        res.json({
+            status: 'success',
+            id: newId,
+            ...(failedAttachments.length > 0 ? { partial_success: true, failed_attachments: failedAttachments } : {}),
+        });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });

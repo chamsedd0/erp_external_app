@@ -13,6 +13,10 @@ import { redisGet, redisScan } from '../lib/redis';
 import { getAuthenticatedEmployee } from '../lib/authContext';
 import { portalAuthStore } from '../lib/portalAuthStore';
 import { getTenantBillingSnapshot } from '../lib/billing';
+import { clearModelSchemaCache, getCustomFieldReport } from '../lib/schemaCache';
+import { logAdminEvent } from '../lib/adminAuditStore';
+import { runTenantCertification } from '../lib/certificationRunner';
+import { certificationStore } from '../lib/certificationStore';
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
@@ -509,6 +513,7 @@ adminRouter.post('/tenants', async (req, res) => {
         });
         await tenantStore.saveTenant(slug, cfg);
         clearOdooClientCache(slug);
+        await logAdminEvent({ action: existing ? 'tenant.updated_via_create' : 'tenant.created', tenantId: slug, details: { status: cfg.subscription_status, plan: cfg.subscription_plan } });
         res.json({ success: true, slug, subscription_number: cfg.subscription_number || undefined });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
@@ -568,6 +573,7 @@ adminRouter.put('/tenants/:slug', async (req, res) => {
         });
         await tenantStore.saveTenant(req.params.slug, merged);
         clearOdooClientCache(req.params.slug);
+        await logAdminEvent({ action: 'tenant.updated', tenantId: req.params.slug, details: { changed_fields: Object.keys(cleanUpdates) } });
         const plan = await planStore.getPlan(merged.subscription_plan).catch(() => null);
         res.json({ success: true, tenant: await safeTenantWithBilling(req.params.slug, merged, plan) });
     } catch (error: any) {
@@ -591,10 +597,12 @@ adminRouter.delete('/tenants/:slug', async (req, res) => {
             });
             await tenantStore.saveTenant(req.params.slug, archived);
             clearOdooClientCache(req.params.slug);
+            await logAdminEvent({ action: 'tenant.archived', tenantId: req.params.slug, details: { subscription_number: existing.subscription_number } });
             return res.json({ success: true, archived: true });
         }
         await tenantStore.deleteTenant(req.params.slug);
         clearOdooClientCache(req.params.slug);
+        await logAdminEvent({ action: 'tenant.deleted', tenantId: req.params.slug });
         res.json({ success: true, deleted: true });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -872,6 +880,115 @@ adminRouter.post('/tenants/:slug/send-quotation', async (req, res) => {
 });
 
 // ── POST /admin/tenants/:slug/activate — set status to trial, generate SP# ────
+// ── Tenant certification ─────────────────────────────────────────────────────
+const certificationEmployeeSchema = z.object({
+    label: z.string().max(80).optional(),
+    identifier: z.string().min(1),
+    pin: z.string().optional(),
+    work_email: z.string().email().optional(),
+    login_method: z.enum(['barcode_pin', 'employee_id_pin', 'work_email_pin', 'activation_invite']),
+});
+
+const certificationRunSchema = z.object({
+    mode: z.enum(['safe', 'write']).default('safe'),
+    employees: z.array(certificationEmployeeSchema).min(1).max(3),
+    options: z.object({
+        include_attachments: z.boolean().optional(),
+        include_wrong_company_tests: z.boolean().optional(),
+        include_optional_modules: z.boolean().optional(),
+    }).optional(),
+});
+
+const certificationOverrideSchema = z.object({
+    run_id: z.string().min(1),
+    note: z.string().min(10),
+});
+
+adminRouter.post('/tenants/:slug/certification/run', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+
+        const body = certificationRunSchema.parse(req.body);
+        await logAdminEvent({
+            action: 'certification.started',
+            tenantId: req.params.slug,
+            details: { mode: body.mode, employee_count: body.employees.length },
+        });
+
+        const run = await runTenantCertification(req.params.slug, cfg, body);
+        await certificationStore.saveRun(run);
+        await logAdminEvent({
+            action: run.status === 'fail' ? 'certification.failed' : 'certification.completed',
+            tenantId: req.params.slug,
+            details: { run_id: run.id, mode: run.mode, status: run.status, summary: run.summary },
+        });
+        res.json(run);
+    } catch (error: any) {
+        if (error instanceof z.ZodError)
+            return res.status(400).json({ error: 'Invalid input', details: error.issues });
+        await logAdminEvent({
+            action: 'certification.failed',
+            tenantId: req.params.slug,
+            details: { error: String(error?.message ?? error) },
+        });
+        res.status(error.statusCode ?? 500).json({ error: error.message });
+    }
+});
+
+adminRouter.get('/tenants/:slug/certification/latest', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        res.json({ run: await certificationStore.getLatest(req.params.slug) });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+adminRouter.get('/tenants/:slug/certification/runs', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        res.json({ runs: await certificationStore.listRuns(req.params.slug) });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+adminRouter.post('/tenants/:slug/certification/override', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const body = certificationOverrideSchema.parse(req.body);
+        const run = await certificationStore.getRun(req.params.slug, body.run_id);
+        if (!run) return res.status(404).json({ error: 'Certification run not found' });
+        const override = await certificationStore.saveOverride(req.params.slug, body.run_id, body.note);
+        await logAdminEvent({
+            action: 'certification.override_approved',
+            tenantId: req.params.slug,
+            details: { run_id: body.run_id, note: body.note },
+        });
+        res.json({ success: true, override });
+    } catch (error: any) {
+        if (error instanceof z.ZodError)
+            return res.status(400).json({ error: 'Invalid input', details: error.issues });
+        res.status(error.statusCode ?? 500).json({ error: error.message });
+    }
+});
+
+adminRouter.get('/tenants/:slug/certification/:runId', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+        const run = await certificationStore.getRun(req.params.slug, req.params.runId);
+        if (!run) return res.status(404).json({ error: 'Certification run not found' });
+        res.json(run);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const activateSchema = z.object({
     subscription_start: z.string().optional(),
     subscription_renewal: z.string().optional(),
@@ -883,6 +1000,23 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
         if (!existing) return res.status(404).json({ error: 'Tenant not found' });
 
         const data = activateSchema.parse(req.body);
+
+        const requiresCertificationGate = existing.subscription_status === 'draft' || !existing.subscription_number;
+        if (requiresCertificationGate) {
+            const latestCertification = await certificationStore.getLatest(req.params.slug);
+            if (!latestCertification) {
+                return res.status(422).json({ error: 'Tenant activation requires a PASS or WARN certification run.' });
+            }
+            if (latestCertification.status === 'fail') {
+                const override = await certificationStore.getOverride(req.params.slug, latestCertification.id);
+                if (!override) {
+                    return res.status(422).json({
+                        error: 'Latest certification failed. Activation requires a force-approval override note.',
+                        run_id: latestCertification.id,
+                    });
+                }
+            }
+        }
 
         const today = new Date().toISOString().split('T')[0];
         const start = data.subscription_start || existing.subscription_start || today;
@@ -913,6 +1047,7 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
             return assigned;
         });
         clearOdooClientCache(req.params.slug);
+        await logAdminEvent({ action: 'tenant.activated', tenantId: req.params.slug, details: { subscription_number: subNum } });
         res.json({ success: true, subscription_number: subNum });
     } catch (error: any) {
         if (error instanceof z.ZodError)
@@ -922,6 +1057,91 @@ adminRouter.post('/tenants/:slug/activate', async (req, res) => {
 });
 
 // ── GET /admin/stats — platform-wide metrics ──────────────────────────────────
+const diagnosticModels = [
+    'hr.expense',
+    'maintenance.request',
+    'helpdesk.ticket',
+    'account.analytic.line',
+    'hr.leave',
+    'hr.attendance',
+    'hr.attendance.overtime',
+];
+
+const schemaRefreshSchema = z.object({
+    model: z.string().optional(),
+});
+
+adminRouter.get('/tenants/:slug/diagnostics', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+
+        const client = getOdooClient(req.params.slug, cfg);
+        const diagnostics: Record<string, any> = {
+            tenant: req.params.slug,
+            odoo: { ok: false },
+            schemas: {},
+            monitor: null,
+        };
+
+        let uid = 0;
+        try {
+            const started = Date.now();
+            uid = await client.authenticate();
+            const version = await client.getVersion().catch(() => null);
+            diagnostics.odoo = { ok: true, version, latency_ms: Date.now() - started };
+        } catch (error: any) {
+            diagnostics.odoo = { ok: false, error: error.message };
+        }
+
+        if (uid) {
+            for (const model of diagnosticModels) {
+                diagnostics.schemas[model] = await getCustomFieldReport(req.params.slug, client, uid, model)
+                    .catch((error: any) => ({
+                        custom_fields: {},
+                        schema_available: false,
+                        unsupported_fields: {},
+                        unsupported_required_fields: {},
+                        schema_cached_at: null,
+                        error: error.message,
+                    }));
+            }
+        }
+
+        diagnostics.monitor = await redisGet(`shadow:t:${req.params.slug}:monitor_status`).catch(() => null);
+        if (typeof diagnostics.monitor === 'string') {
+            try {
+                diagnostics.monitor = JSON.parse(diagnostics.monitor);
+            } catch {
+                diagnostics.monitor = null;
+            }
+        }
+
+        res.json(diagnostics);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+adminRouter.post('/tenants/:slug/schema-cache/refresh', async (req, res) => {
+    try {
+        const cfg = await tenantStore.getTenant(req.params.slug);
+        if (!cfg) return res.status(404).json({ error: 'Tenant not found' });
+
+        const body = schemaRefreshSchema.parse(req.body ?? {});
+        const models = body.model ? [body.model] : diagnosticModels;
+        await Promise.all(models.map(model => clearModelSchemaCache(req.params.slug, model)));
+        await logAdminEvent({ action: 'schema_cache.refreshed', tenantId: req.params.slug, details: { models } });
+
+        res.json({ success: true, refreshed_models: models, refreshed_at: new Date().toISOString() });
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input', details: error.issues });
+        }
+        res.status(500).json({ error: error.message });
+    }
+});
+
 adminRouter.get('/stats', async (_req, res) => {
     try {
         const tenants = await tenantStore.listTenants();

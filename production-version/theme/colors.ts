@@ -85,6 +85,10 @@ export const lightColors = {
   semanticWarning: semantic.warning,
   semanticError: semantic.error,
   semanticInfo: semantic.info,
+
+  // Direct color aliases used by primitive components
+  red: semantic.error,
+  green: semantic.success,
 };
 
 export const darkColors = {
@@ -129,6 +133,10 @@ export const darkColors = {
   semanticWarning: semantic.warning,
   semanticError: semantic.error,
   semanticInfo: semantic.info,
+
+  // Direct color aliases used by primitive components
+  red: semantic.error,
+  green: semantic.success,
 };
 
 export const Colors = {

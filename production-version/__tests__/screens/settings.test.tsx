@@ -25,7 +25,7 @@ beforeEach(() => jest.clearAllMocks());
 // ─── Push token management ────────────────────────────────────────────────────
 
 describe('Push token — deletePushToken', () => {
-    it('sends DELETE to /auth/push-token with employee_id and tenant_slug', async () => {
+    it('sends DELETE to /auth/push-token with employee_id and tenant_code', async () => {
         mockFetch(true, { success: true });
 
         await apiClient.deletePushToken(42, 'testcorp');
@@ -34,7 +34,7 @@ describe('Push token — deletePushToken', () => {
             `${API_URL}/auth/push-token`,
             expect.objectContaining({
                 method: 'DELETE',
-                body: JSON.stringify({ employee_id: 42, tenant_slug: 'testcorp' }),
+                body: JSON.stringify({ employee_id: 42, tenant_code: 'testcorp' }),
             })
         );
     });
@@ -56,7 +56,7 @@ describe('Push token — savePushToken', () => {
         const body = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
         expect(body.employee_id).toBe(42);
         expect(body.token).toBe('ExponentPushToken[abc123]');
-        expect(body.tenant_slug).toBe('testcorp');
+        expect(body.tenant_code).toBe('testcorp');
     });
 });
 

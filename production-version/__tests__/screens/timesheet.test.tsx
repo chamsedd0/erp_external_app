@@ -42,7 +42,7 @@ describe('apiClient.getTimesheetEntries', () => {
 
     it('throws on server error', async () => {
         mockFetch(false, { error: 'Odoo error' }, 500);
-        await expect(apiClient.getTimesheetEntries(42)).rejects.toThrow('Odoo error');
+        await expect(apiClient.getTimesheetEntries(42)).rejects.toThrow('Something went wrong on the server. Please try again or contact your administrator.');
     });
 });
 
@@ -145,7 +145,7 @@ describe('apiClient.createTimesheetEntry', () => {
 
     it('throws on Odoo error', async () => {
         mockFetch(false, { error: 'Internal error' }, 500);
-        await expect(apiClient.createTimesheetEntry(VALID_ENTRY)).rejects.toThrow('Internal error');
+        await expect(apiClient.createTimesheetEntry(VALID_ENTRY)).rejects.toThrow('Server error. Please try again in a moment.');
     });
 });
 

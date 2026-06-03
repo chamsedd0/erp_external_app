@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 import { useToast } from '../../providers/toast-context';
+import { t } from '../../lib/i18n';
 
 interface Notification {
     id: string;
@@ -121,11 +122,16 @@ export default function Notifications() {
         }
 
         if (hours < 48 && now.getDate() - date.getDate() === 1) {
-            return 'Yesterday';
+            return t('notificationsScreen.yesterday');
         }
 
         return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
+
+    const groupLabel = (key: string) =>
+        key === 'Today' ? t('notificationsScreen.today')
+            : key === 'Yesterday' ? t('notificationsScreen.yesterday')
+                : t('notificationsScreen.earlier');
 
     const groupNotifications = (notifs: Notification[]) => {
         const groups: { [key: string]: Notification[] } = {};
@@ -173,10 +179,10 @@ export default function Notifications() {
                 {/* Header */}
                 <View style={{ marginBottom: 24, marginTop: 10, paddingHorizontal: 4 }}>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: text, marginBottom: 4 }}>
-                        Inbox
+                        {t('notificationsScreen.inbox')}
                     </Text>
                     <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>
-                        {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
+                        {t('notificationsScreen.unread', { count: unreadCount })}
                     </Text>
                 </View>
 
@@ -187,9 +193,9 @@ export default function Notifications() {
                 ) : notifications.length === 0 ? (
                     <View style={{ paddingVertical: 100, alignItems: 'center', opacity: 0.5 }}>
                         <Bell size={64} color={muted} />
-                        <Text style={{ marginTop: 20, fontFamily: 'DMSans_500Medium', fontSize: 18, color: text }}>No notifications</Text>
+                        <Text style={{ marginTop: 20, fontFamily: 'DMSans_500Medium', fontSize: 18, color: text }}>{t('notificationsScreen.noNotifications')}</Text>
                         <Text style={{ marginTop: 8, fontFamily: 'DMSans_400Regular', color: muted, textAlign: 'center', maxWidth: 250 }}>
-                            You&apos;re all caught up! Updates on your requests will appear here.
+                            {t('notificationsScreen.caughtUp')}
                         </Text>
                     </View>
                 ) : (
@@ -205,7 +211,7 @@ export default function Notifications() {
                                     letterSpacing: 1,
                                     paddingHorizontal: 4
                                 }}>
-                                    {date}
+                                    {groupLabel(date)}
                                 </Text>
                                 <View style={{ backgroundColor: cardColor, borderRadius: 24, overflow: 'hidden' }}>
                                     {items.map((item, index) => (

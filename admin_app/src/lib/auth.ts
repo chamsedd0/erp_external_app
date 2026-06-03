@@ -23,4 +23,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         strategy: 'jwt',
         maxAge: 8 * 60 * 60, // 8 hours
     },
+    callbacks: {
+        // Drives middleware-based protection in NextAuth v5: any matched route
+        // is only allowed when there is an active session. Unauthenticated
+        // requests are redirected to the signIn page by the middleware.
+        authorized: ({ auth }) => !!auth,
+    },
 });

@@ -57,7 +57,8 @@
           "photosPermission": "Allow Shadow Portal to access your photos for attaching to requests."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,

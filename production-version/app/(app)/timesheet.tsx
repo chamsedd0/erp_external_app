@@ -9,7 +9,10 @@ import { Timer, ChevronLeft, Clock, Briefcase, ListChecks, PlusCircle } from 'lu
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
 import { useToast } from '../../providers/toast-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { SearchableSelect } from '../../components/ui/searchable-select';
+import { t } from '../../lib/i18n';
+import { DynamicFields, type OdooFieldDef } from '../../components/DynamicFields';
 
 type TabState = 'log' | 'history';
 
@@ -17,6 +20,7 @@ export default function Timesheet() {
     const { user } = useSession();
     const toast = useToast();
     const router = useRouter();
+    const navigation = useNavigation();
 
     const [activeTab, setActiveTab] = useState<TabState>('log');
     const [loading, setLoading] = useState(false);
@@ -45,6 +49,8 @@ export default function Timesheet() {
     const [hours, setHours] = useState('');
     const [description, setDescription] = useState('');
     const [tasksLoading, setTasksLoading] = useState(false);
+    const [customFields, setCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [customValues, setCustomValues] = useState<Record<string, any>>({});
 
     // ── Animation ─────────────────────────────────────────────────────────────
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -57,6 +63,34 @@ export default function Timesheet() {
         ]).start();
     }, []);
 
+    useEffect(() => {
+        navigation.setOptions({ tabBarStyle: { display: 'none' } });
+
+        return () => {
+            navigation.setOptions({
+                tabBarStyle: {
+                    position: 'absolute',
+                    bottom: 0,
+                    borderWidth: 0.1,
+                    borderColor: 'rgba(255, 255, 255, 0.28)',
+                    height: 115,
+                    borderTopLeftRadius: 32,
+                    borderTopRightRadius: 32,
+                    backgroundColor: cardColor,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 20,
+                    elevation: 10,
+                    paddingBottom: 0,
+                    paddingTop: 15,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                },
+            });
+        };
+    }, [navigation, cardColor]);
+
     useFocusEffect(
         useCallback(() => {
             fetchInitialData();
@@ -66,10 +100,12 @@ export default function Timesheet() {
     const fetchInitialData = async () => {
         setDataLoading(true);
         try {
-            const [projectsData] = await Promise.all([
+            const [projectsData, schemaData] = await Promise.all([
                 apiClient.getProjects(),
+                apiClient.getTimesheetFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
             ]);
             setProjects(projectsData.projects || []);
+            setCustomFields((schemaData as any).custom_fields || {});
         } catch (error) {
             toast.error('Failed to load projects. Please try again.');
         } finally {
@@ -150,6 +186,7 @@ export default function Timesheet() {
                 date: date.toISOString().split('T')[0],
                 unit_amount: parsedHours,
                 name: description.trim(),
+                custom_values: Object.keys(customValues).length > 0 ? customValues : undefined,
             });
             toast.success('Timesheet entry logged!');
             // Reset form
@@ -158,6 +195,7 @@ export default function Timesheet() {
             setDate(null);
             setHours('');
             setDescription('');
+            setCustomValues({});
             setTasks([]);
             // Refresh history if it's been loaded
             if (history.length > 0) fetchHistory();
@@ -222,7 +260,7 @@ export default function Timesheet() {
                         fontSize: 15,
                         color: activeTab === tab ? '#fff' : muted,
                     }}>
-                        {tab === 'log' ? 'Log Hours' : 'History'}
+                        {tab === 'log' ? t('timesheet.logHours') : t('timesheet.history')}
                     </Text>
                 </TouchableOpacity>
             ))}
@@ -233,97 +271,36 @@ export default function Timesheet() {
         <View style={{ gap: 28 }}>
             {/* Project Selector */}
             <View style={{ gap: 14 }}>
-                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Project</Text>
-                {dataLoading ? (
-                    <View style={{ height: 56, alignItems: 'center', justifyContent: 'center' }}>
-                        <ActivityIndicator size="small" color={muted} />
-                    </View>
-                ) : projects.length === 0 ? (
-                    <View style={{ padding: 20, backgroundColor: cardColor, borderRadius: 20, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', color: muted, fontSize: 15 }}>No active projects found</Text>
-                    </View>
-                ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                        {projects.map((proj: any) => (
-                            <TouchableOpacity
-                                key={proj.id}
-                                onPress={() => handleProjectSelect(proj.id)}
-                                activeOpacity={0.7}
-                                style={{
-                                    backgroundColor: projectId === proj.id ? 'transparent' : cardColor,
-                                    paddingHorizontal: 20,
-                                    paddingVertical: 14,
-                                    borderRadius: 16,
-                                    borderWidth: 1,
-                                    borderColor: projectId === proj.id ? semanticSuccess : 'transparent',
-                                    shadowColor: projectId === proj.id ? semanticSuccess : '#000',
-                                    shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: projectId === proj.id ? 0.3 : 0.03,
-                                    shadowRadius: 8,
-                                    elevation: projectId === proj.id ? 4 : 2,
-                                    minWidth: 100,
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Text style={{
-                                    fontFamily: 'DMSans_700Bold',
-                                    fontSize: 15,
-                                    color: projectId === proj.id ? semanticSuccess : text,
-                                }}>
-                                    {proj.name}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                )}
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('timesheet.project')}</Text>
+                <SearchableSelect
+                    options={projects.map((p: any) => ({ id: p.id, name: p.name }))}
+                    value={projectId}
+                    onChange={(id) => {
+                        if (id == null) { setProjectId(null); setTaskId(null); setTasks([]); }
+                        else handleProjectSelect(Number(id));
+                    }}
+                    loading={dataLoading}
+                    placeholder={t('common.select')}
+                    searchPlaceholder={t('common.search')}
+                    label={t('timesheet.project')}
+                    accent={semanticSuccess}
+                />
             </View>
 
             {/* Task Selector — only visible after a project is selected */}
             {projectId !== null && (
                 <View style={{ gap: 14 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Task (Optional)</Text>
-                    {tasksLoading ? (
-                        <View style={{ height: 56, alignItems: 'center', justifyContent: 'center' }}>
-                            <ActivityIndicator size="small" color={muted} />
-                        </View>
-                    ) : tasks.length === 0 ? (
-                        <View style={{ padding: 14, backgroundColor: cardColor, borderRadius: 16, alignItems: 'center' }}>
-                            <Text style={{ fontFamily: 'DMSans_400Regular', color: muted, fontSize: 14 }}>No tasks for this project</Text>
-                        </View>
-                    ) : (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                            {tasks.map((task: any) => (
-                                <TouchableOpacity
-                                    key={task.id}
-                                    onPress={() => setTaskId(taskId === task.id ? null : task.id)}
-                                    activeOpacity={0.7}
-                                    style={{
-                                        backgroundColor: taskId === task.id ? 'transparent' : cardColor,
-                                        paddingHorizontal: 18,
-                                        paddingVertical: 12,
-                                        borderRadius: 14,
-                                        borderWidth: 1,
-                                        borderColor: taskId === task.id ? semanticInfo : 'transparent',
-                                        shadowColor: taskId === task.id ? semanticInfo : '#000',
-                                        shadowOffset: { width: 0, height: 3 },
-                                        shadowOpacity: taskId === task.id ? 0.25 : 0.03,
-                                        shadowRadius: 6,
-                                        elevation: taskId === task.id ? 3 : 1,
-                                        minWidth: 90,
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <Text style={{
-                                        fontFamily: 'DMSans_500Medium',
-                                        fontSize: 14,
-                                        color: taskId === task.id ? semanticInfo : text,
-                                    }}>
-                                        {task.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    )}
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('timesheet.task')} ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={tasks.map((task: any) => ({ id: task.id, name: task.name }))}
+                        value={taskId}
+                        onChange={(id) => setTaskId(id as number | null)}
+                        loading={tasksLoading}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('timesheet.task')}
+                        accent={semanticInfo}
+                    />
                 </View>
             )}
 
@@ -354,7 +331,7 @@ export default function Timesheet() {
 
                     {/* Hours — hero big input */}
                     <View style={{ gap: 10 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Hours Worked</Text>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>{t('timesheet.hoursWorked')}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={{
                                 width: 48, height: 48, borderRadius: 16,
@@ -390,7 +367,7 @@ export default function Timesheet() {
 
             {/* Description */}
             <View style={{ gap: 14 }}>
-                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Work Description</Text>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('timesheet.workDescription')}</Text>
                 <Input
                     placeholder="What did you work on?"
                     value={description}
@@ -413,6 +390,16 @@ export default function Timesheet() {
                 />
             </View>
 
+            {Object.keys(customFields).length > 0 && (
+                <DynamicFields
+                    sourceModel="account.analytic.line"
+                    fields={customFields}
+                    values={customValues}
+                    onChange={(name, value) => setCustomValues(prev => ({ ...prev, [name]: value }))}
+                    accent={semanticSuccess}
+                />
+            )}
+
             {/* Submit */}
             <Button
                 size="lg"
@@ -432,7 +419,7 @@ export default function Timesheet() {
             >
                 {loading
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>Log Hours</Text>
+                    : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>{t('timesheet.logHours')}</Text>
                 }
             </Button>
         </View>
@@ -560,7 +547,7 @@ export default function Timesheet() {
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: background }}
-            contentContainerStyle={{ padding: 24, paddingBottom: 180, paddingTop: 24 }}
+            contentContainerStyle={{ padding: 24, paddingBottom: 40, paddingTop: 24 }}
             refreshControl={
                 activeTab === 'history'
                     ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -584,8 +571,8 @@ export default function Timesheet() {
                         <Timer size={26} color={semanticSuccess} />
                     </View>
                     <View>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 30, color: text }}>Timesheet</Text>
-                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: muted }}>Log and view your hours</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 30, color: text }}>{t('timesheet.title')}</Text>
+                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: muted }}>{t('timesheet.subtitle')}</Text>
                     </View>
                 </View>
             </Animated.View>

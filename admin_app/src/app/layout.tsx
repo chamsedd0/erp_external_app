@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3001'),
     title: {
         template: '%s | Shadow Portal',
         default: 'Shadow Portal Admin',

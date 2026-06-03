@@ -1,6 +1,9 @@
-import xmlrpc.client, ssl
+import xmlrpc.client, ssl, os
 
 ctx = ssl._create_unverified_context()
+
+# Odoo admin password for the test tenants — read from env, never hardcode.
+ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "")
 
 tenants = [
     {
@@ -28,12 +31,12 @@ tenants = [
 for t in tenants:
     print(f"\n=== {t['slug']} ===")
     common = xmlrpc.client.ServerProxy(f"{t['url']}/xmlrpc/2/common", context=ctx)
-    uid = common.authenticate(t["db"], "admin", "123", {})
+    uid = common.authenticate(t["db"], "admin", ODOO_PASSWORD, {})
     models = xmlrpc.client.ServerProxy(f"{t['url']}/xmlrpc/2/object", context=ctx)
 
     for emp in t["employees"]:
         result = models.execute_kw(
-            t["db"], uid, "123",
+            t["db"], uid, ODOO_PASSWORD,
             "hr.employee", "write",
             [[emp["id"]], {"barcode": emp["barcode"], "pin": emp["pin"]}]
         )

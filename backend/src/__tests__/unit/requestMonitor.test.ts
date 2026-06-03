@@ -83,10 +83,11 @@ describe('requestMonitor — first run (no cache)', () => {
         expect(mockSendPush).not.toHaveBeenCalled();
 
         // Cache must be saved
-        expect(mockRedisSet).toHaveBeenCalledTimes(1);
+        expect(mockRedisSet).toHaveBeenCalledTimes(2);
         const cacheWritten = JSON.parse((mockRedisSet.mock.calls[0] as any)[1]);
         expect(cacheWritten).toHaveProperty('time_off_1');
         expect(cacheWritten).toHaveProperty('expense_5');
+        expect((mockRedisSet.mock.calls[1] as any)[0]).toBe(`shadow:t:${TENANT_ID}:monitor_status`);
     });
 });
 

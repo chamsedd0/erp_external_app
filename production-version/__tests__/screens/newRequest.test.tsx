@@ -101,7 +101,7 @@ describe('Time Off request creation', () => {
 
     it('throws on server error', async () => {
         mockFetch(false, { error: 'Invalid leave type' }, 400);
-        await expect(apiClient.createTimeOffRequest(VALID_PAYLOAD)).rejects.toThrow('Invalid leave type');
+        await expect(apiClient.createTimeOffRequest(VALID_PAYLOAD)).rejects.toThrow('Could not submit your time off request. Please check the dates and try again.');
     });
 });
 
@@ -215,7 +215,7 @@ describe('Maintenance request creation', () => {
 
     it('throws on server error', async () => {
         mockFetch(false, { error: 'Odoo error' }, 500);
-        await expect(apiClient.createMaintenanceRequest(VALID_REQUEST)).rejects.toThrow('Odoo error');
+        await expect(apiClient.createMaintenanceRequest(VALID_REQUEST)).rejects.toThrow('Something went wrong on the server. Please try again or contact your administrator.');
     });
 });
 

@@ -2,20 +2,17 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
-import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { attachmentSchema, attachmentsSchema } from '../lib/attachments';
 
 const router = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Shared attachment schema — used by helpdesk and maintenance */
-export const attachmentSchema = z.object({
-    name: z.string(),
-    data: z.string(),        // base64 encoded file content
-    mimetype: z.string(),    // e.g. 'image/jpeg', 'application/pdf'
-});
+export { attachmentSchema };
 
 /**
  * Runtime check: verify the helpdesk.ticket model is accessible.
@@ -44,7 +41,8 @@ const createHelpdeskSchema = z.object({
     partner_name: z.string().optional(),
     partner_email: z.string().email().optional(),
     partner_phone: z.string().optional(),
-    attachments: z.array(attachmentSchema).max(3).optional(),
+    custom_values: z.record(z.string(), z.any()).optional(), // tenant-specific x_ custom fields
+    attachments: attachmentsSchema,
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -200,6 +198,20 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await getCustomFieldReport(tenantId, client, uid, 'helpdesk.ticket'));
+    } catch (error: any) {
+        console.error('Fetch Helpdesk Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
+    }
+});
+
 router.post('/', async (req, res) => {
     try {
         const tenantId = (req as any).jwtPayload?.tenantId as string;
@@ -246,6 +258,16 @@ router.post('/', async (req, res) => {
         if (body.partner_name) ticketData.partner_name = body.partner_name;
         if (body.partner_email) ticketData.partner_email = body.partner_email;
         if (body.partner_phone) ticketData.partner_phone = body.partner_phone;
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(ticketData, body.custom_values);
+        }
+
+        // Enforce required custom fields up-front for a clear error message.
+        const hdCustomFields = await getCustomFields(tenantId, client, uid, 'helpdesk.ticket');
+        const missingCustom = validateRequiredCustomFields(hdCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
 
         // ticket_type_id and tag_ids may not exist on all Enterprise versions — retry without if rejected
         const optionalFields: Record<string, any> = {};
@@ -262,24 +284,32 @@ router.post('/', async (req, res) => {
             });
         }
 
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
         let newId: number;
         try {
-            newId = await client.createRecord(uid, 'helpdesk.ticket', { ...ticketData, ...optionalFields }) as number;
+            newId = await client.createRecord(uid, 'helpdesk.ticket', { ...ticketData, ...optionalFields }, ctx) as number;
         } catch (createErr: any) {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
             if (msg.includes('ticket_type_id') || msg.includes('tag_ids') || msg.includes('invalid field')) {
                 console.warn('[helpdesk] optional fields rejected, retrying without ticket_type_id/tag_ids:', msg);
-                newId = await client.createRecord(uid, 'helpdesk.ticket', ticketData) as number;
+                newId = await client.createRecord(uid, 'helpdesk.ticket', ticketData, ctx) as number;
             } else {
                 throw createErr;
             }
         }
 
+        let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {
-            await client.uploadAttachments(uid, body.attachments, 'helpdesk.ticket', newId);
+            const result = await client.uploadAttachments(uid, body.attachments, 'helpdesk.ticket', newId, ctx);
+            failedAttachments = result?.failed ?? [];
         }
 
-        res.json({ status: 'success', id: newId, available: true });
+        res.json({
+            status: 'success',
+            id: newId,
+            available: true,
+            ...(failedAttachments.length > 0 ? { partial_success: true, failed_attachments: failedAttachments } : {}),
+        });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });

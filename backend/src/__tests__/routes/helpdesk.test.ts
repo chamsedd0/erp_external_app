@@ -242,7 +242,7 @@ describe('POST /helpdesk', () => {
             });
 
         expect(mockClient.uploadAttachments).toHaveBeenCalledWith(
-            1, expect.any(Array), 'helpdesk.ticket', 203
+            1, expect.any(Array), 'helpdesk.ticket', 203, expect.any(Object)
         );
     });
 

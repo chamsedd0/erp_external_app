@@ -203,7 +203,8 @@ describe('POST /attendance/correction', () => {
 
         expect(mockClient.callMethod).toHaveBeenCalledWith(
             1, 'hr.attendance', 'message_post', [55],
-            expect.objectContaining({ body: expect.stringContaining('Forgot to clock in') })
+            expect.objectContaining({ body: expect.stringContaining('Forgot to clock in') }),
+            expect.any(Object)
         );
     });
 
@@ -260,7 +261,7 @@ describe('POST /attendance/correction', () => {
             });
 
         expect(mockClient.uploadAttachments).toHaveBeenCalledWith(
-            1, expect.any(Array), 'hr.attendance', 55
+            1, expect.any(Array), 'hr.attendance', 55, expect.any(Object)
         );
     });
 });
@@ -417,7 +418,7 @@ describe('POST /attendance/justification', () => {
                 attachments: [{ name: 'cert.pdf', data: 'base64==', mimetype: 'application/pdf' }],
             });
 
-        expect(mockClient.uploadAttachments).toHaveBeenCalledWith(1, expect.any(Array), 'hr.leave', 88);
+        expect(mockClient.uploadAttachments).toHaveBeenCalledWith(1, expect.any(Array), 'hr.leave', 88, expect.any(Object));
     });
 
     it('returns 400 when justification text is missing', async () => {

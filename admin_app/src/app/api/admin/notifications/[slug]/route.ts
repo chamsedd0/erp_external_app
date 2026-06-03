@@ -1,10 +1,13 @@
 import { api } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
+    const denied = await requireAdmin();
+    if (denied) return denied;
     const { slug } = await params;
     const url = new URL(req.url);
     const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);

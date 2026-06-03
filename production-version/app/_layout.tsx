@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import { loadStoredLang } from '../lib/i18n';
 import { ThemeProvider } from '../theme/theme-provider';
 import { SessionProvider, useSession } from '../providers/auth-context';
 import { ToastProvider } from '../providers/toast-context';
@@ -100,13 +101,21 @@ export default function RootLayout() {
         Outfit_700Bold,
     });
 
+    const [langLoaded, setLangLoaded] = useState(false);
+
+    useEffect(() => {
+        loadStoredLang().finally(() => setLangLoaded(true));
+    }, []);
+
+    const ready = fontsLoaded && langLoaded;
+
     const onLayoutRootView = useCallback(async () => {
-        if (fontsLoaded) {
+        if (ready) {
             await SplashScreen.hideAsync();
         }
-    }, [fontsLoaded]);
+    }, [ready]);
 
-    if (!fontsLoaded) {
+    if (!ready) {
         return null;
     }
 

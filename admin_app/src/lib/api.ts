@@ -1,4 +1,4 @@
-import type { Tenant, PlatformStats, TenantStats, HealthResult, TenantFormData, DeviceEntry, NotificationPage, SubscriptionPlan, ErrorLogEntry, ActivationEntry, InviteResult } from './types';
+import type { Tenant, PlatformStats, TenantStats, HealthResult, TenantFormData, DeviceEntry, NotificationPage, SubscriptionPlan, ErrorLogEntry, ActivationEntry, InviteResult, TenantDiagnostics, CertificationRun, CertificationRunRequest } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET ?? '';
@@ -63,6 +63,33 @@ export const api = {
 
     getTenantHealth: (slug: string): Promise<HealthResult> =>
         adminFetch(`/admin/tenants/${slug}/health`),
+
+    getTenantDiagnostics: (slug: string): Promise<TenantDiagnostics> =>
+        adminFetch(`/admin/tenants/${slug}/diagnostics`),
+
+    refreshTenantSchema: (slug: string, model?: string): Promise<{ success: boolean; refreshed_models: string[]; refreshed_at: string }> =>
+        adminFetch(`/admin/tenants/${slug}/schema-cache/refresh`, {
+            method: 'POST',
+            body: JSON.stringify(model ? { model } : {}),
+        }),
+
+    runCertification: (slug: string, data: CertificationRunRequest): Promise<CertificationRun> =>
+        adminFetch(`/admin/tenants/${slug}/certification/run`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    getLatestCertification: (slug: string): Promise<{ run: CertificationRun | null }> =>
+        adminFetch(`/admin/tenants/${slug}/certification/latest`),
+
+    listCertifications: (slug: string): Promise<{ runs: CertificationRun[] }> =>
+        adminFetch(`/admin/tenants/${slug}/certification/runs`),
+
+    overrideCertification: (slug: string, run_id: string, note: string): Promise<{ success: boolean }> =>
+        adminFetch(`/admin/tenants/${slug}/certification/override`, {
+            method: 'POST',
+            body: JSON.stringify({ run_id, note }),
+        }),
 
     getDevices: (slug: string): Promise<DeviceEntry[]> =>
         adminFetch(`/admin/tenants/${slug}/devices`),

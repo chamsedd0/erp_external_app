@@ -1,4 +1,6 @@
 import type { Request } from 'express';
+import { companyContext } from './odooCompatibility';
+import { assertEmployeeCanUseCompany } from './odooCompatibility';
 
 export interface JwtEmployeePayload {
     id?: number;
@@ -53,4 +55,62 @@ export function getAuthenticatedTenantId(req: Request): string {
         throw Object.assign(new Error('Authenticated tenant context required'), { statusCode: 401 });
     }
     return tenantId;
+}
+
+// ── Operating company + language (sent by the app as request headers) ──────────
+
+/** Active res.company chosen in the app's company switcher (X-Company-Id header). */
+export function getActiveCompanyId(req: Request): number | null {
+    const raw = req.headers['x-company-id'];
+    const parsed = Number.parseInt(Array.isArray(raw) ? raw[0] : String(raw ?? ''), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+const LANG_MAP: Record<string, string> = {
+    ar: 'ar_001',
+    en: 'en_US',
+};
+
+/** Odoo locale code derived from the X-Lang header (e.g. "ar" → "ar_001"). */
+export function getLang(req: Request): string | undefined {
+    const raw = req.headers['x-lang'];
+    const code = (Array.isArray(raw) ? raw[0] : raw)?.toString().trim().toLowerCase();
+    if (!code) return undefined;
+    return LANG_MAP[code] ?? (code.includes('_') ? code : undefined);
+}
+
+/**
+ * Combined Odoo context for a request: company scoping + UI language.
+ * Pass this into searchRead/createRecord so reads are company-scoped and
+ * Odoo-sourced labels come back localized.
+ */
+export function getOdooContext(req: Request): Record<string, any> {
+    const lang = getLang(req);
+    return {
+        ...companyContext(getActiveCompanyId(req)),
+        ...(lang ? { lang } : {}),
+    };
+}
+
+export async function buildOdooContext(
+    req: Request,
+    client: any,
+    uid: number,
+    employeeId?: number,
+): Promise<Record<string, any>> {
+    const lang = getLang(req);
+    let companyId = getActiveCompanyId(req);
+
+    if (employeeId) {
+        const result = await assertEmployeeCanUseCompany(client, uid, employeeId, companyId);
+        companyId = result.companyId;
+        if (result.fallback && companyId) {
+            console.warn('[odoo-context] employee company could not be resolved; validated selected company against integration user only');
+        }
+    }
+
+    return {
+        ...companyContext(companyId),
+        ...(lang ? { lang } : {}),
+    };
 }

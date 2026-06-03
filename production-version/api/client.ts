@@ -88,7 +88,11 @@ async function apiFetch<T = any>(
     path: string,
     options?: RequestInit
 ): Promise<T> {
-    const token = await AsyncStorage.getItem('user_token').catch(() => null);
+    const [token, companyId, lang] = await Promise.all([
+        AsyncStorage.getItem('user_token').catch(() => null),
+        AsyncStorage.getItem('operating_company_id').catch(() => null),
+        AsyncStorage.getItem('setting_language').catch(() => null),
+    ]);
 
     let response: Response;
     try {
@@ -97,6 +101,8 @@ async function apiFetch<T = any>(
             headers: {
                 'Content-Type': 'application/json',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(companyId ? { 'X-Company-Id': companyId } : {}),
+                ...(lang ? { 'X-Lang': lang } : {}),
                 ...(options?.headers as Record<string, string> || {}),
             },
         });
@@ -168,6 +174,25 @@ export const apiClient = {
             method: 'DELETE',
         }),
 
+    // ── Companies (operating-company switcher) ──────────────────────────────────
+
+    getCompanies: (): Promise<{
+        companies: { id: number; name: string; currency: { id: number; symbol: string; position: 'before' | 'after' } | null }[];
+        default_company_id: number | null;
+    }> => apiFetch('/companies'),
+
+    // Options for a dynamic many2one custom field. The relation target is
+    // resolved server-side from (source_model, field); supports name search.
+    getRelationOptions: (
+        sourceModel: string,
+        field: string,
+        search = '',
+    ): Promise<{ options: { id: number; name: string }[] }> =>
+        apiFetch(
+            `/options?source_model=${encodeURIComponent(sourceModel)}&field=${encodeURIComponent(field)}` +
+                (search ? `&search=${encodeURIComponent(search)}` : '')
+        ),
+
     // ── Time Off ──────────────────────────────────────────────────────────────
 
     getTimeOffTypes: () => apiFetch('/time-off/types'),
@@ -183,6 +208,7 @@ export const apiClient = {
         date_from: string;
         date_to: string;
         name?: string;
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/time-off', {
@@ -190,11 +216,20 @@ export const apiClient = {
             body: JSON.stringify(data),
         }),
 
+    getTimeOffFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
+        apiFetch('/time-off/form-schema'),
+
     // ── Expenses ──────────────────────────────────────────────────────────────
 
     getExpenseProducts: () => apiFetch('/expenses/products'),
 
     getExpenseTaxes: () => apiFetch('/expenses/taxes'),
+
+    getExpenseAnalyticAccounts: (): Promise<{ accounts: { id: number; name: string }[] }> =>
+        apiFetch('/expenses/analytic-accounts'),
+
+    getExpenseFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
+        apiFetch('/expenses/form-schema'),
 
     getExpenses: (employeeId: number) =>
         apiFetch(`/expenses?employee_id=${employeeId}`),
@@ -210,6 +245,8 @@ export const apiClient = {
         date: string;
         payment_mode?: 'own_account' | 'company_account';
         tax_ids?: number[];
+        analytic_account_id?: number;
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/expenses', {
@@ -234,11 +271,15 @@ export const apiClient = {
         date: string;
         unit_amount: number;
         name: string;
+        custom_values?: Record<string, any>;
     }) =>
         apiFetch('/timesheet', {
             method: 'POST',
             body: JSON.stringify(data),
         }),
+
+    getTimesheetFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
+        apiFetch('/timesheet/form-schema'),
 
     // ── IT Support / Helpdesk ─────────────────────────────────────────────────
 
@@ -253,6 +294,9 @@ export const apiClient = {
 
     getHelpdeskAgents: () => apiFetch('/helpdesk/agents'),
 
+    getHelpdeskFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
+        apiFetch('/helpdesk/form-schema'),
+
     createHelpdeskTicket: (data: {
         employee_id: number;
         name: string;
@@ -265,6 +309,7 @@ export const apiClient = {
         partner_name?: string;
         partner_email?: string;
         partner_phone?: string;
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/helpdesk', {
@@ -283,6 +328,9 @@ export const apiClient = {
 
     getMaintenanceTeams: () => apiFetch('/maintenance/teams'),
 
+    getMaintenanceFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
+        apiFetch('/maintenance/form-schema'),
+
     createMaintenanceRequest: (data: {
         employee_id: number;
         name: string;
@@ -292,8 +340,10 @@ export const apiClient = {
         equipment_id?: number;
         maintenance_team_id?: number;
         schedule_date?: string;
+        request_date?: string;
         duration?: number;
         priority?: '0' | '1' | '2' | '3';
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/maintenance', {
@@ -309,11 +359,19 @@ export const apiClient = {
     getAttendanceOvertime: (employeeId: number) =>
         apiFetch(`/attendance/overtime?employee_id=${employeeId}`),
 
+    getAttendanceFormSchema: (): Promise<{
+        correction: { custom_fields: Record<string, any> };
+        overtime: { custom_fields: Record<string, any> };
+        justification: { custom_fields: Record<string, any> };
+    }> =>
+        apiFetch('/attendance/form-schema'),
+
     createAttendanceCorrection: (data: {
         employee_id: number;
         check_in: string;
         check_out?: string;
         reason?: string;
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/attendance/correction', {
@@ -326,6 +384,7 @@ export const apiClient = {
         date: string;
         duration: number;
         reason?: string;
+        custom_values?: Record<string, any>;
     }) =>
         apiFetch('/attendance/overtime', {
             method: 'POST',
@@ -338,6 +397,7 @@ export const apiClient = {
         date_from: string;
         date_to: string;
         justification: string;
+        custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
         apiFetch('/attendance/justification', {

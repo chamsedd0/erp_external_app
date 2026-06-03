@@ -42,7 +42,7 @@ describe('apiClient.getNotifications', () => {
 
     it('throws on server error', async () => {
         mockFetch(false, { error: 'Internal Server Error' }, 500);
-        await expect(apiClient.getNotifications(42)).rejects.toThrow('Internal Server Error');
+        await expect(apiClient.getNotifications(42)).rejects.toThrow('Server error. Please try again in a moment.');
     });
 });
 
@@ -83,7 +83,7 @@ describe('apiClient.markAllNotificationsRead', () => {
 
     it('throws on server error', async () => {
         mockFetch(false, { error: 'Failed' }, 500);
-        await expect(apiClient.markAllNotificationsRead()).rejects.toThrow('Failed');
+        await expect(apiClient.markAllNotificationsRead()).rejects.toThrow('Server error. Please try again in a moment.');
     });
 });
 

@@ -7,6 +7,8 @@ import { getOdooClient } from '../../odoo/client';
 import { authHeader, SAMPLE_TENANT } from './helpers';
 
 import { notificationStore } from '../../lib/notificationStore';
+import { certificationStore } from '../../lib/certificationStore';
+import { runTenantCertification } from '../../lib/certificationRunner';
 
 // Preserve applyTenantDefaults (pure function) while mocking tenantStore methods
 jest.mock('../../lib/tenantStore', () => {
@@ -25,12 +27,16 @@ jest.mock('../../lib/tenantStore', () => {
 });
 jest.mock('../../lib/pushStore');
 jest.mock('../../lib/notificationStore');
+jest.mock('../../lib/certificationStore');
+jest.mock('../../lib/certificationRunner');
 jest.mock('../../odoo/client');
 
 const mockTenantStore = tenantStore as jest.Mocked<typeof tenantStore>;
 const mockGenerateSubscriptionNumber = generateSubscriptionNumber as jest.MockedFunction<typeof generateSubscriptionNumber>;
 const mockPushStore = pushStore as jest.Mocked<typeof pushStore>;
 const mockNotificationStore = notificationStore as jest.Mocked<typeof notificationStore>;
+const mockCertificationStore = certificationStore as jest.Mocked<typeof certificationStore>;
+const mockRunTenantCertification = runTenantCertification as jest.MockedFunction<typeof runTenantCertification>;
 const mockGetOdooClient = getOdooClient as jest.MockedFunction<typeof getOdooClient>;
 
 const TEST_JWT_SECRET = process.env.JWT_SECRET!;
@@ -52,6 +58,12 @@ beforeEach(() => {
     jest.clearAllMocks();
     mockGetOdooClient.mockReturnValue(MOCK_ODOO_CLIENT as any);
     mockGenerateSubscriptionNumber.mockResolvedValue('SP-00099');
+    mockCertificationStore.getLatest.mockResolvedValue(null);
+    mockCertificationStore.getOverride.mockResolvedValue(null);
+    mockCertificationStore.getRun.mockResolvedValue(null);
+    mockCertificationStore.listRuns.mockResolvedValue([]);
+    mockCertificationStore.saveRun.mockResolvedValue(undefined);
+    mockCertificationStore.saveOverride.mockResolvedValue({ run_id: 'run-1', note: 'approved risk', approved_at: '2026-01-01T00:00:00.000Z' });
 });
 
 // ─── POST /auth/login ──────────────────────────────────────────────────────────
@@ -500,6 +512,18 @@ describe('POST /admin/tenants/:slug/activate', () => {
     it('assigns a subscription number only during activation', async () => {
         mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_status: 'draft', subscription_number: '' });
         mockTenantStore.saveTenant.mockResolvedValue(undefined);
+        mockCertificationStore.getLatest.mockResolvedValue({
+            id: 'run-pass',
+            tenantId: 'testcorp',
+            mode: 'safe',
+            status: 'pass',
+            started_at: '2026-01-01T00:00:00.000Z',
+            finished_at: '2026-01-01T00:01:00.000Z',
+            summary: { passed: 1, warnings: 0, failed: 0, skipped: 0, blocking_failures: 0 },
+            employees: [],
+            scenarios: [],
+            sanitized_errors: [],
+        });
 
         const res = await request(app)
             .post('/admin/tenants/testcorp/activate')
@@ -530,6 +554,175 @@ describe('POST /admin/tenants/:slug/activate', () => {
         expect(res.status).toBe(200);
         expect(res.body.subscription_number).toBe('SP-00042');
         expect(mockGenerateSubscriptionNumber).not.toHaveBeenCalled();
+    });
+
+    it('blocks draft activation when certification is missing', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_status: 'draft', subscription_number: '' });
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/activate')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({});
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toContain('certification');
+        expect(mockTenantStore.saveTenant).not.toHaveBeenCalled();
+    });
+
+    it('blocks draft activation when latest certification failed without override', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_status: 'draft', subscription_number: '' });
+        mockCertificationStore.getLatest.mockResolvedValue({
+            id: 'run-fail',
+            tenantId: 'testcorp',
+            mode: 'safe',
+            status: 'fail',
+            started_at: '2026-01-01T00:00:00.000Z',
+            finished_at: '2026-01-01T00:01:00.000Z',
+            summary: { passed: 0, warnings: 0, failed: 1, skipped: 0, blocking_failures: 1 },
+            employees: [],
+            scenarios: [],
+            sanitized_errors: [],
+        });
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/activate')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({});
+
+        expect(res.status).toBe(422);
+        expect(res.body.run_id).toBe('run-fail');
+        expect(mockTenantStore.saveTenant).not.toHaveBeenCalled();
+    });
+
+    it('allows draft activation when failed certification has override', async () => {
+        mockTenantStore.getTenant.mockResolvedValue({ ...SAMPLE_TENANT, subscription_status: 'draft', subscription_number: '' });
+        mockTenantStore.saveTenant.mockResolvedValue(undefined);
+        mockCertificationStore.getLatest.mockResolvedValue({
+            id: 'run-fail',
+            tenantId: 'testcorp',
+            mode: 'safe',
+            status: 'fail',
+            started_at: '2026-01-01T00:00:00.000Z',
+            finished_at: '2026-01-01T00:01:00.000Z',
+            summary: { passed: 0, warnings: 0, failed: 1, skipped: 0, blocking_failures: 1 },
+            employees: [],
+            scenarios: [],
+            sanitized_errors: [],
+        });
+        mockCertificationStore.getOverride.mockResolvedValue({
+            run_id: 'run-fail',
+            note: 'Accepted risk for first rollout',
+            approved_at: '2026-01-01T00:02:00.000Z',
+        });
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/activate')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({});
+
+        expect(res.status).toBe(200);
+        expect(res.body.subscription_number).toBe('SP-00099');
+    });
+});
+
+describe('tenant certification admin endpoints', () => {
+    const PASS_RUN = {
+        id: 'run-1',
+        tenantId: 'testcorp',
+        mode: 'safe' as const,
+        status: 'pass' as const,
+        started_at: '2026-01-01T00:00:00.000Z',
+        finished_at: '2026-01-01T00:01:00.000Z',
+        summary: { passed: 4, warnings: 0, failed: 0, skipped: 0, blocking_failures: 0 },
+        employees: [{ label: 'Employee 1', employee_id: 42, login_ok: true, company_id: 1 }],
+        scenarios: [],
+        sanitized_errors: [],
+    };
+
+    it('rejects certification runs with zero employees', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/certification/run')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({ mode: 'safe', employees: [] });
+
+        expect(res.status).toBe(400);
+        expect(mockRunTenantCertification).not.toHaveBeenCalled();
+    });
+
+    it('rejects certification runs with more than three employees', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+
+        const employees = [1, 2, 3, 4].map(i => ({
+            label: `Employee ${i}`,
+            identifier: `EMP${i}`,
+            pin: '1234',
+            login_method: 'barcode_pin',
+        }));
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/certification/run')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({ mode: 'safe', employees });
+
+        expect(res.status).toBe(400);
+        expect(mockRunTenantCertification).not.toHaveBeenCalled();
+    });
+
+    it('runs certification and stores sanitized report', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockRunTenantCertification.mockResolvedValue(PASS_RUN as any);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/certification/run')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({
+                mode: 'safe',
+                employees: [{ identifier: 'EMP007', pin: '1234', login_method: 'barcode_pin' }],
+                options: { include_attachments: true },
+            });
+
+        expect(res.status).toBe(200);
+        expect(res.body.id).toBe('run-1');
+        expect(mockRunTenantCertification).toHaveBeenCalledWith('testcorp', SAMPLE_TENANT, expect.objectContaining({ mode: 'safe' }));
+        expect(mockCertificationStore.saveRun).toHaveBeenCalledWith(PASS_RUN);
+    });
+
+    it('returns latest certification report', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockCertificationStore.getLatest.mockResolvedValue(PASS_RUN as any);
+
+        const res = await request(app)
+            .get('/admin/tenants/testcorp/certification/latest')
+            .set('x-admin-secret', TEST_ADMIN_SECRET);
+
+        expect(res.status).toBe(200);
+        expect(res.body.run.id).toBe('run-1');
+    });
+
+    it('rejects override without a long enough note', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/certification/override')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({ run_id: 'run-1', note: 'short' });
+
+        expect(res.status).toBe(400);
+        expect(mockCertificationStore.saveOverride).not.toHaveBeenCalled();
+    });
+
+    it('stores override for an existing run', async () => {
+        mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
+        mockCertificationStore.getRun.mockResolvedValue({ ...PASS_RUN, status: 'fail' } as any);
+
+        const res = await request(app)
+            .post('/admin/tenants/testcorp/certification/override')
+            .set('x-admin-secret', TEST_ADMIN_SECRET)
+            .send({ run_id: 'run-1', note: 'Accepted risk for rollout' });
+
+        expect(res.status).toBe(200);
+        expect(mockCertificationStore.saveOverride).toHaveBeenCalledWith('testcorp', 'run-1', 'Accepted risk for rollout');
     });
 });
 

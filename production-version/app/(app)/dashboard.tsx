@@ -6,10 +6,12 @@ import { Plus, Clock, Calendar, DollarSign, Timer, Wrench, Monitor } from 'lucid
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiClient } from '../../api/client';
 import { useSession } from '../../providers/auth-context';
+import { t } from '../../lib/i18n';
+import { currencySymbol } from '../../lib/currency';
 
 export default function Dashboard() {
     const router = useRouter();
-    const { user } = useSession();
+    const { user, currency } = useSession();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -193,7 +195,7 @@ export default function Dashboard() {
                         {currentDate}
                     </Text>
                     <Text style={{ fontSize: 36, fontFamily: 'Outfit_700Bold', letterSpacing: -1, lineHeight: 42, color: text }}>
-                        Welcome back,{'\n'}{firstName}
+                        {t('dashboard.welcomeBack')}{'\n'}{firstName}
                     </Text>
                 </View>
                 <TouchableOpacity
@@ -233,22 +235,22 @@ export default function Dashboard() {
                                 <Clock size={20} color={semanticWarning} strokeWidth={2.5} />
                             </View>
                             <View style={{ backgroundColor: semanticWarning + '30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 }}>
-                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: semanticWarning }}>Priority</Text>
+                                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: semanticWarning }}>{t('dashboard.priority')}</Text>
                             </View>
                         </View>
 
-                        <Text style={{ fontSize: 15, color: semanticWarning, opacity: 0.9, marginBottom: 4, fontFamily: 'DMSans_500Medium' }}>Pending Approval</Text>
+                        <Text style={{ fontSize: 15, color: semanticWarning, opacity: 0.9, marginBottom: 4, fontFamily: 'DMSans_500Medium' }}>{t('dashboard.pendingApproval')}</Text>
                         <Text style={{ fontSize: 42, fontFamily: 'Outfit_700Bold', letterSpacing: -1, color: text, marginBottom: 16 }}>
-                            {loading ? '...' : `${totalPending} Waiting`}
+                            {loading ? '...' : t('dashboard.waiting', { count: totalPending })}
                         </Text>
 
                         {!loading && (
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                                 {[
-                                    { label: 'Leave', count: pendingLeaves, color: semanticInfo },
-                                    { label: 'Expense', count: pendingExpenses, color: semanticSuccess },
-                                    { label: 'IT', count: helpdeskCount, color: semanticWarning },
-                                    { label: 'Maintenance', count: maintenanceCount, color: semanticError },
+                                    { label: t('dashboard.leave'), count: pendingLeaves, color: semanticInfo },
+                                    { label: t('dashboard.expense'), count: pendingExpenses, color: semanticSuccess },
+                                    { label: t('dashboard.it'), count: helpdeskCount, color: semanticWarning },
+                                    { label: t('dashboard.maintenance'), count: maintenanceCount, color: semanticError },
                                 ].map(item => (
                                     <View key={item.label} style={{
                                         flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -277,7 +279,7 @@ export default function Dashboard() {
                             <View style={{ backgroundColor: semanticInfo + '30', padding: 10, borderRadius: 14 }}>
                                 <Plus size={20} color={semanticInfo} strokeWidth={2.5} />
                             </View>
-                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: semanticInfo, opacity: 0.9 }}>Quick Actions</Text>
+                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 14, color: semanticInfo, opacity: 0.9 }}>{t('dashboard.quickActions')}</Text>
                         </View>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -285,28 +287,28 @@ export default function Dashboard() {
                                 <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Calendar size={22} color={semanticInfo} />
                                 </View>
-                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Time Off</Text>
+                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>{t('dashboard.timeOff')}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/new-request')}>
                                 <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <DollarSign size={22} color={semanticInfo} />
                                 </View>
-                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Expense</Text>
+                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>{t('dashboard.expense')}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/timesheet')}>
                                 <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Timer size={22} color={semanticInfo} />
                                 </View>
-                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>Timesheet</Text>
+                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>{t('dashboard.timesheet')}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={{ alignItems: 'center', gap: 8 }} onPress={() => router.push('/(app)/new-request')}>
                                 <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: semanticInfo + '28', alignItems: 'center', justifyContent: 'center' }}>
                                     <Text style={{ fontFamily: 'Outfit_700Bold', color: semanticInfo }}>...</Text>
                                 </View>
-                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>More</Text>
+                                <Text style={{ fontSize: 12, fontFamily: 'DMSans_500Medium', color: text }}>{t('dashboard.more')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -330,11 +332,11 @@ export default function Dashboard() {
                                 <Timer size={20} color={semanticSuccess} strokeWidth={2.5} />
                             </View>
                             <View>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: semanticSuccess, opacity: 0.9, marginBottom: 2 }}>Timesheet</Text>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: semanticSuccess, opacity: 0.9, marginBottom: 2 }}>{t('dashboard.timesheet')}</Text>
                                 <Text style={{ fontSize: 22, fontFamily: 'Outfit_700Bold', color: text }}>
-                                    {loading ? '...' : `${timesheetCount} Entries`}
+                                    {loading ? '...' : t('dashboard.entries', { count: timesheetCount })}
                                 </Text>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: text, opacity: 0.5, marginTop: 4 }}>Tap to log hours</Text>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: text, opacity: 0.5, marginTop: 4 }}>{t('dashboard.tapToLog')}</Text>
                             </View>
                         </TouchableOpacity>
                     </Animated.View>
@@ -355,11 +357,11 @@ export default function Dashboard() {
                                 <Monitor size={20} color={semanticWarning} strokeWidth={2.5} />
                             </View>
                             <View>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: semanticWarning, opacity: 0.9, marginBottom: 2 }}>IT + Maintenance</Text>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: semanticWarning, opacity: 0.9, marginBottom: 2 }}>{t('dashboard.itMaintenance')}</Text>
                                 <Text style={{ fontSize: 22, fontFamily: 'Outfit_700Bold', color: text }}>
-                                    {loading ? '...' : `${helpdeskCount + maintenanceCount} Open`}
+                                    {loading ? '...' : t('dashboard.open', { count: helpdeskCount + maintenanceCount })}
                                 </Text>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: text, opacity: 0.5, marginTop: 4 }}>Active requests</Text>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: text, opacity: 0.5, marginTop: 4 }}>{t('dashboard.activeRequests')}</Text>
                             </View>
                         </TouchableOpacity>
                     </Animated.View>
@@ -371,16 +373,16 @@ export default function Dashboard() {
                     transform: [{ translateY: card4Anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
                 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: text }}>Recent Activities</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: text }}>{t('dashboard.recentActivities')}</Text>
                         <TouchableOpacity onPress={() => router.push('/(app)/notifications')}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', color: primary, fontSize: 14 }}>View All</Text>
+                            <Text style={{ fontFamily: 'DMSans_500Medium', color: primary, fontSize: 14 }}>{t('dashboard.viewAll')}</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={{ gap: 12 }}>
                         {recentActivities.length === 0 ? (
                             <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: cardColor, borderRadius: 24 }}>
-                                <Text style={{ fontFamily: 'DMSans_500Medium', color: muted, fontSize: 16 }}>No recent activities</Text>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', color: muted, fontSize: 16 }}>{t('dashboard.noActivities')}</Text>
                             </View>
                         ) : (
                             recentActivities.map((activity, index) => (
@@ -418,7 +420,7 @@ export default function Dashboard() {
                                     <View style={{ alignItems: 'flex-end', gap: 6 }}>
                                         {activity.amount !== null && (
                                             <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: text }}>
-                                                {typeof activity.amount === 'string' ? activity.amount : `$${activity.amount}`}
+                                                {typeof activity.amount === 'string' ? activity.amount : `${currencySymbol(currency)}${activity.amount}`}
                                             </Text>
                                         )}
                                         <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: activityColor(activity.type) + '20' }}>

@@ -256,7 +256,7 @@ describe('POST /maintenance', () => {
             });
 
         expect(mockClient.uploadAttachments).toHaveBeenCalledWith(
-            1, expect.any(Array), 'maintenance.request', 60
+            1, expect.any(Array), 'maintenance.request', 60, expect.any(Object)
         );
     });
 

@@ -7,13 +7,13 @@ Tests ALL endpoints across all registered tenants, including:
   - Error handling (missing params, bad auth, Zod validation)
   - Schema validation layer (custom_fields key, validation passthrough)
 """
-import urllib.request, json, ssl, sys, io, time
+import urllib.request, json, ssl, sys, io, time, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 from datetime import date, timedelta
 
-BASE          = "https://erp-external-app.vercel.app"
-# x-admin-secret header value (from backend .env ADMIN_SECRET)
-ADMIN_SECRET  = "lkenflkegnelkngwjrkhvjvu9987hhhj"
+BASE          = os.environ.get("SHADOW_BASE_URL", "https://erp-external-app.vercel.app")
+# x-admin-secret header value — read from env (see backend .env ADMIN_SECRET)
+ADMIN_SECRET  = os.environ.get("ADMIN_SECRET", "")
 ctx           = ssl._create_unverified_context()
 
 PASS = 0

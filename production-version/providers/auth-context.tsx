@@ -5,6 +5,18 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { apiClient, setUnauthorizedHandler } from '../api/client';
 
+export interface Currency {
+    id: number;
+    symbol: string;
+    position: 'before' | 'after';
+}
+
+export interface Company {
+    id: number;
+    name: string;
+    currency: Currency | null;
+}
+
 interface AuthContextType {
     signIn: (token: string, user: any) => Promise<void>;
     signOut: () => Promise<void>;
@@ -18,6 +30,12 @@ interface AuthContextType {
     hrEmail: string | null;
     setTenant: (code: string, name: string, hrEmail: string) => Promise<void>;
     clearTenant: () => Promise<void>;
+    // Operating company (res.company within the tenant's Odoo instance)
+    companies: Company[];
+    operatingCompanyId: number | null;
+    currency: Currency | null;
+    setOperatingCompany: (id: number) => Promise<void>;
+    refreshCompanies: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -33,6 +51,11 @@ const AuthContext = createContext<AuthContextType>({
     hrEmail: null,
     setTenant: async () => { },
     clearTenant: async () => { },
+    companies: [],
+    operatingCompanyId: null,
+    currency: null,
+    setOperatingCompany: async () => { },
+    refreshCompanies: async () => { },
 });
 
 export function useSession() {
@@ -51,11 +74,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [tenantCode, setTenantCode] = useState<string | null>(null);
     const [tenantName, setTenantName] = useState<string | null>(null);
     const [hrEmail, setHrEmail] = useState<string | null>(null);
+    const [companies, setCompanies] = useState<Company[]>([]);
+    const [operatingCompanyId, setOperatingCompanyId] = useState<number | null>(null);
 
     useEffect(() => {
         async function loadStorageData() {
             try {
-                const [token, userData, onboardingStatus, newCode, oldSlug, name, email] = await Promise.all([
+                const [token, userData, onboardingStatus, newCode, oldSlug, name, email, storedCompanyId] = await Promise.all([
                     AsyncStorage.getItem('user_token'),
                     AsyncStorage.getItem('user_data'),
                     AsyncStorage.getItem('is_new_user'),
@@ -63,6 +88,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                     AsyncStorage.getItem('tenant_slug'),   // old key — kept for one-time migration
                     AsyncStorage.getItem('tenant_name'),
                     AsyncStorage.getItem('tenant_hr_email'),
+                    AsyncStorage.getItem('operating_company_id'),
                 ]);
 
                 if (token) setSession(token);
@@ -70,6 +96,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 if (onboardingStatus === 'false') setIsNewUser(false);
                 if (name) setTenantName(name);
                 if (email) setHrEmail(email);
+                if (storedCompanyId && !Number.isNaN(Number(storedCompanyId))) {
+                    setOperatingCompanyId(Number(storedCompanyId));
+                }
 
                 // Migration: prefer new key; fall back to old slug key
                 // A stored slug still works — backend accepts slugs via resolveToSlug fast path
@@ -108,8 +137,41 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setTenantCode(null);
         setTenantName(null);
         setHrEmail(null);
-        await AsyncStorage.multiRemove(['tenant_code', 'tenant_name', 'tenant_hr_email']);
+        setCompanies([]);
+        setOperatingCompanyId(null);
+        await AsyncStorage.multiRemove(['tenant_code', 'tenant_name', 'tenant_hr_email', 'operating_company_id']);
     };
+
+    // ── Operating company ──────────────────────────────────────────────────────
+
+    const setOperatingCompany = async (id: number) => {
+        setOperatingCompanyId(id);
+        await AsyncStorage.setItem('operating_company_id', String(id)).catch(() => {});
+    };
+
+    const refreshCompanies = async () => {
+        try {
+            const { companies: list, default_company_id } = await apiClient.getCompanies();
+            setCompanies(list ?? []);
+            // Seed the operating company on first load if none is persisted yet.
+            setOperatingCompanyId((current) => {
+                if (current && (list ?? []).some((c) => c.id === current)) return current;
+                const fallback = default_company_id ?? list?.[0]?.id ?? null;
+                if (fallback != null) AsyncStorage.setItem('operating_company_id', String(fallback)).catch(() => {});
+                return fallback;
+            });
+        } catch {
+            // Non-fatal — switcher just stays empty; requests fall back to employee company.
+        }
+    };
+
+    // Load companies whenever an authenticated session is available.
+    useEffect(() => {
+        if (session) refreshCompanies();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session]);
+
+    const currency = companies.find((c) => c.id === operatingCompanyId)?.currency ?? null;
 
     // ── Push Notification Helpers ──────────────────────────────────────────────
 
@@ -204,6 +266,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 hrEmail,
                 setTenant,
                 clearTenant,
+                companies,
+                operatingCompanyId,
+                currency,
+                setOperatingCompany,
+                refreshCompanies,
             }}>
             {children}
         </AuthContext.Provider>

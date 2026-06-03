@@ -47,10 +47,11 @@ describe('Company code step — getTenantInfo', () => {
         await expect(apiClient.getTenantInfo('SP-99999')).rejects.toThrow('Tenant not found');
     });
 
-    it('throws generic error when response body has no error field', async () => {
+    it('throws a friendly server error when response body has no error field', async () => {
         mockFetch(false, {}, 500);
 
-        await expect(apiClient.getTenantInfo('bad')).rejects.toThrow('Request failed (500)');
+        // friendlyError maps any 5xx to a generic server message.
+        await expect(apiClient.getTenantInfo('bad')).rejects.toThrow('Server error. Please try again in a moment.');
     });
 });
 
@@ -69,7 +70,7 @@ describe('Login step — apiClient.login', () => {
             `${API_URL}/auth/login`,
             expect.objectContaining({
                 method: 'POST',
-                body: JSON.stringify({ employee_id: '42', pin: '1234', tenant_subscription_number: 'SP-00001' }),
+                body: JSON.stringify({ identifier: '42', employee_id: '42', pin: '1234', tenant_subscription_number: 'SP-00001' }),
             })
         );
         expect(result.token).toBe('jwt-abc-123');
@@ -86,7 +87,8 @@ describe('Login step — apiClient.login', () => {
     it('throws on network failure', async () => {
         (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network request failed'));
 
-        await expect(apiClient.login('42', '1234', 'SP-00001')).rejects.toThrow('Network request failed');
+        // friendlyError converts raw network errors into a user-facing message.
+        await expect(apiClient.login('42', '1234', 'SP-00001')).rejects.toThrow('No internet connection. Please check your network and try again.');
     });
 
     it('sends tenant_subscription_number (not tenant_slug) in body', async () => {

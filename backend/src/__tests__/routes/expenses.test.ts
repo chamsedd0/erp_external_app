@@ -291,7 +291,7 @@ describe('POST /expenses', () => {
             });
 
         expect(mockClient.uploadAttachments).toHaveBeenCalledWith(
-            1, expect.any(Array), 'hr.expense', 99
+            1, expect.any(Array), 'hr.expense', 99, expect.any(Object)
         );
     });
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from './tenantStore';
 import { notificationStore, Notification } from './notificationStore';
@@ -21,6 +22,7 @@ interface EmployeeCache {
 }
 
 const cacheKey = (tenantId: string, employeeId: number) => `shadow:t:${tenantId}:req_cache:${employeeId}`;
+const monitorStatusKey = (tenantId: string) => `shadow:t:${tenantId}:monitor_status`;
 
 async function loadCache(tenantId: string, employeeId: number): Promise<EmployeeCache> {
     try {
@@ -195,7 +197,7 @@ export const requestMonitor = {
             if (previous && previous.state !== stageId) {
                 const isDoneStage = /\b(done|closed|resolved|cancel)/i.test(stageName);
                 const notif: Notification = {
-                    id: Math.random().toString(36).substring(7),
+                    id: randomUUID(),
                     employeeId,
                     title: isDoneStage ? 'IT Support Ticket Closed' : 'IT Support Ticket Updated',
                     message: `Your ticket "${req.name}" moved to stage: ${stageName || 'Updated'}.`,
@@ -221,7 +223,7 @@ export const requestMonitor = {
             if (previous && previous.state !== stageId) {
                 const isDoneStage = /\b(done|repaired|closed|cancel)/i.test(stageName);
                 const notif: Notification = {
-                    id: Math.random().toString(36).substring(7),
+                    id: randomUUID(),
                     employeeId,
                     title: isDoneStage ? 'Maintenance Request Completed' : 'Maintenance Request Updated',
                     message: `Your maintenance request "${req.name}" moved to: ${stageName || 'Updated'}.`,
@@ -247,6 +249,12 @@ export const requestMonitor = {
 
         // ── 9. Save updated cache to Redis ────────────────────────────────────
         await saveCache(tenantId, employeeId, newCache);
+        await redisSet(monitorStatusKey(tenantId), JSON.stringify({
+            last_run_at: new Date().toISOString(),
+            employee_id: employeeId,
+            notifications_created: notificationsToAdd.length,
+            fetched,
+        })).catch(() => undefined);
     },
 };
 
@@ -283,7 +291,7 @@ function createLeaveExpenseNotification(
     if (!title) return null;
 
     return {
-        id: Math.random().toString(36).substring(7),
+        id: randomUUID(),
         employeeId,
         title,
         message,

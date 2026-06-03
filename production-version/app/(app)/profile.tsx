@@ -6,6 +6,7 @@ import { useSession } from '../../providers/auth-context';
 import { useRouter } from 'expo-router';
 import { LogOut, User, Settings, Shield, HelpCircle, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { t } from '../../lib/i18n';
 
 export default function Profile() {
     const { user, signOut } = useSession();
@@ -29,24 +30,24 @@ export default function Profile() {
     const menuItems = [
         {
             icon: Settings,
-            label: 'Settings',
-            sub: 'App preferences & notifications',
+            label: t('profile.settings'),
+            sub: t('profile.settingsSub'),
             path: '/(app)/settings' as const,
             color: semanticInfo,
             enabled: true,
         },
         {
             icon: Shield,
-            label: 'Security',
-            sub: 'Password & privacy — coming soon',
+            label: t('profile.security'),
+            sub: t('profile.securitySub'),
             path: null,
             color: semanticWarning,
             enabled: false,
         },
         {
             icon: HelpCircle,
-            label: 'Help & Support',
-            sub: 'FAQs & contact HR',
+            label: t('profile.help'),
+            sub: t('profile.helpSub'),
             path: '/(app)/help' as const,
             color: semanticSuccess,
             enabled: true,
@@ -162,7 +163,7 @@ export default function Profile() {
             >
                 <LogOut size={20} color={semanticError} strokeWidth={2.5} />
                 <Text style={{ fontFamily: 'Outfit_700Bold', color: semanticError, fontSize: 16 }}>
-                    Sign Out
+                    {t('profile.signOut')}
                 </Text>
             </TouchableOpacity>
 
@@ -209,10 +210,10 @@ export default function Profile() {
                         </View>
 
                         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text, marginBottom: 8, textAlign: 'center' }}>
-                            Sign Out?
+                            {t('profile.signOutConfirmTitle')}
                         </Text>
                         <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted, marginBottom: 32, textAlign: 'center', lineHeight: 24 }}>
-                            Are you sure you want to sign out of your account?
+                            {t('profile.signOutConfirmBody')}
                         </Text>
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%' }}>
@@ -223,7 +224,7 @@ export default function Profile() {
                                     backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center',
                                 }}
                             >
-                                <Text style={{ fontFamily: 'DMSans_700Bold', color: text }}>Cancel</Text>
+                                <Text style={{ fontFamily: 'DMSans_700Bold', color: text }}>{t('common.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={handleLogout}
@@ -232,7 +233,7 @@ export default function Profile() {
                                     backgroundColor: semanticError, alignItems: 'center',
                                 }}
                             >
-                                <Text style={{ fontFamily: 'DMSans_700Bold', color: 'white' }}>Sign Out</Text>
+                                <Text style={{ fontFamily: 'DMSans_700Bold', color: 'white' }}>{t('profile.signOut')}</Text>
                             </TouchableOpacity>
                         </View>
                     </Pressable>

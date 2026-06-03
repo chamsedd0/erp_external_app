@@ -1,6 +1,8 @@
-import { redisGet, redisSet } from './redis';
+import { randomUUID } from 'crypto';
+import { redisDel, redisGet, redisLPush, redisLRange, redisSet, redisTrim } from './redis';
 
 const REDIS_KEY = (tenantId: string) => `shadow:t:${tenantId}:notifications`;
+const REDIS_LIST_KEY = (tenantId: string) => `shadow:t:${tenantId}:notifications:list`;
 
 export interface Notification {
     id: string;
@@ -16,6 +18,19 @@ export interface Notification {
 
 async function readAll(tenantId: string): Promise<Notification[]> {
     try {
+        const list = await Promise.resolve(redisLRange(REDIS_LIST_KEY(tenantId), 0, -1)).catch(() => []);
+        if (Array.isArray(list) && list.length > 0) {
+            return list
+                .map(item => {
+                    try {
+                        return JSON.parse(item) as Notification;
+                    } catch {
+                        return null;
+                    }
+                })
+                .filter((item): item is Notification => item !== null);
+        }
+
         const raw = await redisGet(REDIS_KEY(tenantId));
         if (!raw) return [];
         return JSON.parse(raw) as Notification[];
@@ -27,6 +42,12 @@ async function readAll(tenantId: string): Promise<Notification[]> {
 
 async function writeAll(tenantId: string, notifications: Notification[]): Promise<void> {
     try {
+        const listKey = REDIS_LIST_KEY(tenantId);
+        await Promise.resolve(redisDel(listKey)).catch(() => undefined);
+        if (notifications.length > 0) {
+            await Promise.resolve(redisLPush(listKey, ...[...notifications].reverse().map(n => JSON.stringify(n)))).catch(() => undefined);
+            await Promise.resolve(redisTrim(listKey, 0, 999)).catch(() => undefined);
+        }
         await redisSet(REDIS_KEY(tenantId), JSON.stringify(notifications));
     } catch (e) {
         console.error('notificationStore: failed to write to Redis', e);
@@ -42,10 +63,20 @@ export const notificationStore = {
 
     /** Append a new notification. Trims the total list to the last 1 000 entries. */
     add: async (tenantId: string, notification: Notification): Promise<void> => {
-        let all = await readAll(tenantId);
-        all.push(notification);
-        if (all.length > 1000) all = all.slice(all.length - 1000);
-        await writeAll(tenantId, all);
+        const safeNotification = {
+            ...notification,
+            id: notification.id || randomUUID(),
+        };
+        try {
+            const existing = await readAll(tenantId);
+            await Promise.resolve(redisLPush(REDIS_LIST_KEY(tenantId), JSON.stringify(safeNotification))).catch(() => undefined);
+            await Promise.resolve(redisTrim(REDIS_LIST_KEY(tenantId), 0, 999)).catch(() => undefined);
+            await redisSet(REDIS_KEY(tenantId), JSON.stringify([...existing, safeNotification].slice(-1000)));
+        } catch (e) {
+            console.error('notificationStore: failed to append to Redis list', e);
+            const all = await readAll(tenantId);
+            await redisSet(REDIS_KEY(tenantId), JSON.stringify([...all, safeNotification].slice(-1000)));
+        }
     },
 
     /** Mark a single notification as read by its ID. */

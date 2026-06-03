@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
-import { attachmentSchema } from './helpdesk';
-import { getCustomFields, validatePayload } from '../lib/schemaCache';
+import { attachmentsSchema } from '../lib/attachments';
+import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, getAuthenticatedEmployeeId, getActiveCompanyId, getOdooContext } from '../lib/authContext';
 import { companyCompatible, getEmployeeCompanyId, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
 
 const router = Router();
@@ -22,10 +22,10 @@ const isMaintenanceAvailable = async (client: OdooClientInstance, uid: number): 
 };
 const INCOMPATIBLE_MAINTENANCE_TEAM = 'No maintenance team is available for your employee company. Please contact your administrator.';
 
-async function fetchMaintenanceTeams(client: OdooClientInstance, uid: number): Promise<any[]> {
+async function fetchMaintenanceTeams(client: OdooClientInstance, uid: number, context?: Record<string, any>): Promise<any[]> {
     try {
         const teams: any = await client.searchRead(
-            uid, 'maintenance.team', [], ['id', 'name', 'company_id'], true
+            uid, 'maintenance.team', [], ['id', 'name', 'company_id'], { silent: true, context }
         );
         return Array.isArray(teams) ? teams : [];
     } catch {
@@ -46,10 +46,12 @@ const createMaintenanceSchema = z.object({
     maintenance_type: z.enum(['corrective', 'preventive']).default('corrective'),
     equipment_id: z.number().optional(),
     maintenance_team_id: z.number().optional(),
-    schedule_date: z.string().optional(), // ISO datetime string
+    schedule_date: z.string().optional(), // ISO datetime string (preventive)
+    request_date: z.string().optional(),  // date YYYY-MM-DD (corrective)
     duration: z.number().optional(),      // hours as float
     priority: z.enum(['0', '1', '2', '3']).optional(),
-    attachments: z.array(attachmentSchema).max(3).optional(),
+    custom_values: z.record(z.string(), z.any()).optional(), // tenant-specific x_ custom fields
+    attachments: attachmentsSchema,
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -68,7 +70,8 @@ router.get('/equipment', async (req, res) => {
         }
 
         const equipment: any = await client.searchRead(
-            uid, 'maintenance.equipment', [], ['id', 'name', 'category_id']
+            uid, 'maintenance.equipment', [], ['id', 'name', 'category_id'],
+            { context: getOdooContext(req) }
         );
         res.json({ available: true, equipment: Array.isArray(equipment) ? equipment : [] });
     } catch (error: any) {
@@ -90,7 +93,8 @@ router.get('/teams', async (req, res) => {
             return res.json({ available: false, teams: [] });
         }
 
-        const teams = await fetchMaintenanceTeams(client, uid);
+        const teams = await fetchMaintenanceTeams(client, uid, getOdooContext(req));
+        const activeCompanyId = getActiveCompanyId(req);
         let employeeCompanyId: number | null = null;
         try {
             const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
@@ -98,7 +102,7 @@ router.get('/teams', async (req, res) => {
         } catch (e) {
             console.warn('[maintenance] employee company lookup failed; returning unfiltered teams:', e);
         }
-        const enriched = withCompanyRequestability(teams, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM);
+        const enriched = withCompanyRequestability(teams, activeCompanyId ?? employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM);
         res.json({ available: true, teams: requestableRecords(enriched) });
     } catch (error: any) {
         console.error('Fetch Maintenance Teams Error:', error);
@@ -120,12 +124,27 @@ router.get('/categories', async (req, res) => {
         }
 
         const categories: any = await client.searchRead(
-            uid, 'maintenance.equipment.category', [], ['id', 'name']
+            uid, 'maintenance.equipment.category', [], ['id', 'name'],
+            { context: getOdooContext(req) }
         );
         res.json({ available: true, categories: Array.isArray(categories) ? categories : [] });
     } catch (error: any) {
         console.error('Fetch Maintenance Categories Error:', error);
         res.json({ available: false, categories: [], message: error.message });
+    }
+});
+
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = (req as any).jwtPayload?.tenantId as string;
+        const tenantConfig = await tenantStore.getTenant(tenantId);
+        if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
+        const client = getOdooClient(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await getCustomFieldReport(tenantId, client, uid, 'maintenance.request'));
+    } catch (error: any) {
+        console.error('Fetch Maintenance Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
     }
 });
 
@@ -199,28 +218,35 @@ router.post('/', async (req, res) => {
         if (body.category_id) recordData.category_id = body.category_id;
         if (body.equipment_id) recordData.equipment_id = body.equipment_id;
         if (body.priority) recordData.priority = body.priority;
-
-        let employeeCompanyId: number | null = null;
-        try {
-            employeeCompanyId = await getEmployeeCompanyId(client, uid, body.employee_id);
-        } catch (e) {
-            console.warn('[maintenance] employee company lookup failed; skipping team compatibility preflight:', e);
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(recordData, body.custom_values);
         }
 
-        const teams = await fetchMaintenanceTeams(client, uid).catch(() => []);
+        // Enforce required custom fields up-front for a clear error message.
+        const mntCustomFields = await getCustomFields(tenantId, client, uid, 'maintenance.request');
+        const missingCustom = validateRequiredCustomFields(mntCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
+
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
+        const activeCompanyId = ctx.company_id ?? null;
+        const filterCompanyId = activeCompanyId;
+
+        const teams = await fetchMaintenanceTeams(client, uid, ctx).catch(() => []);
         if (body.maintenance_team_id) {
             const selectedTeam = teams.find((team: any) => team.id === body.maintenance_team_id);
-            if (selectedTeam && !companyCompatible(selectedTeam.company_id, employeeCompanyId)) {
+            if (selectedTeam && !companyCompatible(selectedTeam.company_id, filterCompanyId)) {
                 return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
             }
             recordData.maintenance_team_id = body.maintenance_team_id;
         } else if (teams.length > 0) {
             const compatibleTeams = requestableRecords(
-                withCompanyRequestability(teams, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM)
+                withCompanyRequestability(teams, filterCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM)
             );
             if (compatibleTeams.length > 0) {
                 recordData.maintenance_team_id = compatibleTeams[0].id;
-            } else if (employeeCompanyId && teams.some((team: any) => 'company_id' in team)) {
+            } else if (filterCompanyId && teams.some((team: any) => 'company_id' in team)) {
                 return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
             }
         }
@@ -232,6 +258,7 @@ router.post('/', async (req, res) => {
             const d = new Date(body.schedule_date);
             extendedFields.schedule_date = d.toISOString().replace('T', ' ').substring(0, 19);
         }
+        if (body.request_date) extendedFields.request_date = body.request_date.split('T')[0];
         if (body.duration !== undefined) extendedFields.duration = body.duration;
 
         // Pre-validate base payload against live Odoo schema
@@ -246,12 +273,12 @@ router.post('/', async (req, res) => {
 
         let newId: number;
         try {
-            newId = await client.createRecord(uid, 'maintenance.request', { ...recordData, ...extendedFields }) as number;
+            newId = await client.createRecord(uid, 'maintenance.request', { ...recordData, ...extendedFields }, ctx) as number;
         } catch (createErr: any) {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();
             if (msg.includes('schedule_date') || msg.includes('duration') || msg.includes('invalid field')) {
                 console.warn('[maintenance] schedule_date/duration rejected, retrying without them:', msg);
-                newId = await client.createRecord(uid, 'maintenance.request', recordData) as number;
+                newId = await client.createRecord(uid, 'maintenance.request', recordData, ctx) as number;
             } else if (msg.includes('incompatible companies') || msg.includes('company')) {
                 return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
             } else {
@@ -259,11 +286,17 @@ router.post('/', async (req, res) => {
             }
         }
 
+        let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {
-            await client.uploadAttachments(uid, body.attachments, 'maintenance.request', newId);
+            const result = await client.uploadAttachments(uid, body.attachments, 'maintenance.request', newId, ctx);
+            failedAttachments = result?.failed ?? [];
         }
 
-        res.json({ status: 'success', id: newId });
+        res.json({
+            status: 'success',
+            id: newId,
+            ...(failedAttachments.length > 0 ? { partial_success: true, failed_attachments: failedAttachments } : {}),
+        });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid input', details: (error as any).errors });

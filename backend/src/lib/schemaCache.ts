@@ -1,4 +1,4 @@
-import { redisGet, redisSet } from './redis';
+import { redisDel, redisGet, redisSet } from './redis';
 import type { OdooClientInstance } from '../odoo/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -9,6 +9,8 @@ export interface OdooFieldDef {
     required: boolean;
     selection?: [string, string][];      // for selection fields: [[value, label], ...]
     relation?: string;                   // for relational fields: target model name
+    readonly?: boolean;                  // computed / non-writable fields
+    store?: boolean;                     // non-stored (computed) fields have store === false
 }
 
 export interface ValidationResult {
@@ -20,6 +22,18 @@ export interface ValidationResult {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SCHEMA_TTL_S = 86_400; // 24 hours
+export const SUPPORTED_CUSTOM_FIELD_TYPES = new Set([
+    'char',
+    'text',
+    'boolean',
+    'integer',
+    'float',
+    'monetary',
+    'date',
+    'datetime',
+    'selection',
+    'many2one',
+]);
 
 /** Fields that Odoo manages automatically — never sent by callers, never validated. */
 const SYSTEM_FIELDS = new Set([
@@ -32,6 +46,10 @@ const SYSTEM_FIELDS = new Set([
 function schemaKey(tenantId: string, model: string): string {
     // e.g. shadow:t:isec-v17:schema:hr_expense
     return `shadow:t:${tenantId}:schema:${model.replace(/\./g, '_')}`;
+}
+
+function schemaMetaKey(tenantId: string, model: string): string {
+    return `${schemaKey(tenantId, model)}:meta`;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -62,11 +80,19 @@ export async function getModelSchema(
         const schema = await (client.getSchema(uid, model) as Promise<Record<string, OdooFieldDef>>);
         // 3. Write to cache (best-effort)
         redisSet(key, JSON.stringify(schema), SCHEMA_TTL_S).catch(() => {/* ignore */});
+        redisSet(schemaMetaKey(tenantId, model), JSON.stringify({ cached_at: new Date().toISOString() }), SCHEMA_TTL_S).catch(() => {/* ignore */});
         return schema;
     } catch {
         // Model may not exist on this Odoo version — return empty gracefully
         return {};
     }
+}
+
+export async function clearModelSchemaCache(tenantId: string, model: string): Promise<void> {
+    await Promise.all([
+        redisDel(schemaKey(tenantId, model)).catch(() => undefined),
+        redisDel(schemaMetaKey(tenantId, model)).catch(() => undefined),
+    ]);
 }
 
 /**
@@ -81,8 +107,83 @@ export async function getCustomFields(
 ): Promise<Record<string, OdooFieldDef>> {
     const schema = await getModelSchema(tenantId, client, uid, model);
     return Object.fromEntries(
-        Object.entries(schema).filter(([key]) => key.startsWith('x_')),
+        Object.entries(schema).filter(([key, def]) =>
+            key.startsWith('x_') &&
+            // Only surface fields an employee can actually fill in: skip
+            // computed/readonly and non-stored (related/computed) Studio fields.
+            !def.readonly &&
+            def.store !== false &&
+            SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type),
+        ),
     );
+}
+
+export async function getCustomFieldReport(
+    tenantId: string,
+    client: OdooClientInstance,
+    uid: number,
+    model: string,
+): Promise<{
+    custom_fields: Record<string, OdooFieldDef>;
+    schema_available: boolean;
+    unsupported_fields: Record<string, OdooFieldDef>;
+    unsupported_required_fields: Record<string, OdooFieldDef>;
+    schema_cached_at: string | null;
+}> {
+    const schema = await getModelSchema(tenantId, client, uid, model);
+    const metaRaw = await redisGet(schemaMetaKey(tenantId, model)).catch(() => null);
+    let schema_cached_at: string | null = null;
+    if (metaRaw) {
+        try {
+            schema_cached_at = JSON.parse(metaRaw).cached_at ?? null;
+        } catch {
+            schema_cached_at = null;
+        }
+    }
+    const writableCustom = Object.fromEntries(
+        Object.entries(schema).filter(([key, def]) =>
+            key.startsWith('x_') &&
+            !def.readonly &&
+            def.store !== false,
+        )
+    );
+    const supported = Object.fromEntries(
+        Object.entries(writableCustom).filter(([, def]) => SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type))
+    );
+    const unsupported = Object.fromEntries(
+        Object.entries(writableCustom).filter(([, def]) => !SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type))
+    );
+    const unsupportedRequired = Object.fromEntries(
+        Object.entries(unsupported).filter(([, def]) => def.required)
+    );
+
+    return {
+        custom_fields: supported,
+        schema_available: Object.keys(schema).length > 0,
+        unsupported_fields: unsupported,
+        unsupported_required_fields: unsupportedRequired,
+        schema_cached_at,
+    };
+}
+
+/**
+ * Returns the labels of required custom fields that are missing/empty in the
+ * supplied values. Use before create to fail fast with a clear message instead
+ * of letting Odoo reject the write with a less controlled error.
+ */
+export function validateRequiredCustomFields(
+    customFields: Record<string, OdooFieldDef>,
+    values: Record<string, any> | undefined,
+): string[] {
+    const missing: string[] = [];
+    for (const [name, def] of Object.entries(customFields)) {
+        if (!def.required) continue;
+        const v = values?.[name];
+        if (v === undefined || v === null || v === false || v === '') {
+            missing.push(def.string);
+        }
+    }
+    return missing;
 }
 
 /**
