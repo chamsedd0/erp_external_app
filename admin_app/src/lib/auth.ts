@@ -9,7 +9,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 password: { label: 'Password', type: 'password' },
             },
             async authorize(credentials) {
-                if (credentials?.password === process.env.ADMIN_SECRET) {
+                const expectedSecret = process.env.ADMIN_SECRET?.trim();
+                const submittedSecret = String(credentials?.password ?? '').trim();
+                if (expectedSecret && submittedSecret === expectedSecret) {
                     return { id: 'admin', name: 'Administrator', email: 'admin@shadow-portal.app' };
                 }
                 return null;

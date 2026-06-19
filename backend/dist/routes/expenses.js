@@ -9,13 +9,8 @@ const schemaCache_1 = require("../lib/schemaCache");
 const parseError_1 = require("../odoo/parseError");
 const authContext_1 = require("../lib/authContext");
 const odooCompatibility_1 = require("../lib/odooCompatibility");
+const attachments_1 = require("../lib/attachments");
 const router = (0, express_1.Router)();
-// Shared attachment schema
-const attachmentSchema = zod_1.z.object({
-    name: zod_1.z.string(),
-    data: zod_1.z.string(), // base64
-    mimetype: zod_1.z.string(), // e.g. 'image/jpeg'
-});
 // Validation Schema for Expense
 const createExpenseSchema = zod_1.z.object({
     employee_id: zod_1.z.number(),
@@ -26,7 +21,9 @@ const createExpenseSchema = zod_1.z.object({
     date: zod_1.z.string(), // YYYY-MM-DD
     payment_mode: zod_1.z.enum(['own_account', 'company_account']).default('own_account'),
     tax_ids: zod_1.z.array(zod_1.z.number()).optional(),
-    attachments: zod_1.z.array(attachmentSchema).max(3).optional(), // Up to 3 receipt images
+    analytic_account_id: zod_1.z.number().optional(),
+    custom_values: zod_1.z.record(zod_1.z.string(), zod_1.z.any()).optional(), // tenant-specific x_ custom fields
+    attachments: attachments_1.attachmentsSchema, // Up to 3 receipt images
 });
 // Fields to fetch for expenses — price_unit may not exist on Odoo 17+
 const EXPENSE_READ_FIELDS_FULL = ['id', 'name', 'product_id', 'price_unit', 'quantity', 'total_amount', 'date', 'state', 'create_date'];
@@ -91,7 +88,8 @@ router.get('/taxes', async (req, res) => {
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
-        const taxes = await client.searchRead(uid, 'account.tax', [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']]], ['id', 'name', 'amount', 'amount_type']);
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const taxes = await client.searchRead(uid, 'account.tax', [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']]], ['id', 'name', 'amount', 'amount_type'], { context: ctx });
         res.json({ taxes: Array.isArray(taxes) ? taxes : [] });
     }
     catch (error) {
@@ -108,15 +106,16 @@ router.get('/products', async (req, res) => {
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
         let products = [];
         try {
-            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'company_id'], true);
+            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'company_id'], { silent: true, context: ctx });
             products = Array.isArray(result) ? result : [];
         }
         catch (e) {
             console.warn('product.product can_be_expensed query failed, trying product.product fallback without company:', e);
             try {
-                const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price']);
+                const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price'], { silent: true, context: ctx });
                 products = Array.isArray(result) ? result : [];
             }
             catch (fallbackError) {
@@ -125,7 +124,7 @@ router.get('/products', async (req, res) => {
         }
         if (products.length === 0) {
             try {
-                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'], true);
+                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'], { silent: true, context: ctx });
                 if (Array.isArray(templates)) {
                     products = templates
                         .filter((t) => Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0)
@@ -140,7 +139,7 @@ router.get('/products', async (req, res) => {
             catch (e) {
                 console.warn('product.template fallback with company failed:', e);
                 try {
-                    const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids']);
+                    const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids'], { silent: true, context: ctx });
                     if (Array.isArray(templates)) {
                         products = templates
                             .filter((t) => Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0)
@@ -156,20 +155,54 @@ router.get('/products', async (req, res) => {
                 }
             }
         }
-        let employeeCompanyId = null;
-        try {
-            const employeeId = (0, authContext_1.getAuthenticatedEmployeeId)(req, req.query.employee_id);
-            employeeCompanyId = await (0, odooCompatibility_1.getEmployeeCompanyId)(client, uid, employeeId);
-        }
-        catch (e) {
-            console.warn('[expenses] employee company lookup failed; returning unfiltered products:', e);
-        }
+        // ctx.company_id is the employee's own company (derived server-side).
+        const employeeCompanyId = ctx.company_id ?? null;
         const enriched = (0, odooCompatibility_1.withCompanyRequestability)(products, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
         res.json({ products: (0, odooCompatibility_1.requestableRecords)(enriched) });
     }
     catch (error) {
         console.error('Fetch Expense Products Error:', error);
         res.json({ products: [], error: error.message });
+    }
+});
+// GET /analytic-accounts - Analytic accounts for the active company
+router.get('/analytic-accounts', async (req, res) => {
+    try {
+        const tenantId = req.jwtPayload?.tenantId;
+        const tenantConfig = await tenantStore_1.tenantStore.getTenant(tenantId);
+        if (!tenantConfig)
+            return res.status(401).json({ error: 'Unknown tenant' });
+        const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const accounts = await client
+            .searchRead(uid, 'account.analytic.account', [], ['id', 'name'], {
+            silent: true,
+            context: ctx,
+            limit: 500,
+        })
+            .catch(() => []);
+        res.json({ accounts: Array.isArray(accounts) ? accounts : [] });
+    }
+    catch (error) {
+        console.error('Fetch Analytic Accounts Error:', error);
+        res.json({ accounts: [], error: error.message });
+    }
+});
+// GET /form-schema - Tenant custom (x_) fields for the expense create form
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = req.jwtPayload?.tenantId;
+        const tenantConfig = await tenantStore_1.tenantStore.getTenant(tenantId);
+        if (!tenantConfig)
+            return res.status(401).json({ error: 'Unknown tenant' });
+        const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await (0, schemaCache_1.getCustomFieldReport)(tenantId, client, uid, 'hr.expense'));
+    }
+    catch (error) {
+        console.error('Fetch Expense Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
     }
 });
 // POST / - Create Expense
@@ -187,7 +220,10 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Employee not found' });
         }
         const employee = employees[0];
-        const companyId = employee.company_id[0];
+        // Company is always the employee's own company, derived + validated server-side.
+        const ctx = await (0, authContext_1.buildOdooContext)(req, client, uid, body.employee_id);
+        const companyId = ctx.company_id
+            ?? (Array.isArray(employee.company_id) ? employee.company_id[0] : undefined);
         const companies = await client.searchRead(uid, 'res.company', [['id', '=', companyId]], ['currency_id']);
         const currencyId = companies && companies[0] && companies[0].currency_id
             ? companies[0].currency_id[0]
@@ -215,6 +251,27 @@ router.post('/', async (req, res) => {
         if (body.tax_ids && body.tax_ids.length > 0) {
             baseExpenseData.tax_ids = [[6, 0, body.tax_ids]];
         }
+        // Analytic account → single-account distribution (Odoo 16+ uses the JSON
+        // analytic_distribution field; older versions used a scalar analytic_account_id).
+        if (body.analytic_account_id) {
+            if (odooVersion >= 16) {
+                baseExpenseData.analytic_distribution = { [String(body.analytic_account_id)]: 100 };
+            }
+            else {
+                baseExpenseData.analytic_account_id = body.analytic_account_id;
+            }
+        }
+        // Tenant-specific custom (x_) fields, validated below against the live schema.
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(baseExpenseData, body.custom_values);
+        }
+        // Enforce required custom fields up-front so the user gets a clear message
+        // instead of a downstream Odoo write error.
+        const expenseCustomFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.expense');
+        const missingCustom = (0, schemaCache_1.validateRequiredCustomFields)(expenseCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
         // Pre-validate payload against live Odoo schema (selection values + required fields)
         const validation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.expense', baseExpenseData);
         if (!validation.valid) {
@@ -232,7 +289,7 @@ router.post('/', async (req, res) => {
             : { ...withPriceUnit, total_amount_currency: body.unit_amount };
         let newExpenseId;
         try {
-            newExpenseId = await client.createRecord(uid, 'hr.expense', primaryPayload);
+            newExpenseId = await client.createRecord(uid, 'hr.expense', primaryPayload, ctx);
         }
         catch (err1) {
             const msg1 = String(err1?.faultString || err1?.message || '').toLowerCase();
@@ -241,14 +298,14 @@ router.post('/', async (req, res) => {
                 console.warn('[expenses] total_amount_currency rejected, retrying without it');
                 const withoutCurrency = useNewAmountField ? withTotalAmount : withPriceUnit;
                 try {
-                    newExpenseId = await client.createRecord(uid, 'hr.expense', withoutCurrency);
+                    newExpenseId = await client.createRecord(uid, 'hr.expense', withoutCurrency, ctx);
                 }
                 catch (err2) {
                     const msg2 = String(err2?.faultString || err2?.message || '').toLowerCase();
                     // price_unit rejected on v17+ — switch to total_amount
                     if (msg2.includes('price_unit')) {
                         console.warn('[expenses] price_unit rejected (Odoo 17+), switching to total_amount');
-                        newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
+                        newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount, ctx);
                     }
                     else {
                         throw err2;
@@ -262,10 +319,10 @@ router.post('/', async (req, res) => {
                     newExpenseId = await client.createRecord(uid, 'hr.expense', {
                         ...withTotalAmount,
                         total_amount_currency: body.unit_amount * body.quantity,
-                    });
+                    }, ctx);
                 }
                 catch {
-                    newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount);
+                    newExpenseId = await client.createRecord(uid, 'hr.expense', withTotalAmount, ctx);
                 }
             }
             else if (msg1.includes('incompatible companies') || msg1.includes('company')) {
@@ -275,15 +332,26 @@ router.post('/', async (req, res) => {
                 throw err1;
             }
         }
+        let failedAttachments = [];
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await client.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId);
+                const result = await client.uploadAttachments(uid, body.attachments, 'hr.expense', newExpenseId, ctx);
+                failedAttachments = result?.failed ?? [];
             }
             catch (attachError) {
                 console.error('Attachment upload error:', attachError);
+                failedAttachments = body.attachments.map(a => a.name);
             }
         }
-        res.json({ status: 'success', id: newExpenseId, state: 'draft', message: 'Expense created in draft state' });
+        res.json({
+            status: 'success',
+            id: newExpenseId,
+            state: 'draft',
+            message: 'Expense created in draft state',
+            ...(failedAttachments.length > 0
+                ? { partial_success: true, failed_attachments: failedAttachments }
+                : {}),
+        });
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {

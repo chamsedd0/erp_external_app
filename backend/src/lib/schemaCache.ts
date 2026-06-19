@@ -41,6 +41,47 @@ const SYSTEM_FIELDS = new Set([
     '__last_update', 'display_name', 'active',
 ]);
 
+/**
+ * Relation models that the mobile create forms already expose via a dedicated
+ * native selector, per source model. A tenant custom (x_) many2one pointing at
+ * one of these would render a SECOND, duplicate picker (e.g. a Studio
+ * `x_project_id` → project.project on a timesheet line duplicates the built-in
+ * Project selector). We hide such custom fields from the dynamic renderer so the
+ * native selector remains the single source of truth.
+ */
+const NATIVE_RELATION_MODELS: Record<string, Set<string>> = {
+    'account.analytic.line': new Set(['project.project', 'project.task']),
+    'hr.expense': new Set(['product.product', 'product.template', 'account.analytic.account']),
+    'maintenance.request': new Set(['maintenance.equipment', 'maintenance.equipment.category', 'maintenance.team']),
+    'hr.leave': new Set(['hr.leave.type']),
+    'helpdesk.ticket': new Set(['helpdesk.team', 'helpdesk.ticket.type', 'helpdesk.tag', 'res.users']),
+};
+
+const NATIVE_FIELD_NAME_PATTERNS: Record<string, RegExp[]> = {
+    'account.analytic.line': [
+        /(^|_)project(_id)?$/i,
+        /(^|_)task(_id)?$/i,
+        /project.*task/i,
+    ],
+};
+
+/**
+ * True when a custom field on `model` should be hidden from the dynamic renderer
+ * because the create form already covers it with a native control:
+ *  - many2one fields whose relation is already a native selector for this model;
+ *  - the well-known scalar fields the form sets itself (dates, duration, etc.).
+ */
+function isNativelyHandled(model: string, fieldName: string, def: OdooFieldDef): boolean {
+    if (def.type === 'many2one' && def.relation) {
+        const natives = NATIVE_RELATION_MODELS[model];
+        if (natives?.has(def.relation)) return true;
+    }
+    if (def.type === 'many2one' && NATIVE_FIELD_NAME_PATTERNS[model]?.some(re => re.test(fieldName))) {
+        return true;
+    }
+    return false;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function schemaKey(tenantId: string, model: string): string {
@@ -113,7 +154,10 @@ export async function getCustomFields(
             // computed/readonly and non-stored (related/computed) Studio fields.
             !def.readonly &&
             def.store !== false &&
-            SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type),
+            SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type) &&
+            // Skip fields the create form already renders natively (avoids a
+            // duplicate picker, e.g. a custom x_project_id on a timesheet line).
+            !isNativelyHandled(model, key, def),
         ),
     );
 }
@@ -144,7 +188,8 @@ export async function getCustomFieldReport(
         Object.entries(schema).filter(([key, def]) =>
             key.startsWith('x_') &&
             !def.readonly &&
-            def.store !== false,
+            def.store !== false &&
+            !isNativelyHandled(model, key, def),
         )
     );
     const supported = Object.fromEntries(

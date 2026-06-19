@@ -4,8 +4,8 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { buildOdooContext, getAuthenticatedEmployeeId, getActiveCompanyId, getLang, getOdooContext } from '../lib/authContext';
-import { companyCompatible, companyContext, getEmployeeCompanyId, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
+import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { companyCompatible, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
 import { attachmentsSchema } from '../lib/attachments';
 
 const router = Router();
@@ -91,12 +91,13 @@ router.get('/taxes', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
+        const ctx = await buildReadContext(req, client, uid);
         const taxes: any = await client.searchRead(
             uid,
             'account.tax',
             [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']]],
             ['id', 'name', 'amount', 'amount_type'],
-            { context: getOdooContext(req) }
+            { context: ctx }
         );
         res.json({ taxes: Array.isArray(taxes) ? taxes : [] });
     } catch (error: any) {
@@ -114,7 +115,7 @@ router.get('/products', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
-        const ctx = getOdooContext(req);
+        const ctx = await buildReadContext(req, client, uid);
         let products: any[] = [];
 
         try {
@@ -133,7 +134,8 @@ router.get('/products', async (req, res) => {
                     uid,
                     'product.product',
                     [['can_be_expensed', '=', true]],
-                    ['id', 'name', 'standard_price']
+                    ['id', 'name', 'standard_price'],
+                    { silent: true, context: ctx }
                 );
                 products = Array.isArray(result) ? result : [];
             } catch (fallbackError) {
@@ -148,7 +150,7 @@ router.get('/products', async (req, res) => {
                     'product.template',
                     [['can_be_expensed', '=', true]],
                     ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'],
-                    true
+                    { silent: true, context: ctx }
                 );
                 if (Array.isArray(templates)) {
                     products = templates
@@ -169,7 +171,8 @@ router.get('/products', async (req, res) => {
                         uid,
                         'product.template',
                         [['can_be_expensed', '=', true]],
-                        ['id', 'name', 'standard_price', 'product_variant_ids']
+                        ['id', 'name', 'standard_price', 'product_variant_ids'],
+                        { silent: true, context: ctx }
                     );
                     if (Array.isArray(templates)) {
                         products = templates
@@ -188,16 +191,9 @@ router.get('/products', async (req, res) => {
             }
         }
 
-        const activeCompanyId = ctx.company_id;
-        let employeeCompanyId: number | null = null;
-        try {
-            const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
-            employeeCompanyId = await getEmployeeCompanyId(client, uid, employeeId);
-        } catch (e) {
-            console.warn('[expenses] employee company lookup failed; returning unfiltered products:', e);
-        }
-
-        const enriched = withCompanyRequestability(products, activeCompanyId ?? employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
+        // ctx.company_id is the employee's own company (derived server-side).
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+        const enriched = withCompanyRequestability(products, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
         res.json({ products: requestableRecords(enriched) });
     } catch (error: any) {
         console.error('Fetch Expense Products Error:', error);
@@ -213,10 +209,11 @@ router.get('/analytic-accounts', async (req, res) => {
         if (!tenantConfig) return res.status(401).json({ error: 'Unknown tenant' });
         const client = getOdooClient(tenantId, tenantConfig);
         const uid = await client.authenticate();
+        const ctx = await buildReadContext(req, client, uid);
         const accounts: any = await client
             .searchRead(uid, 'account.analytic.account', [], ['id', 'name'], {
                 silent: true,
-                context: getOdooContext(req),
+                context: ctx,
                 limit: 500,
             })
             .catch(() => []);
@@ -265,27 +262,10 @@ router.post('/', async (req, res) => {
         }
 
         const employee = employees[0];
-        const selectedCompanyId = getActiveCompanyId(req);
-        const employeeCompanyId = Array.isArray(employee.company_id) ? employee.company_id[0] : null;
-        if (selectedCompanyId && employeeCompanyId && selectedCompanyId !== employeeCompanyId) {
-            return res.status(422).json({ error: 'Selected company is not available for this employee.' });
-        }
-        const lang = getLang(req);
-        const ctx: Record<string, any> = {
-            ...companyContext(selectedCompanyId ?? employeeCompanyId),
-            ...(lang ? { lang } : {}),
-        };
-        // Prefer the operating company chosen in the app; fall back to the employee's company.
-        const activeCompanyId = getActiveCompanyId(req);
-        // Never trust the X-Company-Id header blindly — it must be a company the
-        // integration user can actually operate in.
-        if (activeCompanyId) {
-            const allowedCompanies = [activeCompanyId];
-            if (allowedCompanies.length > 0 && !allowedCompanies.includes(activeCompanyId)) {
-                return res.status(422).json({ error: 'Selected company is not available.' });
-            }
-        }
-        const companyId = ctx.company_id ?? employee.company_id[0];
+        // Company is always the employee's own company, derived + validated server-side.
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
+        const companyId = (ctx.company_id as number | undefined)
+            ?? (Array.isArray(employee.company_id) ? employee.company_id[0] : undefined);
 
         const companies: any = await client.searchRead(
             uid,

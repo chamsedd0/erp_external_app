@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
-import { authHeader, SAMPLE_TENANT, makeMockOdooClient } from './helpers';
+import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -86,10 +86,12 @@ describe('GET /timesheet', () => {
 
 describe('GET /timesheet/projects', () => {
     it('returns active projects', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 1, name: 'Project Alpha' },
-            { id: 2, name: 'Project Beta' },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'project.project': () => [
+                { id: 1, name: 'Project Alpha', company_id: [1, 'Test Co'] },
+                { id: 2, name: 'Project Beta', company_id: false },
+            ],
+        });
 
         const res = await request(app)
             .get('/timesheet/projects')
@@ -99,13 +101,41 @@ describe('GET /timesheet/projects', () => {
         expect(res.body.projects).toHaveLength(2);
     });
 
+    it('filters projects to the authenticated employee company', async () => {
+        let seenDomain: any[] = [];
+        mockSearchReadByModel(mockClient, {
+            'project.project': (domain) => {
+                seenDomain = domain;
+                return [
+                    { id: 1, name: 'Own Project', company_id: [1, 'Test Co'] },
+                    { id: 2, name: 'Shared Project', company_id: false },
+                    { id: 3, name: 'Other Company Project', company_id: [99, 'Other Co'] },
+                ];
+            },
+        });
+
+        const res = await request(app)
+            .get('/timesheet/projects')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.projects.map((p: any) => p.name)).toEqual(['Own Project', 'Shared Project']);
+        expect(seenDomain).toEqual(expect.arrayContaining([
+            ['active', '=', true],
+            ['company_id', '=', false],
+            ['company_id', '=', 1],
+        ]));
+    });
+
     it('returns 401 without JWT', async () => {
         const res = await request(app).get('/timesheet/projects');
         expect(res.status).toBe(401);
     });
 
     it('returns 500 on Odoo error', async () => {
-        mockClient.searchRead.mockRejectedValueOnce(new Error('RPC error'));
+        mockSearchReadByModel(mockClient, {
+            'project.project': () => { throw new Error('RPC error'); },
+        });
         const res = await request(app)
             .get('/timesheet/projects')
             .set('Authorization', authHeader());
@@ -117,10 +147,13 @@ describe('GET /timesheet/projects', () => {
 
 describe('GET /timesheet/tasks', () => {
     it('returns tasks for given project_id', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 10, name: 'Design UI' },
-            { id: 11, name: 'Write tests' },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'project.project': () => [{ id: 1, company_id: [1, 'Test Co'] }],
+            'project.task': () => [
+                { id: 10, name: 'Design UI' },
+                { id: 11, name: 'Write tests' },
+            ],
+        });
 
         const res = await request(app)
             .get('/timesheet/tasks?project_id=1')
@@ -131,10 +164,13 @@ describe('GET /timesheet/tasks', () => {
     });
 
     it('filters tasks linked to time off types', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 10, name: 'Client Work', leave_type_id: false },
-            { id: 11, name: 'Time Off Task', leave_type_id: [1, 'Annual Leave'] },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'project.project': () => [{ id: 1, company_id: [1, 'Test Co'] }],
+            'project.task': () => [
+                { id: 10, name: 'Client Work', leave_type_id: false },
+                { id: 11, name: 'Time Off Task', leave_type_id: [1, 'Annual Leave'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/timesheet/tasks?project_id=1')
@@ -171,10 +207,20 @@ describe('POST /timesheet', () => {
         name: 'Implemented authentication flow',
     };
 
+    function mockTimesheetProject(account: any = [10, 'Alpha Account'], projectCompany: any = [1, 'Test Co']) {
+        mockSearchReadByModel(mockClient, {
+            'project.project': (_domain, fields) => {
+                if (fields.includes('analytic_account_id')) {
+                    if (account instanceof Error) throw account;
+                    return [{ analytic_account_id: account }];
+                }
+                return projectCompany === null ? [] : [{ id: 1, name: 'Project Alpha', company_id: projectCompany }];
+            },
+        });
+    }
+
     it('creates timesheet entry and returns 200 with id', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }]) // project existence check
-            .mockResolvedValueOnce([{ analytic_account_id: [10, 'Alpha Account'] }]); // analytic account
+        mockTimesheetProject([10, 'Alpha Account']);
         mockClient.createRecord.mockResolvedValueOnce(300);
 
         const res = await request(app)
@@ -188,9 +234,7 @@ describe('POST /timesheet', () => {
     });
 
     it('includes account_id in record when analytic account resolves', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: [10, 'Alpha Account'] }]);
+        mockTimesheetProject([10, 'Alpha Account']);
         mockClient.createRecord.mockResolvedValueOnce(301);
 
         await request(app)
@@ -203,9 +247,7 @@ describe('POST /timesheet', () => {
     });
 
     it('omits account_id when analytic_account_id field is absent (Odoo v15)', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockRejectedValueOnce(new Error('field analytic_account_id not found')); // field absent
+        mockTimesheetProject(new Error('field analytic_account_id not found'));
         mockClient.createRecord.mockResolvedValueOnce(302);
 
         const res = await request(app)
@@ -219,9 +261,7 @@ describe('POST /timesheet', () => {
     });
 
     it('omits account_id when analytic_account_id is false', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockTimesheetProject(false);
         mockClient.createRecord.mockResolvedValueOnce(303);
 
         await request(app)
@@ -234,9 +274,7 @@ describe('POST /timesheet', () => {
     });
 
     it('includes task_id in record when provided', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockTimesheetProject(false);
         mockClient.createRecord.mockResolvedValueOnce(304);
 
         await request(app)
@@ -249,9 +287,7 @@ describe('POST /timesheet', () => {
     });
 
     it('returns 422 when Odoo rejects a task linked to time off', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockTimesheetProject(false);
         mockClient.createRecord.mockRejectedValueOnce({ faultString: 'You cannot create timesheets for a task that is linked to a time off type. Please use the Time Off application.' });
 
         const res = await request(app)
@@ -264,9 +300,7 @@ describe('POST /timesheet', () => {
     });
 
     it('omits task_id when not provided', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockTimesheetProject(false);
         mockClient.createRecord.mockResolvedValueOnce(305);
 
         await request(app)
@@ -295,21 +329,19 @@ describe('POST /timesheet', () => {
     });
 
     it('returns 400 when project is not found in Odoo', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]); // project not found
+        mockTimesheetProject(false, null);
 
         const res = await request(app)
             .post('/timesheet')
             .set('Authorization', authHeader())
             .send(VALID_BODY);
 
-        expect(res.status).toBe(400);
-        expect(res.body.error).toMatch(/project not found/i);
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/project is not available/i);
     });
 
     it('returns 500 when createRecord throws', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 1, name: 'Project Alpha' }])
-            .mockResolvedValueOnce([{ analytic_account_id: false }]);
+        mockTimesheetProject(false);
         mockClient.createRecord.mockRejectedValueOnce(new Error('Odoo RPC failure'));
 
         const res = await request(app)

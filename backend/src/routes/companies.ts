@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getAuthenticatedEmployeeId } from '../lib/authContext';
-import { getEmployeeAllowedCompanyIds, getEmployeeCompanyId, getIntegrationCompanyIds, relationId } from '../lib/odooCompatibility';
+import { getEmployeeCompanyId, relationId } from '../lib/odooCompatibility';
 
 const router = Router();
 
-// GET / — companies the integration user can operate in, plus the requesting
-// employee's default company. Powers the in-app "Operating Company" switcher.
+// GET / — the authenticated employee's company.
+// One mobile account maps to one hr.employee and one res.company. Never expose
+// the integration user's broader multi-company access to the mobile app.
 router.get('/', async (req, res) => {
     try {
         const tenantId = (req as any).jwtPayload?.tenantId as string;
@@ -16,26 +17,20 @@ router.get('/', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
         const uid = await client.authenticate();
 
-        let defaultCompanyId: number | null = null;
-        let fallbackCompanyScope = false;
-        let companyIds: number[] = [];
-        try {
-            const empId = getAuthenticatedEmployeeId(req, req.query.employee_id);
-            defaultCompanyId = await getEmployeeCompanyId(client, uid, empId);
-            companyIds = await getEmployeeAllowedCompanyIds(client, uid, empId);
-        } catch {
-            // Older clients may call without employee context; keep a visible fallback.
+        const empId = getAuthenticatedEmployeeId(req, req.query.employee_id);
+        const defaultCompanyId = await getEmployeeCompanyId(client, uid, empId);
+        if (!defaultCompanyId) {
+            return res.status(422).json({
+                error: 'Employee company is not configured. Please contact your administrator.',
+                companies: [],
+                default_company_id: null,
+                fallback_company_scope: false,
+            });
         }
 
-        // Fallback: every readable company (older Odoo / restricted user record)
-        if (companyIds.length === 0) {
-            fallbackCompanyScope = true;
-            companyIds = await getIntegrationCompanyIds(client, uid);
-        }
-
-        const companies: any = companyIds.length
+        const companies: any = defaultCompanyId
             ? await client
-                  .searchRead(uid, 'res.company', [['id', 'in', companyIds]], ['id', 'name', 'currency_id'], true)
+                  .searchRead(uid, 'res.company', [['id', '=', defaultCompanyId]], ['id', 'name', 'currency_id'], true)
                   .catch(() => [])
             : [];
 
@@ -57,11 +52,7 @@ router.get('/', async (req, res) => {
                 currency: cur ? { id: cur.id, symbol: cur.symbol, position: cur.position } : null,
             };
         });
-        
-            // employee lookup optional — switcher still works without a default
-        
-
-        res.json({ companies: result, default_company_id: defaultCompanyId, fallback_company_scope: fallbackCompanyScope });
+        res.json({ companies: result, default_company_id: defaultCompanyId, fallback_company_scope: false });
     } catch (error: any) {
         console.error('Fetch Companies Error:', error);
         res.status(500).json({ error: error.message });

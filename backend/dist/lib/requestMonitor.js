@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requestMonitor = void 0;
+const crypto_1 = require("crypto");
 const client_1 = require("../odoo/client");
 const tenantStore_1 = require("./tenantStore");
 const notificationStore_1 = require("./notificationStore");
 const pushStore_1 = require("./pushStore");
 const redis_1 = require("./redis");
 const cacheKey = (tenantId, employeeId) => `shadow:t:${tenantId}:req_cache:${employeeId}`;
+const monitorStatusKey = (tenantId) => `shadow:t:${tenantId}:monitor_status`;
 async function loadCache(tenantId, employeeId) {
     try {
         const raw = await (0, redis_1.redisGet)(cacheKey(tenantId, employeeId));
@@ -147,9 +149,9 @@ exports.requestMonitor = {
                 if (previous && previous.state !== stageId) {
                     const isDoneStage = /\b(done|closed|resolved|cancel)/i.test(stageName);
                     const notif = {
-                        id: Math.random().toString(36).substring(7),
+                        id: (0, crypto_1.randomUUID)(),
                         employeeId,
-                        title: isDoneStage ? 'IT Support Ticket Closed' : 'IT Support Ticket Updated',
+                        title: isDoneStage ? 'Helpdesk Ticket Closed' : 'Helpdesk Ticket Updated',
                         message: `Your ticket "${req.name}" moved to stage: ${stageName || 'Updated'}.`,
                         type: isDoneStage ? 'request_approved' : 'system',
                         read: false,
@@ -171,7 +173,7 @@ exports.requestMonitor = {
                 if (previous && previous.state !== stageId) {
                     const isDoneStage = /\b(done|repaired|closed|cancel)/i.test(stageName);
                     const notif = {
-                        id: Math.random().toString(36).substring(7),
+                        id: (0, crypto_1.randomUUID)(),
                         employeeId,
                         title: isDoneStage ? 'Maintenance Request Completed' : 'Maintenance Request Updated',
                         message: `Your maintenance request "${req.name}" moved to: ${stageName || 'Updated'}.`,
@@ -195,6 +197,12 @@ exports.requestMonitor = {
         }
         // ── 9. Save updated cache to Redis ────────────────────────────────────
         await saveCache(tenantId, employeeId, newCache);
+        await (0, redis_1.redisSet)(monitorStatusKey(tenantId), JSON.stringify({
+            last_run_at: new Date().toISOString(),
+            employee_id: employeeId,
+            notifications_created: notificationsToAdd.length,
+            fetched,
+        })).catch(() => undefined);
     },
 };
 // ── Notification factory for leave / expense (string-state models) ────────────
@@ -220,7 +228,7 @@ function createLeaveExpenseNotification(employeeId, req, type, oldState, newStat
     if (!title)
         return null;
     return {
-        id: Math.random().toString(36).substring(7),
+        id: (0, crypto_1.randomUUID)(),
         employeeId,
         title,
         message,

@@ -29,12 +29,14 @@
     "markAllRead": "Mark All as Read",
     "appVersion": "App Version",
     "hrContact": "HR Contact",
-    "operatingCompany": "Operating Company",
-    "operatingCompanyHint": "Company used for new requests",
     "changeCompany": "Change Company",
     "language": "Language",
     "clearCache": "Clear App Cache",
-    "restartRequired": "Restart the app to apply the new layout direction."
+    "restartRequired": "Restart the app to apply the new layout direction.",
+    "appearance": "Appearance",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System"
   },
   "newRequest": {
     "title": "New Request",
@@ -44,11 +46,11 @@
     "expense": "Expense Claim",
     "expenseSub": "Reimbursements & Purchases",
     "attendance": "Attendance",
-    "attendanceSub": "Corrections, Overtime & Absences",
+    "attendanceSub": "Fix a missed check-in or check-out",
     "moreOptions": "More Options",
     "timesheet": "Timesheet",
     "timesheetSub": "Log your hours",
-    "itSupport": "IT Support",
+    "itSupport": "Helpdesk",
     "itSupportSub": "Report an issue",
     "maintenance": "Maintenance",
     "maintenanceSub": "Equipment & facility issues"
@@ -75,9 +77,13 @@
     "category": "Category",
     "equipment": "Equipment",
     "team": "Team",
+    "manufacturingOrder": "Manufacturing Order",
     "priority": "Priority",
     "scheduledDate": "Scheduled Date",
-    "requestDate": "Request Date"
+    "scheduledEnd": "Scheduled End",
+    "requestDate": "Request Date",
+    "recurrent": "Recurrent",
+    "noEquipment": "No equipment is registered for your company."
   },
   "timesheet": {
     "title": "Timesheet",
@@ -143,31 +149,51 @@
       "badge": "Welcome to Shadow",
       "title": "Your workplace,\nin your pocket",
       "subtitle": "Everything you need to manage your work life — available anytime, anywhere.",
-      "bullets": ["Submit requests in seconds", "Track approvals in real time", "Stay connected with your team"]
+      "bullets": [
+        "Submit requests in seconds",
+        "Track approvals in real time",
+        "Stay connected with your team"
+      ]
     },
     "requests": {
       "badge": "Time Off & Requests",
       "title": "Request time off\neffortlessly",
       "subtitle": "Choose your leave type, pick your dates, and submit — your manager gets notified instantly.",
-      "bullets": ["Annual, sick & unpaid leave", "Date picker with day count", "Attach supporting documents"]
+      "bullets": [
+        "Annual, sick & unpaid leave",
+        "Date picker with day count",
+        "Attach supporting documents"
+      ]
     },
     "expenses": {
       "badge": "Expenses",
       "title": "Log expenses\non the go",
       "subtitle": "Snap a receipt, pick a category, and submit your expense claim before you even leave the meeting.",
-      "bullets": ["Snap & attach receipts", "Select from expense categories", "Track reimbursement status"]
+      "bullets": [
+        "Snap & attach receipts",
+        "Select from expense categories",
+        "Track reimbursement status"
+      ]
     },
     "timesheets": {
       "badge": "Timesheets",
       "title": "Log your hours\nwith ease",
       "subtitle": "Pick a project, add a task, enter your hours — your timesheet is always up to date.",
-      "bullets": ["Browse projects & tasks", "Log hours with a description", "Review past entries anytime"]
+      "bullets": [
+        "Browse projects & tasks",
+        "Log hours with a description",
+        "Review past entries anytime"
+      ]
     },
     "notifications": {
       "badge": "Stay in the loop",
       "title": "Never miss\nan update",
       "subtitle": "Get notified the moment your requests are approved, rejected, or need your attention.",
-      "bullets": ["Real-time push notifications", "In-app notification centre", "Mark all as read in one tap"]
+      "bullets": [
+        "Real-time push notifications",
+        "In-app notification centre",
+        "Mark all as read in one tap"
+      ]
     }
   },
   "dashboard": {
@@ -194,7 +220,10 @@
   },
   "notificationsScreen": {
     "inbox": "Inbox",
-    "unread": { "one": "{{count}} unread message", "other": "{{count}} unread messages" },
+    "unread": {
+      "one": "{{count}} unread message",
+      "other": "{{count}} unread messages"
+    },
     "today": "Today",
     "yesterday": "Yesterday",
     "earlier": "Earlier",

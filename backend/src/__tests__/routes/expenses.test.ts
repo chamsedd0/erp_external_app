@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
-import { authHeader, SAMPLE_TENANT, makeMockOdooClient } from './helpers';
+import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -94,10 +94,12 @@ describe('GET /expenses/pending', () => {
 
 describe('GET /expenses/products', () => {
     it('returns products from product.product when available', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 10, name: 'Accommodation', standard_price: 0 },
-            { id: 11, name: 'Meals', standard_price: 0 },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => [
+                { id: 10, name: 'Accommodation', standard_price: 0, company_id: [1, 'Test Co'] },
+                { id: 11, name: 'Meals', standard_price: 0, company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -109,12 +111,13 @@ describe('GET /expenses/products', () => {
     });
 
     it('falls back to product.template when product.product returns empty', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([]) // product.product returns nothing
-            .mockResolvedValueOnce([   // product.template fallback
-                { id: 20, name: 'Transport', standard_price: 0, product_variant_ids: [55] },
-                { id: 21, name: 'Hotel', standard_price: 0, product_variant_ids: [56] },
-            ]);
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => [],
+            'product.template': () => [
+                { id: 20, name: 'Transport', standard_price: 0, product_variant_ids: [55], company_id: [1, 'Test Co'] },
+                { id: 21, name: 'Hotel', standard_price: 0, product_variant_ids: [56], company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -127,11 +130,16 @@ describe('GET /expenses/products', () => {
     });
 
     it('falls back to product.template when product.product throws', async () => {
-        mockClient.searchRead
-            .mockRejectedValueOnce(new Error('model not found'))
-            .mockResolvedValueOnce([
-                { id: 30, name: 'Parking', standard_price: 0, product_variant_ids: [60] },
-            ]);
+        let firstProductCall = true;
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => {
+                if (firstProductCall) { firstProductCall = false; throw new Error('model not found'); }
+                return [];
+            },
+            'product.template': () => [
+                { id: 30, name: 'Parking', standard_price: 0, product_variant_ids: [60], company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -142,9 +150,10 @@ describe('GET /expenses/products', () => {
     });
 
     it('returns empty products when both sources fail', async () => {
-        mockClient.searchRead
-            .mockRejectedValueOnce(new Error('product.product error'))
-            .mockRejectedValueOnce(new Error('product.template error'));
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => { throw new Error('product.product error'); },
+            'product.template': () => { throw new Error('product.template error'); },
+        });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -155,12 +164,13 @@ describe('GET /expenses/products', () => {
     });
 
     it('excludes template entries with no variants', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([]) // product.product empty
-            .mockResolvedValueOnce([
-                { id: 20, name: 'With Variants', standard_price: 0, product_variant_ids: [55] },
-                { id: 21, name: 'No Variants', standard_price: 0, product_variant_ids: [] },
-            ]);
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => [],
+            'product.template': () => [
+                { id: 20, name: 'With Variants', standard_price: 0, product_variant_ids: [55], company_id: [1, 'Test Co'] },
+                { id: 21, name: 'No Variants', standard_price: 0, product_variant_ids: [], company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -171,13 +181,13 @@ describe('GET /expenses/products', () => {
     });
 
     it('excludes products from a different employee company', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'product.product': () => [
                 { id: 10, name: 'Same Company', standard_price: 0, company_id: [1, 'My Company'] },
                 { id: 11, name: 'Global Product', standard_price: 0, company_id: false },
                 { id: 12, name: 'Other Company', standard_price: 0, company_id: [2, 'Other'] },
-            ])
-            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]);
+            ],
+        }, { employeeCompanyId: 1 });
 
         const res = await request(app)
             .get('/expenses/products')
@@ -201,7 +211,8 @@ describe('POST /expenses', () => {
 
     function setupValidCreate(expenseId = 77) {
         mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]) // hr.employee
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]) // route hr.employee lookup
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]) // buildOdooContext hr.employee lookup
             .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);        // res.company
         mockClient.createRecord.mockResolvedValueOnce(expenseId);
     }
@@ -262,6 +273,7 @@ describe('POST /expenses', () => {
     it('retries without total_amount_currency when first create throws "Invalid field"', async () => {
         mockClient.searchRead
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
         mockClient.createRecord
             .mockRejectedValueOnce({ faultString: 'Invalid field total_amount_currency on model hr.expense' })
@@ -298,6 +310,7 @@ describe('POST /expenses', () => {
     it('returns 500 when Odoo createRecord throws unrecognized error', async () => {
         mockClient.searchRead
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
         mockClient.createRecord.mockRejectedValue(new Error('Unexpected Odoo RPC error'));
 
@@ -322,10 +335,10 @@ describe('POST /expenses', () => {
     });
 
     it('returns 422 before create when selected product belongs to another company', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
-            .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }])
-            .mockResolvedValueOnce([{ id: 10, company_id: [2, 'Other Company'] }]);
+        mockSearchReadByModel(mockClient, {
+            'res.company': () => [{ id: 1, currency_id: [3, 'USD'] }],
+            'product.product': () => [{ id: 10, company_id: [2, 'Other Company'] }],
+        }, { employeeCompanyId: 1 });
 
         const res = await request(app)
             .post('/expenses')
@@ -405,6 +418,7 @@ describe('POST /expenses', () => {
         mockClient.getVersion.mockResolvedValue(17);
         mockClient.searchRead
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
         mockClient.createRecord.mockResolvedValueOnce(80);
 
@@ -421,6 +435,7 @@ describe('POST /expenses', () => {
     it('uses price_unit on Odoo 16', async () => {
         mockClient.getVersion.mockResolvedValue(16);
         mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [3, 'USD'] }]);
         mockClient.createRecord.mockResolvedValueOnce(81);
@@ -439,10 +454,12 @@ describe('POST /expenses', () => {
 
 describe('GET /expenses/taxes', () => {
     it('returns tax list filtered to purchase/all usage', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 1, name: 'VAT 20%', amount: 20, amount_type: 'percent' },
-            { id: 2, name: 'Fixed Fee', amount: 5, amount_type: 'fixed' },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'account.tax': () => [
+                { id: 1, name: 'VAT 20%', amount: 20, amount_type: 'percent' },
+                { id: 2, name: 'Fixed Fee', amount: 5, amount_type: 'fixed' },
+            ],
+        });
 
         const res = await request(app)
             .get('/expenses/taxes')
@@ -454,7 +471,9 @@ describe('GET /expenses/taxes', () => {
     });
 
     it('returns empty taxes array when searchRead throws (silent fail)', async () => {
-        mockClient.searchRead.mockRejectedValueOnce(new Error('account.tax not found'));
+        mockSearchReadByModel(mockClient, {
+            'account.tax': () => { throw new Error('account.tax not found'); },
+        });
 
         const res = await request(app)
             .get('/expenses/taxes')
@@ -552,7 +571,8 @@ describe('POST /expenses — resilience: Odoo version detection edge cases', () 
         mockClient.getVersion.mockResolvedValueOnce(17);
         // POST /expenses calls searchRead twice: employee lookup, then company lookup
         mockClient.searchRead
-            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])  // hr.employee
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])  // route hr.employee lookup
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])  // buildOdooContext hr.employee lookup
             .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);        // res.company
         mockClient.createRecord.mockResolvedValueOnce(55);
 
@@ -570,6 +590,7 @@ describe('POST /expenses — resilience: Odoo version detection edge cases', () 
         mockClient.getVersion.mockResolvedValueOnce(16);
         mockClient.searchRead
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);
         mockClient.createRecord.mockResolvedValueOnce(56);
 
@@ -586,6 +607,7 @@ describe('POST /expenses — resilience: Odoo version detection edge cases', () 
     it('falls back to total_amount when price_unit is rejected with "Invalid field"', async () => {
         mockClient.getVersion.mockResolvedValueOnce(16); // v16 path → primary uses price_unit
         mockClient.searchRead
+            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
             .mockResolvedValueOnce([{ id: 42, company_id: [1, 'Test Corp'] }])
             .mockResolvedValueOnce([{ id: 1, currency_id: [1, 'USD'] }]);
         mockClient.createRecord

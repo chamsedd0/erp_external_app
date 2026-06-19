@@ -2,6 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useCallback, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { loadStoredLang } from '../lib/i18n';
+import { loadThemePreference } from '../lib/theme-preference';
 import { ThemeProvider } from '../theme/theme-provider';
 import { SessionProvider, useSession } from '../providers/auth-context';
 import { ToastProvider } from '../providers/toast-context';
@@ -104,7 +105,7 @@ export default function RootLayout() {
     const [langLoaded, setLangLoaded] = useState(false);
 
     useEffect(() => {
-        loadStoredLang().finally(() => setLangLoaded(true));
+        Promise.all([loadStoredLang(), loadThemePreference()]).finally(() => setLangLoaded(true));
     }, []);
 
     const ready = fontsLoaded && langLoaded;

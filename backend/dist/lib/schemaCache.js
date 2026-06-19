@@ -1,20 +1,78 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.SUPPORTED_CUSTOM_FIELD_TYPES = void 0;
 exports.getModelSchema = getModelSchema;
+exports.clearModelSchemaCache = clearModelSchemaCache;
 exports.getCustomFields = getCustomFields;
+exports.getCustomFieldReport = getCustomFieldReport;
+exports.validateRequiredCustomFields = validateRequiredCustomFields;
 exports.validatePayload = validatePayload;
 const redis_1 = require("./redis");
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SCHEMA_TTL_S = 86400; // 24 hours
+exports.SUPPORTED_CUSTOM_FIELD_TYPES = new Set([
+    'char',
+    'text',
+    'boolean',
+    'integer',
+    'float',
+    'monetary',
+    'date',
+    'datetime',
+    'selection',
+    'many2one',
+]);
 /** Fields that Odoo manages automatically — never sent by callers, never validated. */
 const SYSTEM_FIELDS = new Set([
     'id', 'create_date', 'write_date', 'create_uid', 'write_uid',
     '__last_update', 'display_name', 'active',
 ]);
+/**
+ * Relation models that the mobile create forms already expose via a dedicated
+ * native selector, per source model. A tenant custom (x_) many2one pointing at
+ * one of these would render a SECOND, duplicate picker (e.g. a Studio
+ * `x_project_id` → project.project on a timesheet line duplicates the built-in
+ * Project selector). We hide such custom fields from the dynamic renderer so the
+ * native selector remains the single source of truth.
+ */
+const NATIVE_RELATION_MODELS = {
+    'account.analytic.line': new Set(['project.project', 'project.task']),
+    'hr.expense': new Set(['product.product', 'product.template', 'account.analytic.account']),
+    'maintenance.request': new Set(['maintenance.equipment', 'maintenance.equipment.category', 'maintenance.team']),
+    'hr.leave': new Set(['hr.leave.type']),
+    'helpdesk.ticket': new Set(['helpdesk.team', 'helpdesk.ticket.type', 'helpdesk.tag', 'res.users']),
+};
+const NATIVE_FIELD_NAME_PATTERNS = {
+    'account.analytic.line': [
+        /(^|_)project(_id)?$/i,
+        /(^|_)task(_id)?$/i,
+        /project.*task/i,
+    ],
+};
+/**
+ * True when a custom field on `model` should be hidden from the dynamic renderer
+ * because the create form already covers it with a native control:
+ *  - many2one fields whose relation is already a native selector for this model;
+ *  - the well-known scalar fields the form sets itself (dates, duration, etc.).
+ */
+function isNativelyHandled(model, fieldName, def) {
+    if (def.type === 'many2one' && def.relation) {
+        const natives = NATIVE_RELATION_MODELS[model];
+        if (natives?.has(def.relation))
+            return true;
+    }
+    if (def.type === 'many2one' && NATIVE_FIELD_NAME_PATTERNS[model]?.some(re => re.test(fieldName))) {
+        return true;
+    }
+    return false;
+}
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function schemaKey(tenantId, model) {
     // e.g. shadow:t:isec-v17:schema:hr_expense
     return `shadow:t:${tenantId}:schema:${model.replace(/\./g, '_')}`;
+}
+function schemaMetaKey(tenantId, model) {
+    return `${schemaKey(tenantId, model)}:meta`;
 }
 // ── Public API ────────────────────────────────────────────────────────────────
 /**
@@ -38,6 +96,7 @@ async function getModelSchema(tenantId, client, uid, model) {
         const schema = await client.getSchema(uid, model);
         // 3. Write to cache (best-effort)
         (0, redis_1.redisSet)(key, JSON.stringify(schema), SCHEMA_TTL_S).catch(() => { });
+        (0, redis_1.redisSet)(schemaMetaKey(tenantId, model), JSON.stringify({ cached_at: new Date().toISOString() }), SCHEMA_TTL_S).catch(() => { });
         return schema;
     }
     catch {
@@ -45,13 +104,71 @@ async function getModelSchema(tenantId, client, uid, model) {
         return {};
     }
 }
+async function clearModelSchemaCache(tenantId, model) {
+    await Promise.all([
+        (0, redis_1.redisDel)(schemaKey(tenantId, model)).catch(() => undefined),
+        (0, redis_1.redisDel)(schemaMetaKey(tenantId, model)).catch(() => undefined),
+    ]);
+}
 /**
  * Returns only custom fields (prefixed `x_`) with their definitions.
  * Empty object if none exist or on any failure.
  */
 async function getCustomFields(tenantId, client, uid, model) {
     const schema = await getModelSchema(tenantId, client, uid, model);
-    return Object.fromEntries(Object.entries(schema).filter(([key]) => key.startsWith('x_')));
+    return Object.fromEntries(Object.entries(schema).filter(([key, def]) => key.startsWith('x_') &&
+        // Only surface fields an employee can actually fill in: skip
+        // computed/readonly and non-stored (related/computed) Studio fields.
+        !def.readonly &&
+        def.store !== false &&
+        exports.SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type) &&
+        // Skip fields the create form already renders natively (avoids a
+        // duplicate picker, e.g. a custom x_project_id on a timesheet line).
+        !isNativelyHandled(model, key, def)));
+}
+async function getCustomFieldReport(tenantId, client, uid, model) {
+    const schema = await getModelSchema(tenantId, client, uid, model);
+    const metaRaw = await (0, redis_1.redisGet)(schemaMetaKey(tenantId, model)).catch(() => null);
+    let schema_cached_at = null;
+    if (metaRaw) {
+        try {
+            schema_cached_at = JSON.parse(metaRaw).cached_at ?? null;
+        }
+        catch {
+            schema_cached_at = null;
+        }
+    }
+    const writableCustom = Object.fromEntries(Object.entries(schema).filter(([key, def]) => key.startsWith('x_') &&
+        !def.readonly &&
+        def.store !== false &&
+        !isNativelyHandled(model, key, def)));
+    const supported = Object.fromEntries(Object.entries(writableCustom).filter(([, def]) => exports.SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type)));
+    const unsupported = Object.fromEntries(Object.entries(writableCustom).filter(([, def]) => !exports.SUPPORTED_CUSTOM_FIELD_TYPES.has(def.type)));
+    const unsupportedRequired = Object.fromEntries(Object.entries(unsupported).filter(([, def]) => def.required));
+    return {
+        custom_fields: supported,
+        schema_available: Object.keys(schema).length > 0,
+        unsupported_fields: unsupported,
+        unsupported_required_fields: unsupportedRequired,
+        schema_cached_at,
+    };
+}
+/**
+ * Returns the labels of required custom fields that are missing/empty in the
+ * supplied values. Use before create to fail fast with a clear message instead
+ * of letting Odoo reject the write with a less controlled error.
+ */
+function validateRequiredCustomFields(customFields, values) {
+    const missing = [];
+    for (const [name, def] of Object.entries(customFields)) {
+        if (!def.required)
+            continue;
+        const v = values?.[name];
+        if (v === undefined || v === null || v === false || v === '') {
+            missing.push(def.string);
+        }
+    }
+    return missing;
 }
 /**
  * Pre-validates a payload against the live Odoo schema before createRecord.

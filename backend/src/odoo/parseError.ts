@@ -163,6 +163,13 @@ export function parseOdooError(err: any): OdooErrorResult {
 export function sendOdooError(res: any, err: any, context: string): void {
     if (err?.name === 'ZodError' || err instanceof Error && err.message.startsWith('ZodError')) return;
 
+    // Honor explicit status codes set by our own guards (e.g. the validated
+    // company-context helpers throw a 422 with a clear, user-facing message).
+    if (typeof err?.statusCode === 'number') {
+        res.status(err.statusCode).json({ error: err.message });
+        return;
+    }
+
     const { message, isBusinessRule, raw } = parseOdooError(err);
     console.error(`[${context}] Odoo error: ${raw}`);
     const status = isBusinessRule ? 422 : 500;

@@ -19,10 +19,7 @@ export function companyCompatible(recordCompany: any, employeeCompanyId: number 
     return recordCompanyId === null || recordCompanyId === employeeCompanyId;
 }
 
-/**
- * Companies the integration user may operate in — the trust boundary for the
- * client-supplied X-Company-Id. Falls back to all readable companies.
- */
+/** Companies the integration user may operate in, used only by admin/certification helpers. */
 export async function getIntegrationCompanyIds(client: any, uid: number): Promise<number[]> {
     const users: any = await client
         .searchRead(uid, 'res.users', [['id', '=', uid]], ['company_ids'], true)

@@ -52,7 +52,7 @@ function friendlyError(raw: string, status?: number): string {
 
     // Helpdesk
     if (s.includes('helpdesk'))
-        return 'Could not submit your support ticket. Please try again.';
+        return 'Could not submit your helpdesk ticket. Please try again.';
 
     // Maintenance
     if (s.includes('maintenance'))
@@ -88,9 +88,10 @@ async function apiFetch<T = any>(
     path: string,
     options?: RequestInit
 ): Promise<T> {
-    const [token, companyId, lang] = await Promise.all([
+    // No X-Company-Id: the backend derives the company from the authenticated
+    // employee. One account = one hr.employee = one res.company.
+    const [token, lang] = await Promise.all([
         AsyncStorage.getItem('user_token').catch(() => null),
-        AsyncStorage.getItem('operating_company_id').catch(() => null),
         AsyncStorage.getItem('setting_language').catch(() => null),
     ]);
 
@@ -101,7 +102,6 @@ async function apiFetch<T = any>(
             headers: {
                 'Content-Type': 'application/json',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                ...(companyId ? { 'X-Company-Id': companyId } : {}),
                 ...(lang ? { 'X-Lang': lang } : {}),
                 ...(options?.headers as Record<string, string> || {}),
             },
@@ -174,7 +174,7 @@ export const apiClient = {
             method: 'DELETE',
         }),
 
-    // ── Companies (operating-company switcher) ──────────────────────────────────
+    // ── Employee Company (currency/display only; no operating-company switcher) ─
 
     getCompanies: (): Promise<{
         companies: { id: number; name: string; currency: { id: number; symbol: string; position: 'before' | 'after' } | null }[];
@@ -281,7 +281,7 @@ export const apiClient = {
     getTimesheetFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
         apiFetch('/timesheet/form-schema'),
 
-    // ── IT Support / Helpdesk ─────────────────────────────────────────────────
+    // ── Helpdesk ──────────────────────────────────────────────────────────────
 
     getHelpdeskTickets: (employeeId: number) =>
         apiFetch(`/helpdesk?employee_id=${employeeId}`),
@@ -306,9 +306,6 @@ export const apiClient = {
         priority?: '0' | '1' | '2' | '3';
         ticket_type_id?: number;
         tag_ids?: number[];
-        partner_name?: string;
-        partner_email?: string;
-        partner_phone?: string;
         custom_values?: Record<string, any>;
         attachments?: Attachment[];
     }) =>
@@ -328,6 +325,8 @@ export const apiClient = {
 
     getMaintenanceTeams: () => apiFetch('/maintenance/teams'),
 
+    getMaintenanceManufacturingOrders: () => apiFetch('/maintenance/manufacturing-orders'),
+
     getMaintenanceFormSchema: (): Promise<{ custom_fields: Record<string, any> }> =>
         apiFetch('/maintenance/form-schema'),
 
@@ -340,12 +339,22 @@ export const apiClient = {
         equipment_id?: number;
         maintenance_team_id?: number;
         schedule_date?: string;
+        schedule_end?: string;
         request_date?: string;
+        recurring?: boolean;
+        production_id?: number;
         duration?: number;
         priority?: '0' | '1' | '2' | '3';
         custom_values?: Record<string, any>;
         attachments?: Attachment[];
-    }) =>
+    }): Promise<{
+        status?: string;
+        id?: number;
+        available?: boolean;
+        partial_success?: boolean;
+        failed_attachments?: string[];
+        dropped_fields?: string[];
+    }> =>
         apiFetch('/maintenance', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -379,6 +388,8 @@ export const apiClient = {
             body: JSON.stringify(data),
         }),
 
+    // Overtime and justification are retained for API compatibility; the current
+    // mobile UI only submits check-in/out corrections.
     createAttendanceOvertime: (data: {
         employee_id: number;
         date: string;

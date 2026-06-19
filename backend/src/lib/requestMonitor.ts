@@ -199,7 +199,7 @@ export const requestMonitor = {
                 const notif: Notification = {
                     id: randomUUID(),
                     employeeId,
-                    title: isDoneStage ? 'IT Support Ticket Closed' : 'IT Support Ticket Updated',
+                    title: isDoneStage ? 'Helpdesk Ticket Closed' : 'Helpdesk Ticket Updated',
                     message: `Your ticket "${req.name}" moved to stage: ${stageName || 'Updated'}.`,
                     type: isDoneStage ? 'request_approved' : 'system',
                     read: false,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Switch } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
@@ -20,7 +20,9 @@ import { DynamicFields, type OdooFieldDef } from '../../components/DynamicFields
 import { t } from '../../lib/i18n';
 
 type ViewState = 'hub' | 'time-off' | 'expense' | 'helpdesk' | 'maintenance' | 'attendance';
-type AttSubType = 'correction' | 'overtime' | 'justification';
+// Attendance is limited to check-in/out corrections on mobile. Overtime and
+// absence-justification flows were intentionally removed from the app.
+type AttSubType = 'correction';
 type Priority = '0' | '1' | '2' | '3';
 
 export default function NewRequest() {
@@ -45,6 +47,7 @@ export default function NewRequest() {
     const [maintenanceCategories, setMaintenanceCategories] = useState<any[]>([]);
     const [maintenanceEquipment, setMaintenanceEquipment] = useState<any[]>([]);
     const [maintenanceTeams, setMaintenanceTeams] = useState<any[]>([]);
+    const [maintenanceManufacturingOrders, setMaintenanceManufacturingOrders] = useState<any[]>([]);
 
     // ── Colors ─────────────────────────────────────────────────────────────────
     const background = useColor('background');
@@ -78,7 +81,7 @@ export default function NewRequest() {
     const [expenseCustomFields, setExpenseCustomFields] = useState<Record<string, OdooFieldDef>>({});
     const [expenseCustomValues, setExpenseCustomValues] = useState<Record<string, any>>({});
 
-    // ── IT Support Form State ──────────────────────────────────────────────────
+    // ── Helpdesk Form State ────────────────────────────────────────────────────
     const [hdSubject, setHdSubject] = useState('');
     const [hdDescription, setHdDescription] = useState('');
     const [hdTeamId, setHdTeamId] = useState<number | null>(null);
@@ -86,9 +89,6 @@ export default function NewRequest() {
     const [hdPriority, setHdPriority] = useState<Priority>('0');
     const [hdTypeId, setHdTypeId] = useState<number | null>(null);
     const [hdTagIds, setHdTagIds] = useState<number[]>([]);
-    const [hdPartnerName, setHdPartnerName] = useState('');
-    const [hdPartnerEmail, setHdPartnerEmail] = useState('');
-    const [hdPartnerPhone, setHdPartnerPhone] = useState('');
     const [hdAttachments, setHdAttachments] = useState<Attachment[]>([]);
     const [hdCustomFields, setHdCustomFields] = useState<Record<string, OdooFieldDef>>({});
     const [hdCustomValues, setHdCustomValues] = useState<Record<string, any>>({});
@@ -101,36 +101,23 @@ export default function NewRequest() {
     const [mntEquipmentId, setMntEquipmentId] = useState<number | null>(null);
     const [mntTeamId, setMntTeamId] = useState<number | null>(null);
     const [mntScheduleDate, setMntScheduleDate] = useState<Date | null>(null);
+    const [mntScheduleEnd, setMntScheduleEnd] = useState<Date | null>(null);
     const [mntRequestDate, setMntRequestDate] = useState<Date | null>(null);
+    const [mntRecurring, setMntRecurring] = useState(false);
+    const [mntManufacturingOrderId, setMntManufacturingOrderId] = useState<number | null>(null);
     const [mntDuration, setMntDuration] = useState('');
     const [mntPriority, setMntPriority] = useState<Priority>('0');
     const [mntAttachments, setMntAttachments] = useState<Attachment[]>([]);
     const [mntCustomFields, setMntCustomFields] = useState<Record<string, OdooFieldDef>>({});
     const [mntCustomValues, setMntCustomValues] = useState<Record<string, any>>({});
 
-    // ── Attendance Form State ──────────────────────────────────────────────────
-    const [attSubType, setAttSubType] = useState<AttSubType>('correction');
+    // ── Attendance Form State (check-in/out correction only) ───────────────────
     const [attCheckIn, setAttCheckIn] = useState<Date | null>(null);
     const [attCheckOut, setAttCheckOut] = useState<Date | null>(null);
     const [attReason, setAttReason] = useState('');
-    const [attOvertimeDate, setAttOvertimeDate] = useState<Date | null>(null);
-    const [attOvertimeDuration, setAttOvertimeDuration] = useState('');
-    const [attOvertimeReason, setAttOvertimeReason] = useState('');
-    const [attJustLeaveTypeId, setAttJustLeaveTypeId] = useState<number | null>(null);
-    const [attJustDateFrom, setAttJustDateFrom] = useState<Date | null>(null);
-    const [attJustDateTo, setAttJustDateTo] = useState<Date | null>(null);
-    const [attJustText, setAttJustText] = useState('');
     const [attAttachments, setAttAttachments] = useState<Attachment[]>([]);
-    const [attCustomFields, setAttCustomFields] = useState<Record<AttSubType, Record<string, OdooFieldDef>>>({
-        correction: {},
-        overtime: {},
-        justification: {},
-    });
-    const [attCustomValues, setAttCustomValues] = useState<Record<AttSubType, Record<string, any>>>({
-        correction: {},
-        overtime: {},
-        justification: {},
-    });
+    const [attCustomFields, setAttCustomFields] = useState<Record<string, OdooFieldDef>>({});
+    const [attCustomValues, setAttCustomValues] = useState<Record<string, any>>({});
 
     useEffect(() => {
         fetchData();
@@ -172,7 +159,7 @@ export default function NewRequest() {
         setDataLoading(true);
         setProductsLoadError(false);
         try {
-            const [typesData, productsData, taxesData, teamsData, categoriesData, equipmentData, mntTeamsData, hdTypesData, hdTagsData, hdAgentsData, analyticData, expenseSchemaData, mntSchemaData, timeOffSchemaData, helpdeskSchemaData, attendanceSchemaData] = await Promise.all([
+            const [typesData, productsData, taxesData, teamsData, categoriesData, equipmentData, mntTeamsData, mntOrdersData, hdTypesData, hdTagsData, hdAgentsData, analyticData, expenseSchemaData, mntSchemaData, timeOffSchemaData, helpdeskSchemaData, attendanceSchemaData] = await Promise.all([
                 apiClient.getTimeOffTypes().catch(() => ({ types: [] as any[] })),
                 apiClient.getExpenseProducts().catch(() => ({ products: [] as any[], _error: true })),
                 apiClient.getExpenseTaxes().catch(() => ({ taxes: [] as any[] })),
@@ -180,6 +167,7 @@ export default function NewRequest() {
                 apiClient.getMaintenanceCategories().catch(() => ({ categories: [] as any[] })),
                 apiClient.getMaintenanceEquipment().catch(() => ({ equipment: [] as any[] })),
                 apiClient.getMaintenanceTeams().catch(() => ({ teams: [] as any[] })),
+                apiClient.getMaintenanceManufacturingOrders().catch(() => ({ orders: [] as any[] })),
                 apiClient.getHelpdeskTicketTypes().catch(() => ({ types: [] as any[] })),
                 apiClient.getHelpdeskTags().catch(() => ({ tags: [] as any[] })),
                 apiClient.getHelpdeskAgents().catch(() => ({ agents: [] as any[] })),
@@ -190,8 +178,6 @@ export default function NewRequest() {
                 apiClient.getHelpdeskFormSchema().catch(() => ({ custom_fields: {} as Record<string, any> })),
                 apiClient.getAttendanceFormSchema().catch(() => ({
                     correction: { custom_fields: {} as Record<string, any> },
-                    overtime: { custom_fields: {} as Record<string, any> },
-                    justification: { custom_fields: {} as Record<string, any> },
                 })),
             ]);
 
@@ -201,6 +187,7 @@ export default function NewRequest() {
             const categories = (categoriesData as any).categories || [];
             const equipment = (equipmentData as any).equipment || [];
             const mntTeams = requestableItems((mntTeamsData as any).teams || []);
+            const mntOrders = requestableItems((mntOrdersData as any).orders || []);
             const hdTypes = (hdTypesData as any).types || [];
             const hdTags = (hdTagsData as any).tags || [];
             const hdAgents = (hdAgentsData as any).agents || [];
@@ -216,6 +203,7 @@ export default function NewRequest() {
             setMaintenanceCategories(categories);
             setMaintenanceEquipment(equipment);
             setMaintenanceTeams(mntTeams);
+            setMaintenanceManufacturingOrders(mntOrders);
             setHelpdeskTicketTypes(hdTypes);
             setHelpdeskTags(hdTags);
             setHelpdeskAgents(hdAgents);
@@ -224,11 +212,7 @@ export default function NewRequest() {
             setMntCustomFields((mntSchemaData as any).custom_fields || {});
             setTimeOffCustomFields((timeOffSchemaData as any).custom_fields || {});
             setHdCustomFields((helpdeskSchemaData as any).custom_fields || {});
-            setAttCustomFields({
-                correction: (attendanceSchemaData as any).correction?.custom_fields || {},
-                overtime: (attendanceSchemaData as any).overtime?.custom_fields || {},
-                justification: (attendanceSchemaData as any).justification?.custom_fields || {},
-            });
+            setAttCustomFields((attendanceSchemaData as any).correction?.custom_fields || {});
 
             setProductsLoadError(Boolean((productsData as any)._error));
         } catch (error) {
@@ -328,18 +312,14 @@ export default function NewRequest() {
                 priority: hdPriority !== '0' ? hdPriority : undefined,
                 ticket_type_id: hdTypeId ?? undefined,
                 tag_ids: hdTagIds.length > 0 ? hdTagIds : undefined,
-                partner_name: hdPartnerName.trim() || undefined,
-                partner_email: hdPartnerEmail.trim() || undefined,
-                partner_phone: hdPartnerPhone.trim() || undefined,
                 custom_values: Object.keys(hdCustomValues).length > 0 ? hdCustomValues : undefined,
                 attachments: hdAttachments.length > 0 ? hdAttachments : undefined,
             });
-            toast.success('IT support ticket submitted!');
+            toast.success('Helpdesk ticket submitted!');
             setCurrentView('hub');
             setHdSubject(''); setHdDescription(''); setHdTeamId(null);
             setHdUserId(null); setHdPriority('0'); setHdTypeId(null);
-            setHdTagIds([]); setHdPartnerName(''); setHdPartnerEmail('');
-            setHdPartnerPhone(''); setHdAttachments([]); setHdCustomValues({});
+            setHdTagIds([]); setHdAttachments([]); setHdCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit ticket');
         } finally {
@@ -355,7 +335,7 @@ export default function NewRequest() {
         if (!user?.id) { toast.error('User session not found. Please re-login.'); return; }
         setLoading(true);
         try {
-            await apiClient.createMaintenanceRequest({
+            const result = await apiClient.createMaintenanceRequest({
                 employee_id: user.id,
                 name: mntTitle.trim(),
                 description: mntDescription.trim() || undefined,
@@ -364,17 +344,36 @@ export default function NewRequest() {
                 equipment_id: mntEquipmentId ?? undefined,
                 maintenance_team_id: mntTeamId ?? undefined,
                 schedule_date: mntType === 'preventive' && mntScheduleDate ? mntScheduleDate.toISOString() : undefined,
+                schedule_end: mntType === 'preventive' && mntScheduleEnd ? mntScheduleEnd.toISOString() : undefined,
                 request_date: mntType === 'corrective' && mntRequestDate ? mntRequestDate.toISOString() : undefined,
+                recurring: mntType === 'preventive' ? mntRecurring : undefined,
+                production_id: mntManufacturingOrderId ?? undefined,
                 duration: mntDuration ? parseFloat(mntDuration) : undefined,
                 priority: mntPriority !== '0' ? mntPriority : undefined,
                 custom_values: Object.keys(mntCustomValues).length > 0 ? mntCustomValues : undefined,
                 attachments: mntAttachments.length > 0 ? mntAttachments : undefined,
             });
-            toast.success('Maintenance request submitted!');
+            // The request was created, but some optional fields weren't supported
+            // by this Odoo version (or some attachments failed) — tell the user.
+            if (result?.partial_success) {
+                const notSaved = [
+                    ...(result.dropped_fields ?? []),
+                    ...(result.failed_attachments?.length ? ['some attachments'] : []),
+                ];
+                toast.warning(
+                    notSaved.length > 0
+                        ? `Request created, but these weren't saved: ${notSaved.join(', ')}.`
+                        : 'Request created with some fields not saved.'
+                );
+            } else {
+                toast.success('Maintenance request submitted!');
+            }
             setCurrentView('hub');
             setMntTitle(''); setMntDescription(''); setMntCategoryId(null);
             setMntType('corrective'); setMntEquipmentId(null); setMntTeamId(null);
-            setMntScheduleDate(null); setMntRequestDate(null); setMntDuration(''); setMntPriority('0');
+            setMntScheduleDate(null); setMntScheduleEnd(null); setMntRequestDate(null);
+            setMntRecurring(false); setMntManufacturingOrderId(null);
+            setMntDuration(''); setMntPriority('0');
             setMntAttachments([]); setMntCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit maintenance request');
@@ -385,58 +384,22 @@ export default function NewRequest() {
 
     const handleCreateAttendance = async () => {
         if (!user?.id) { toast.error('User session not found. Please re-login.'); return; }
+        if (!attCheckIn) { toast.warning('Please select a check-in date and time.'); return; }
         setLoading(true);
         try {
-            if (attSubType === 'correction') {
-                if (!attCheckIn) { toast.warning('Please select a check-in date and time.'); setLoading(false); return; }
-                await apiClient.createAttendanceCorrection({
-                    employee_id: user.id,
-                    check_in: attCheckIn.toISOString(),
-                    check_out: attCheckOut ? attCheckOut.toISOString() : undefined,
-                    reason: attReason.trim() || undefined,
-                    custom_values: Object.keys(attCustomValues.correction).length > 0 ? attCustomValues.correction : undefined,
-                    attachments: attAttachments.length > 0 ? attAttachments : undefined,
-                });
-                toast.success('Attendance correction submitted!');
-            } else if (attSubType === 'overtime') {
-                if (!attOvertimeDate || !attOvertimeDuration) {
-                    toast.warning('Please select a date and enter the overtime hours.');
-                    setLoading(false); return;
-                }
-                await apiClient.createAttendanceOvertime({
-                    employee_id: user.id,
-                    date: attOvertimeDate.toISOString().split('T')[0],
-                    duration: parseFloat(attOvertimeDuration),
-                    reason: attOvertimeReason.trim() || undefined,
-                    custom_values: Object.keys(attCustomValues.overtime).length > 0 ? attCustomValues.overtime : undefined,
-                });
-                toast.success('Overtime request submitted!');
-            } else {
-                if (!attJustLeaveTypeId || !attJustDateFrom || !attJustDateTo || !attJustText.trim()) {
-                    toast.warning('Please fill in all required fields.');
-                    setLoading(false); return;
-                }
-                if (!leaveTypes.some((type: any) => type.id === attJustLeaveTypeId)) {
-                    toast.warning('Please select an available leave type.');
-                    setLoading(false); return;
-                }
-                await apiClient.createAttendanceJustification({
-                    employee_id: user.id,
-                    leave_type_id: attJustLeaveTypeId,
-                    date_from: attJustDateFrom.toISOString().split('T')[0],
-                    date_to: attJustDateTo.toISOString().split('T')[0],
-                    justification: attJustText.trim(),
-                    custom_values: Object.keys(attCustomValues.justification).length > 0 ? attCustomValues.justification : undefined,
-                    attachments: attAttachments.length > 0 ? attAttachments : undefined,
-                });
-                toast.success('Absence justification submitted!');
-            }
+            await apiClient.createAttendanceCorrection({
+                employee_id: user.id,
+                check_in: attCheckIn.toISOString(),
+                check_out: attCheckOut ? attCheckOut.toISOString() : undefined,
+                reason: attReason.trim() || undefined,
+                custom_values: Object.keys(attCustomValues).length > 0 ? attCustomValues : undefined,
+                attachments: attAttachments.length > 0 ? attAttachments : undefined,
+            });
+            toast.success('Attendance correction submitted!');
             setCurrentView('hub');
             setAttCheckIn(null); setAttCheckOut(null); setAttReason('');
-            setAttOvertimeDate(null); setAttOvertimeDuration(''); setAttOvertimeReason('');
-            setAttJustLeaveTypeId(null); setAttJustDateFrom(null); setAttJustDateTo(null);
-            setAttJustText(''); setAttAttachments([]);
-            setAttCustomValues({ correction: {}, overtime: {}, justification: {} });
+            setAttAttachments([]);
+            setAttCustomValues({});
         } catch (error: any) {
             toast.error(error.message || 'Failed to submit attendance request');
         } finally {
@@ -548,9 +511,9 @@ export default function NewRequest() {
                     </View>
                 </TouchableOpacity>
 
-                {/* IT Support → inline form */}
+                {/* Helpdesk → inline form */}
                 <TouchableOpacity activeOpacity={0.9}
-                    onPress={() => helpdeskAvailable ? setCurrentView('helpdesk') : toast.warning('IT Support is not enabled on your Odoo instance.')}
+                    onPress={() => helpdeskAvailable ? setCurrentView('helpdesk') : toast.warning('Helpdesk is not enabled on your Odoo instance.')}
                     style={{ flex: 1, backgroundColor: (helpdeskAvailable ? semanticError : muted) + '18', borderRadius: 28, padding: 24, overflow: 'hidden', minHeight: 160, justifyContent: 'space-between', opacity: helpdeskAvailable ? 1 : 0.5 }}>
                     <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.1 }}>
                         <Monitor size={100} color={semanticError} />
@@ -776,12 +739,12 @@ export default function NewRequest() {
         </View>
     );
 
-    // ── Render: IT Support Form ────────────────────────────────────────────────
+    // ── Render: Helpdesk Form ──────────────────────────────────────────────────
 
     const renderHelpdeskForm = () => (
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>IT Support Ticket</Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>Helpdesk Ticket</Text>
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Describe the issue you&apos;re experiencing</Text>
             </View>
 
@@ -866,23 +829,6 @@ export default function NewRequest() {
                     multiline textAlignVertical="top" />
             </View>
 
-            <View style={{ gap: 16 }}>
-                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Customer Info (Optional)</Text>
-                <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
-                    <Input placeholder="Customer Name" value={hdPartnerName} onChangeText={setHdPartnerName}
-                        containerStyle={{ borderWidth: 0, backgroundColor: background, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 }}
-                        inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: text }} />
-                    <Input placeholder="Email" value={hdPartnerEmail} onChangeText={setHdPartnerEmail}
-                        keyboardType="email-address" autoCapitalize="none"
-                        containerStyle={{ borderWidth: 0, backgroundColor: background, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 }}
-                        inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: text }} />
-                    <Input placeholder="Phone" value={hdPartnerPhone} onChangeText={setHdPartnerPhone}
-                        keyboardType="phone-pad"
-                        containerStyle={{ borderWidth: 0, backgroundColor: background, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 }}
-                        inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: text }} />
-                </View>
-            </View>
-
             {Object.keys(hdCustomFields).length > 0 && (
                 <DynamicFields
                     sourceModel="helpdesk.ticket"
@@ -947,20 +893,24 @@ export default function NewRequest() {
                 </View>
             )}
 
-            {maintenanceEquipment.length > 0 && (
-                <View style={{ gap: 16 }}>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.equipment')} ({t('common.optional')})</Text>
-                    <SearchableSelect
-                        options={maintenanceEquipment.map((eq: any) => ({ id: eq.id, name: eq.name }))}
-                        value={mntEquipmentId}
-                        onChange={(id) => setMntEquipmentId(id as number | null)}
-                        placeholder={t('common.select')}
-                        searchPlaceholder={t('common.search')}
-                        label={t('maintenance.equipment')}
-                        accent={semanticInfo}
-                    />
-                </View>
-            )}
+            <View style={{ gap: 16 }}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.equipment')} ({t('common.optional')})</Text>
+                <SearchableSelect
+                    options={maintenanceEquipment.map((eq: any) => ({ id: eq.id, name: eq.name }))}
+                    value={mntEquipmentId}
+                    onChange={(id) => setMntEquipmentId(id as number | null)}
+                    placeholder={t('common.select')}
+                    searchPlaceholder={t('common.search')}
+                    label={t('maintenance.equipment')}
+                    accent={semanticInfo}
+                    disabled={maintenanceEquipment.length === 0}
+                />
+                {maintenanceEquipment.length === 0 && (
+                    <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: muted }}>
+                        {t('maintenance.noEquipment')}
+                    </Text>
+                )}
+            </View>
 
             {maintenanceTeams.length > 0 && (
                 <View style={{ gap: 16 }}>
@@ -977,6 +927,21 @@ export default function NewRequest() {
                 </View>
             )}
 
+            {maintenanceManufacturingOrders.length > 0 && (
+                <View style={{ gap: 16 }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>{t('maintenance.manufacturingOrder')} ({t('common.optional')})</Text>
+                    <SearchableSelect
+                        options={maintenanceManufacturingOrders.map((order: any) => ({ id: order.id, name: order.name }))}
+                        value={mntManufacturingOrderId}
+                        onChange={(id) => setMntManufacturingOrderId(id as number | null)}
+                        placeholder={t('common.select')}
+                        searchPlaceholder={t('common.search')}
+                        label={t('maintenance.manufacturingOrder')}
+                        accent={semanticInfo}
+                    />
+                </View>
+            )}
+
             <View style={{ gap: 16 }}>
                 <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Priority (Optional)</Text>
                 {renderPriorityStars(mntPriority, setMntPriority, semanticInfo)}
@@ -987,7 +952,7 @@ export default function NewRequest() {
                 <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
                     <View style={{ gap: 12 }}>
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>
-                            {mntType === 'preventive' ? 'Scheduled Date' : 'Request Date'}
+                            {mntType === 'preventive' ? t('maintenance.scheduledDate') : t('maintenance.requestDate')}
                         </Text>
                         {mntType === 'preventive' ? (
                             <DatePicker value={mntScheduleDate} onChange={setMntScheduleDate} placeholder="Select scheduled date" />
@@ -995,6 +960,25 @@ export default function NewRequest() {
                             <DatePicker value={mntRequestDate} onChange={setMntRequestDate} placeholder="Select request date" />
                         )}
                     </View>
+                    {mntType === 'preventive' && (
+                        <>
+                            <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                            <View style={{ gap: 12 }}>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>{t('maintenance.scheduledEnd')}</Text>
+                                <DatePicker value={mntScheduleEnd} onChange={setMntScheduleEnd} placeholder="Select scheduled end" />
+                            </View>
+                            <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text, flex: 1 }}>{t('maintenance.recurrent')}</Text>
+                                <Switch
+                                    value={mntRecurring}
+                                    onValueChange={setMntRecurring}
+                                    trackColor={{ false: 'rgba(0,0,0,0.18)', true: semanticInfo }}
+                                    thumbColor="#fff"
+                                />
+                            </View>
+                        </>
+                    )}
                     <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
                     <View style={{ gap: 12 }}>
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Duration (hours)</Text>
@@ -1038,146 +1022,41 @@ export default function NewRequest() {
     const renderAttendanceForm = () => (
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>Attendance Request</Text>
-                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Corrections, overtime & absence justifications</Text>
-            </View>
-
-            {/* Sub-type selector */}
-            <View style={{ gap: 16 }}>
-                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Request Type</Text>
-                <View style={{ flexDirection: 'row', backgroundColor: cardColor, borderRadius: 20, padding: 4 }}>
-                    {([
-                        ['correction', 'Check-in/out'],
-                        ['overtime', 'Overtime'],
-                        ['justification', 'Absence'],
-                    ] as [AttSubType, string][]).map(([val, label]) => (
-                        <TouchableOpacity key={val} onPress={() => setAttSubType(val)} activeOpacity={0.7}
-                            style={{ flex: 1, paddingVertical: 12, borderRadius: 16, alignItems: 'center',
-                                backgroundColor: attSubType === val ? semanticWarning : 'transparent' }}>
-                            <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 12, color: attSubType === val ? '#fff' : muted }}>
-                                {label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 24, color: text }}>Attendance Correction</Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 16, color: muted }}>Fix a missed or incorrect check-in / check-out</Text>
             </View>
 
             {/* Check-in/out Correction */}
-            {attSubType === 'correction' && (
-                <View style={{ gap: 24 }}>
-                    <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Check-in Date & Time</Text>
-                            <DatePicker value={attCheckIn} onChange={setAttCheckIn} placeholder="Select check-in time" />
-                        </View>
-                        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Check-out Date & Time (Optional)</Text>
-                            <DatePicker value={attCheckOut} onChange={setAttCheckOut} placeholder="Select check-out time" />
-                        </View>
+            <View style={{ gap: 24 }}>
+                <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Check-in Date & Time</Text>
+                        <DatePicker value={attCheckIn} onChange={setAttCheckIn} placeholder="Select check-in time" />
                     </View>
-                    <View style={{ gap: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Reason (Optional)</Text>
-                        <Input placeholder="Why is this correction needed?" value={attReason} onChangeText={setAttReason}
-                            containerStyle={{ backgroundColor: cardColor, borderWidth: 0, height: 120, borderRadius: 24, padding: 20 }}
-                            inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
-                            multiline textAlignVertical="top" />
+                    <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Check-out Date & Time (Optional)</Text>
+                        <DatePicker value={attCheckOut} onChange={setAttCheckOut} placeholder="Select check-out time" />
                     </View>
-                    {Object.keys(attCustomFields.correction).length > 0 && (
-                        <DynamicFields
-                            sourceModel="hr.attendance"
-                            fields={attCustomFields.correction}
-                            values={attCustomValues.correction}
-                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, correction: { ...prev.correction, [name]: value } }))}
-                            accent={semanticWarning}
-                        />
-                    )}
-                    <AttachmentPicker attachments={attAttachments} onChange={setAttAttachments} label="Supporting Documents" />
                 </View>
-            )}
-
-            {/* Overtime Request */}
-            {attSubType === 'overtime' && (
-                <View style={{ gap: 24 }}>
-                    <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Date</Text>
-                            <DatePicker value={attOvertimeDate} onChange={setAttOvertimeDate} placeholder="Select overtime date" />
-                        </View>
-                        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>Overtime Hours</Text>
-                            <Input placeholder="e.g. 2.5" value={attOvertimeDuration} onChangeText={setAttOvertimeDuration}
-                                keyboardType="numeric"
-                                containerStyle={{ borderWidth: 0, backgroundColor: background, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 }}
-                                inputStyle={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: text }} />
-                        </View>
-                    </View>
-                    <View style={{ gap: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Reason (Optional)</Text>
-                        <Input placeholder="What were you working on?" value={attOvertimeReason} onChangeText={setAttOvertimeReason}
-                            containerStyle={{ backgroundColor: cardColor, borderWidth: 0, height: 120, borderRadius: 24, padding: 20 }}
-                            inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
-                            multiline textAlignVertical="top" />
-                    </View>
-                    {Object.keys(attCustomFields.overtime).length > 0 && (
-                        <DynamicFields
-                            sourceModel="hr.attendance.overtime"
-                            fields={attCustomFields.overtime}
-                            values={attCustomValues.overtime}
-                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, overtime: { ...prev.overtime, [name]: value } }))}
-                            accent={semanticWarning}
-                        />
-                    )}
+                <View style={{ gap: 16 }}>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Reason (Optional)</Text>
+                    <Input placeholder="Why is this correction needed?" value={attReason} onChangeText={setAttReason}
+                        containerStyle={{ backgroundColor: cardColor, borderWidth: 0, height: 120, borderRadius: 24, padding: 20 }}
+                        inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
+                        multiline textAlignVertical="top" />
                 </View>
-            )}
-
-            {/* Absence Justification */}
-            {attSubType === 'justification' && (
-                <View style={{ gap: 24 }}>
-                    <View style={{ gap: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Leave Type</Text>
-                        <SearchableSelect
-                            options={leaveTypes.map((type: any) => ({ id: type.id, name: type.name }))}
-                            value={attJustLeaveTypeId}
-                            onChange={(id) => setAttJustLeaveTypeId(id as number | null)}
-                            loading={dataLoading}
-                            placeholder={t('common.select')}
-                            searchPlaceholder={t('common.search')}
-                            label="Leave Type"
-                            accent={semanticWarning}
-                        />
-                    </View>
-                    <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 24, gap: 20 }}>
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>From</Text>
-                            <DatePicker value={attJustDateFrom} onChange={setAttJustDateFrom} placeholder="Select start date" />
-                        </View>
-                        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.05)' }} />
-                        <View style={{ gap: 12 }}>
-                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>To</Text>
-                            <DatePicker value={attJustDateTo} onChange={setAttJustDateTo} placeholder="Select end date" />
-                        </View>
-                    </View>
-                    <View style={{ gap: 16 }}>
-                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: muted, textTransform: 'uppercase', letterSpacing: 1 }}>Justification</Text>
-                        <Input placeholder="Explain your absence..." value={attJustText} onChangeText={setAttJustText}
-                            containerStyle={{ backgroundColor: cardColor, borderWidth: 0, height: 140, borderRadius: 24, padding: 20 }}
-                            inputStyle={{ fontFamily: 'DMSans_400Regular', fontSize: 16, lineHeight: 24 }}
-                            multiline textAlignVertical="top" />
-                    </View>
-                    {Object.keys(attCustomFields.justification).length > 0 && (
-                        <DynamicFields
-                            sourceModel="hr.leave"
-                            fields={attCustomFields.justification}
-                            values={attCustomValues.justification}
-                            onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, justification: { ...prev.justification, [name]: value } }))}
-                            accent={semanticWarning}
-                        />
-                    )}
-                    <AttachmentPicker attachments={attAttachments} onChange={setAttAttachments} label="Supporting Documents" />
-                </View>
-            )}
+                {Object.keys(attCustomFields).length > 0 && (
+                    <DynamicFields
+                        sourceModel="hr.attendance"
+                        fields={attCustomFields}
+                        values={attCustomValues}
+                        onChange={(name, value) => setAttCustomValues(prev => ({ ...prev, [name]: value }))}
+                        accent={semanticWarning}
+                    />
+                )}
+                <AttachmentPicker attachments={attAttachments} onChange={setAttAttachments} label="Supporting Documents" />
+            </View>
 
             <Button size="lg" onPress={handleCreateAttendance} disabled={loading}
                 style={{ borderRadius: 20, marginTop: 8, backgroundColor: semanticWarning, height: 56, shadowColor: semanticWarning, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 6 }}>

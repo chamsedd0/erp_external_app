@@ -9,13 +9,8 @@ const tenantStore_1 = require("../lib/tenantStore");
 const schemaCache_1 = require("../lib/schemaCache");
 const parseError_1 = require("../odoo/parseError");
 const authContext_1 = require("../lib/authContext");
+const attachments_1 = require("../lib/attachments");
 const router = (0, express_1.Router)();
-// Shared attachment schema
-const attachmentSchema = zod_1.z.object({
-    name: zod_1.z.string(),
-    data: zod_1.z.string(), // base64
-    mimetype: zod_1.z.string(),
-});
 // Validation Schema for Time Off Request
 // We accept the field as `leave_type_id` from the frontend regardless of what
 // Odoo calls it internally — the actual Odoo field name is resolved at runtime below.
@@ -25,7 +20,8 @@ const createLeaveSchema = zod_1.z.object({
     date_from: zod_1.z.string(), // ISO String
     date_to: zod_1.z.string(), // ISO String
     name: zod_1.z.string().optional(),
-    attachments: zod_1.z.array(attachmentSchema).max(3).optional(),
+    custom_values: zod_1.z.record(zod_1.z.string(), zod_1.z.any()).optional(),
+    attachments: attachments_1.attachmentsSchema,
 });
 // ── Leave-type field detection ────────────────────────────────────────────────
 // Odoo has renamed the leave type Many2one field across versions:
@@ -140,15 +136,17 @@ router.get('/types', async (req, res) => {
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
+        // Leave types can be company-specific; scope to the employee's company.
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
         try {
-            const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'], true);
+            const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'], { silent: true, context: ctx });
             if (Array.isArray(types) && types.length > 0) {
                 return res.json({ types: types.map(enrichLeaveType) });
             }
         }
         catch {
             try {
-                const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name'], true);
+                const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name'], { silent: true, context: ctx });
                 if (Array.isArray(types) && types.length > 0) {
                     return res.json({ types: types.map(enrichLeaveType) });
                 }
@@ -158,7 +156,7 @@ router.get('/types', async (req, res) => {
             }
         }
         try {
-            const allTypes = await client.searchRead(uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true);
+            const allTypes = await client.searchRead(uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], { silent: true, context: ctx });
             if (Array.isArray(allTypes)) {
                 const seen = new Set();
                 const leaveTypes = allTypes
@@ -211,6 +209,21 @@ router.get('/pending', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = req.jwtPayload?.tenantId;
+        const tenantConfig = await tenantStore_1.tenantStore.getTenant(tenantId);
+        if (!tenantConfig)
+            return res.status(401).json({ error: 'Unknown tenant' });
+        const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await (0, schemaCache_1.getCustomFieldReport)(tenantId, client, uid, 'hr.leave'));
+    }
+    catch (error) {
+        console.error('Fetch Time Off Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
+    }
+});
 // POST / - Create Time Off Request
 router.post('/', async (req, res) => {
     try {
@@ -221,7 +234,13 @@ router.post('/', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const body = { ...createLeaveSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
+        const ctx = await (0, authContext_1.buildOdooContext)(req, client, uid, body.employee_id);
         const leaveTypeField = await getLeaveTypeField(tenantId, client, uid);
+        const leaveCustomFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'hr.leave');
+        const missingCustom = (0, schemaCache_1.validateRequiredCustomFields)(leaveCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
         const formatDatetime = (isoString) => isoString.replace('T', ' ').substring(0, 19);
         const leavePayload = (fieldName) => ({
             employee_id: body.employee_id,
@@ -231,6 +250,7 @@ router.post('/', async (req, res) => {
             name: body.name || 'Time Off Request from Portal',
             request_date_from: body.date_from.split('T')[0],
             request_date_to: body.date_to.split('T')[0],
+            ...(body.custom_values && typeof body.custom_values === 'object' ? body.custom_values : {}),
         });
         // Pre-validate payload against live Odoo schema
         const validation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'hr.leave', leavePayload(leaveTypeField));
@@ -243,7 +263,7 @@ router.post('/', async (req, res) => {
         }
         let newLeaveId;
         try {
-            newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload(leaveTypeField));
+            newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload(leaveTypeField), ctx);
         }
         catch (createErr) {
             const msg = String(createErr?.faultString || createErr?.message || '');
@@ -251,21 +271,28 @@ router.post('/', async (req, res) => {
             if (msg.includes('KeyError: None') && leaveTypeField !== 'holiday_status_id') {
                 console.warn(`[${tenantId}] [time_off] Create failed with KeyError: None, retrying with holiday_status_id`);
                 exports._leaveTypeField.set(tenantId, 'holiday_status_id');
-                newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload('holiday_status_id'));
+                newLeaveId = await client.createRecord(uid, 'hr.leave', leavePayload('holiday_status_id'), ctx);
             }
             else {
                 throw createErr;
             }
         }
+        let failedAttachments = [];
         if (body.attachments && body.attachments.length > 0) {
             try {
-                await client.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId);
+                const result = await client.uploadAttachments(uid, body.attachments, 'hr.leave', newLeaveId, ctx);
+                failedAttachments = result?.failed ?? [];
             }
             catch (attachError) {
                 console.error('Leave attachment upload error:', attachError);
+                failedAttachments = body.attachments.map(a => a.name);
             }
         }
-        res.json({ status: 'success', id: newLeaveId });
+        res.json({
+            status: 'success',
+            id: newLeaveId,
+            ...(failedAttachments.length > 0 ? { partial_success: true, failed_attachments: failedAttachments } : {}),
+        });
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {

@@ -4,8 +4,9 @@ import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
 import { attachmentSchema, attachmentsSchema } from '../lib/attachments';
+import { companyCompatible } from '../lib/odooCompatibility';
 
 const router = Router();
 
@@ -38,6 +39,8 @@ const createHelpdeskSchema = z.object({
     priority: z.enum(['0', '1', '2', '3']).optional(),
     ticket_type_id: z.number().optional(),
     tag_ids: z.array(z.number()).optional(),
+    // Customer/partner contact fields — optional and retained for API
+    // compatibility. The mobile app no longer collects or sends these.
     partner_name: z.string().optional(),
     partner_email: z.string().email().optional(),
     partner_phone: z.string().optional(),
@@ -60,7 +63,8 @@ router.get('/ticket-types', async (req, res) => {
             return res.json({ available: false, types: [] });
         }
 
-        const types: any = await client.searchRead(uid, 'helpdesk.ticket.type', [], ['id', 'name'], true);
+        const ctx = await buildReadContext(req, client, uid);
+        const types: any = await client.searchRead(uid, 'helpdesk.ticket.type', [], ['id', 'name'], { silent: true, context: ctx });
         res.json({ available: true, types: Array.isArray(types) ? types : [] });
     } catch (error: any) {
         console.error('Fetch Helpdesk Ticket Types Error:', error);
@@ -81,7 +85,8 @@ router.get('/tags', async (req, res) => {
             return res.json({ available: false, tags: [] });
         }
 
-        const tags: any = await client.searchRead(uid, 'helpdesk.tag', [], ['id', 'name', 'color'], true);
+        const ctx = await buildReadContext(req, client, uid);
+        const tags: any = await client.searchRead(uid, 'helpdesk.tag', [], ['id', 'name', 'color'], { silent: true, context: ctx });
         res.json({ available: true, tags: Array.isArray(tags) ? tags : [] });
     } catch (error: any) {
         console.error('Fetch Helpdesk Tags Error:', error);
@@ -102,12 +107,28 @@ router.get('/agents', async (req, res) => {
             return res.json({ available: false, agents: [] });
         }
 
-        const agents: any = await client.searchRead(
-            uid, 'res.users',
-            [['active', '=', true], ['share', '=', false]],
-            ['id', 'name'],
-            true
-        );
+        const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+
+        // res.users is NOT constrained by allowed_company_ids, so scope it
+        // explicitly to the employee's company (or company-less users). The
+        // company field on res.users is `company_ids` (many2many); on instances
+        // where that field differs, fall back to the unscoped active/share query.
+        const baseDomain: any[] = [['active', '=', true], ['share', '=', false]];
+        let agents: any;
+        if (employeeCompanyId) {
+            agents = await client.searchRead(
+                uid, 'res.users',
+                [...baseDomain, '|', ['company_ids', '=', false], ['company_ids', 'in', [employeeCompanyId]]],
+                ['id', 'name'],
+                { silent: true, context: ctx }
+            ).catch(() => null);
+        }
+        if (!Array.isArray(agents)) {
+            agents = await client.searchRead(
+                uid, 'res.users', baseDomain, ['id', 'name'], { silent: true, context: ctx }
+            );
+        }
         // Limit to 50 to keep response size reasonable
         const list = Array.isArray(agents) ? agents.slice(0, 50) : [];
         res.json({ available: true, agents: list });
@@ -130,8 +151,11 @@ router.get('/teams', async (req, res) => {
             return res.json({ available: false, teams: [] });
         }
 
-        const teams: any = await client.searchRead(uid, 'helpdesk.team', [], ['id', 'name']);
-        res.json({ available: true, teams: Array.isArray(teams) ? teams : [] });
+        const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+        const teams: any = await client.searchRead(uid, 'helpdesk.team', [], ['id', 'name', 'company_id'], { silent: true, context: ctx });
+        const scoped = Array.isArray(teams) ? teams.filter((team: any) => companyCompatible(team.company_id, employeeCompanyId)) : [];
+        res.json({ available: true, teams: scoped });
     } catch (error: any) {
         console.error('Fetch Helpdesk Teams Error:', error);
         res.status(500).json({ error: error.message });
@@ -246,11 +270,30 @@ router.post('/', async (req, res) => {
             }
         }
 
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+
+        // Re-validate a client-supplied team_id against the employee company: the
+        // filtered GET /teams only constrains the UI, a crafted body could still
+        // reference another company's team.
+        if (body.team_id) {
+            const teams: any = await client.searchRead(
+                uid, 'helpdesk.team', [['id', '=', body.team_id]], ['id', 'company_id'],
+                { silent: true, context: ctx }
+            ).catch(() => []);
+            if (Array.isArray(teams) && teams.length > 0 &&
+                !companyCompatible(teams[0].company_id, employeeCompanyId)) {
+                return res.status(422).json({ error: 'This helpdesk team is not available for your company.' });
+            }
+        }
+
         const ticketData: Record<string, any> = {
             name: body.name,
             description: body.description || '',
         };
 
+        // Pin the record to the employee's own company (defense-in-depth).
+        if (employeeCompanyId) ticketData.company_id = employeeCompanyId;
         if (partnerId) ticketData.partner_id = partnerId;
         if (body.team_id) ticketData.team_id = body.team_id;
         if (body.user_id) ticketData.user_id = body.user_id;
@@ -284,7 +327,6 @@ router.post('/', async (req, res) => {
             });
         }
 
-        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
         let newId: number;
         try {
             newId = await client.createRecord(uid, 'helpdesk.ticket', { ...ticketData, ...optionalFields }, ctx) as number;

@@ -26,7 +26,7 @@ interface DynamicFieldsProps {
 
 /** Renders tenant custom (x_) fields from a live Odoo schema. */
 export function DynamicFields({ sourceModel, fields, values, onChange, accent }: DynamicFieldsProps) {
-    const entries = Object.entries(fields || {});
+    const entries = Object.entries(fields || {}).filter(([name, def]) => !isNativeDuplicate(sourceModel, name, def));
     if (entries.length === 0) return null;
 
     return (
@@ -44,6 +44,12 @@ export function DynamicFields({ sourceModel, fields, values, onChange, accent }:
             ))}
         </View>
     );
+}
+
+function isNativeDuplicate(sourceModel: string, name: string, def: OdooFieldDef): boolean {
+    if (sourceModel !== 'account.analytic.line' || def.type !== 'many2one') return false;
+    if (def.relation === 'project.project' || def.relation === 'project.task') return true;
+    return /(^|_)project(_id)?$/i.test(name) || /(^|_)task(_id)?$/i.test(name) || /project.*task/i.test(name);
 }
 
 function DynamicField({

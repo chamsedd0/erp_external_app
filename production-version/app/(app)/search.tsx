@@ -173,7 +173,7 @@ export default function Search() {
         switch (type) {
             case 'timeoff': return 'Time Off';
             case 'expense': return 'Expense';
-            case 'helpdesk': return 'IT Support';
+            case 'helpdesk': return 'Helpdesk';
             case 'maintenance': return 'Maintenance';
             case 'timesheet': return 'Timesheet';
             default: return type;
@@ -209,7 +209,7 @@ export default function Search() {
         { key: 'all', label: 'All' },
         { key: 'timeoff', label: 'Time Off' },
         { key: 'expense', label: 'Expenses' },
-        { key: 'helpdesk', label: 'IT Support' },
+        { key: 'helpdesk', label: 'Helpdesk' },
         { key: 'maintenance', label: 'Maintenance' },
         { key: 'timesheet', label: 'Timesheet' },
     ];

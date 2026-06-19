@@ -8,6 +8,10 @@ import { getCustomFieldReport, getCustomFields, validatePayload, validateRequire
 import { sendOdooError } from '../odoo/parseError';
 import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
 
+// NOTE: The mobile app uses the check-in/out CORRECTION flow only. The
+// overtime (/attendance/overtime) and absence-justification
+// (/attendance/justification) routes below are retained for API compatibility
+// and other clients; the current mobile UI does not call them.
 const router = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

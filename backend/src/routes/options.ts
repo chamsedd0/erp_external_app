@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
-import { getOdooContext } from '../lib/authContext';
+import { buildReadContext } from '../lib/authContext';
 import { getModelSchema } from '../lib/schemaCache';
 
 const router = Router();
@@ -48,7 +48,7 @@ router.get('/', async (req, res) => {
 
         const client = getOdooClient(tenantId, tenantConfig);
         const uid = await client.authenticate();
-        const ctx = getOdooContext(req);
+        const ctx = await buildReadContext(req, client, uid);
 
         // Resolve the relation target from the field definition.
         const schema = await getModelSchema(tenantId, client, uid, sourceModel);

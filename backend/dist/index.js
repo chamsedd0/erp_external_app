@@ -15,12 +15,14 @@ const timesheet_1 = require("./routes/timesheet");
 const helpdesk_1 = require("./routes/helpdesk");
 const maintenance_1 = require("./routes/maintenance");
 const attendance_1 = require("./routes/attendance");
+const companies_1 = require("./routes/companies");
+const options_1 = require("./routes/options");
 const cron_1 = require("./routes/cron");
 const errorLog_1 = require("./lib/errorLog");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
 // Allow Authorization header in cross-origin requests (required for JWT)
-app.use((0, cors_1.default)({ allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use((0, cors_1.default)({ allowedHeaders: ['Content-Type', 'Authorization', 'X-Lang'] }));
 // Increase JSON payload limit to support base64 attachments (up to 3 × 5 MB ≈ 15 MB)
 app.use(express_1.default.json({ limit: '20mb' }));
 app.use((req, res, next) => {
@@ -102,30 +104,30 @@ app.use('/timesheet', timesheet_1.timesheetRouter);
 app.use('/helpdesk', helpdesk_1.helpdeskRouter);
 app.use('/maintenance', maintenance_1.maintenanceRouter);
 app.use('/attendance', attendance_1.attendanceRouter);
-// ── Error capture middleware — intercepts res.json calls for 5xx ──────────────
-// Must be registered AFTER all route handlers.
-app.use((req, res, next) => {
-    const originalJson = res.json.bind(res);
-    res.json = function (body) {
-        if (res.statusCode >= 500) {
-            const tenantId = req.jwtPayload?.tenantId;
-            if (tenantId) {
-                const errorMsg = (typeof body === 'object' && body?.error)
-                    ? String(body.error).slice(0, 500)
-                    : 'Internal server error';
-                void (0, errorLog_1.pushError)(tenantId, {
-                    timestamp: new Date().toISOString(),
-                    method: req.method,
-                    path: req.path,
-                    status: res.statusCode,
-                    error: errorMsg,
-                    employee_id: req.jwtPayload?.id,
-                });
-            }
-        }
-        return originalJson(body);
-    };
-    next();
+app.use('/companies', companies_1.companiesRouter);
+app.use('/options', options_1.optionsRouter);
+// ── Error-handling middleware — catches errors thrown/forwarded by handlers ───
+// Registered AFTER all routes. Express recognises it as an error handler by its
+// four-argument signature. Complements the res.json wrapper above (which logs
+// explicit 5xx responses) by also capturing thrown/uncaught route errors.
+app.use((err, req, res, _next) => {
+    const tenantId = req.jwtPayload?.tenantId;
+    if (tenantId) {
+        void (0, errorLog_1.pushError)(tenantId, {
+            timestamp: new Date().toISOString(),
+            method: req.method,
+            path: req.path,
+            status: 500,
+            error: String(err?.message ?? err ?? 'Internal server error').slice(0, 500),
+            employee_id: req.jwtPayload?.id,
+        });
+    }
+    else {
+        console.error('Unhandled error:', err);
+    }
+    if (res.headersSent)
+        return;
+    res.status(500).json({ error: 'Internal server error' });
 });
 // ── Local dev server ──────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {

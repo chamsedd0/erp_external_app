@@ -8,6 +8,7 @@ const tenantStore_1 = require("../lib/tenantStore");
 const schemaCache_1 = require("../lib/schemaCache");
 const parseError_1 = require("../odoo/parseError");
 const authContext_1 = require("../lib/authContext");
+const odooCompatibility_1 = require("../lib/odooCompatibility");
 const router = (0, express_1.Router)();
 const TIME_OFF_TASK_ERROR = 'This task is linked to a time off type. Please choose a different task or leave task blank.';
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -18,9 +19,13 @@ const createTimesheetSchema = zod_1.z.object({
     date: zod_1.z.string(), // YYYY-MM-DD
     unit_amount: zod_1.z.number(), // hours, e.g. 2.5
     name: zod_1.z.string(), // description of work done
+    custom_values: zod_1.z.record(zod_1.z.string(), zod_1.z.any()).optional(), // tenant-specific x_ custom fields
 });
 function taskIsLinkedToTimeOff(task) {
     return Boolean(task?.leave_type_id || task?.time_off_type_id || task?.holiday_status_id);
+}
+function companyDomain(companyId) {
+    return companyId ? ['|', ['company_id', '=', false], ['company_id', '=', companyId]] : [];
 }
 // ── Routes ────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -68,9 +73,12 @@ router.get('/projects', async (req, res) => {
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const employeeCompanyId = ctx.company_id ?? null;
+        const domain = [['active', '=', true], ...companyDomain(employeeCompanyId)];
         let projects;
         try {
-            projects = await client.searchRead(uid, 'project.project', [['active', '=', true]], ['id', 'name']);
+            projects = await client.searchRead(uid, 'project.project', domain, ['id', 'name', 'company_id'], { context: ctx });
         }
         catch (e) {
             const msg = String(e?.faultString || e?.message || '').toLowerCase();
@@ -79,7 +87,10 @@ router.get('/projects', async (req, res) => {
             }
             throw e;
         }
-        res.json({ projects: Array.isArray(projects) ? projects : [] });
+        const safeProjects = Array.isArray(projects)
+            ? projects.filter((project) => (0, odooCompatibility_1.companyCompatible)(project.company_id, employeeCompanyId))
+            : [];
+        res.json({ projects: safeProjects });
     }
     catch (error) {
         console.error('Fetch Projects Error:', error);
@@ -102,12 +113,18 @@ router.get('/tasks', async (req, res) => {
             return res.status(400).json({ error: 'Invalid project_id' });
         }
         const uid = await client.authenticate();
+        const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const employeeCompanyId = ctx.company_id ?? null;
+        const projectCheck = await client.searchRead(uid, 'project.project', [['id', '=', parsedProjectId], ...companyDomain(employeeCompanyId)], ['id', 'company_id'], { silent: true, context: ctx }).catch(() => []);
+        if (!Array.isArray(projectCheck) || projectCheck.length === 0 || !(0, odooCompatibility_1.companyCompatible)(projectCheck[0].company_id, employeeCompanyId)) {
+            return res.status(422).json({ error: 'Project is not available for your company.' });
+        }
         let tasks = [];
         try {
-            tasks = await client.searchRead(uid, 'project.task', [['project_id', '=', parsedProjectId], ['active', '=', true]], ['id', 'name', 'leave_type_id', 'time_off_type_id', 'holiday_status_id'], true);
+            tasks = await client.searchRead(uid, 'project.task', [['project_id', '=', parsedProjectId], ['active', '=', true]], ['id', 'name', 'leave_type_id', 'time_off_type_id', 'holiday_status_id'], { silent: true, context: ctx });
         }
         catch {
-            tasks = await client.searchRead(uid, 'project.task', [['project_id', '=', parsedProjectId], ['active', '=', true]], ['id', 'name']);
+            tasks = await client.searchRead(uid, 'project.task', [['project_id', '=', parsedProjectId], ['active', '=', true]], ['id', 'name'], { silent: true, context: ctx });
         }
         const safeTasks = Array.isArray(tasks)
             ? tasks
@@ -125,6 +142,21 @@ router.get('/tasks', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+router.get('/form-schema', async (req, res) => {
+    try {
+        const tenantId = req.jwtPayload?.tenantId;
+        const tenantConfig = await tenantStore_1.tenantStore.getTenant(tenantId);
+        if (!tenantConfig)
+            return res.status(401).json({ error: 'Unknown tenant' });
+        const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
+        const uid = await client.authenticate();
+        res.json(await (0, schemaCache_1.getCustomFieldReport)(tenantId, client, uid, 'account.analytic.line'));
+    }
+    catch (error) {
+        console.error('Fetch Timesheet Form Schema Error:', error);
+        res.json({ custom_fields: {}, schema_available: false, unsupported_fields: {}, unsupported_required_fields: {}, schema_cached_at: null });
+    }
+});
 router.post('/', async (req, res) => {
     try {
         const tenantId = req.jwtPayload?.tenantId;
@@ -134,9 +166,11 @@ router.post('/', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const body = { ...createTimesheetSchema.parse(req.body), employee_id: (0, authContext_1.getAuthenticatedEmployeeId)(req, req.body?.employee_id) };
         const uid = await client.authenticate();
-        const projects = await client.searchRead(uid, 'project.project', [['id', '=', body.project_id]], ['id', 'name']);
-        if (!Array.isArray(projects) || projects.length === 0) {
-            return res.status(400).json({ error: 'Project not found' });
+        const ctx = await (0, authContext_1.buildOdooContext)(req, client, uid, body.employee_id);
+        const employeeCompanyId = ctx.company_id ?? null;
+        const projects = await client.searchRead(uid, 'project.project', [['id', '=', body.project_id], ...companyDomain(employeeCompanyId)], ['id', 'name', 'company_id'], { context: ctx });
+        if (!Array.isArray(projects) || projects.length === 0 || !(0, odooCompatibility_1.companyCompatible)(projects[0].company_id, employeeCompanyId)) {
+            return res.status(422).json({ error: 'Project is not available for your company.' });
         }
         let analyticAccountId = false;
         try {
@@ -157,10 +191,21 @@ router.post('/', async (req, res) => {
             date: body.date,
             unit_amount: body.unit_amount,
         };
+        if (employeeCompanyId)
+            recordData.company_id = employeeCompanyId;
         if (analyticAccountId)
             recordData.account_id = analyticAccountId;
         if (body.task_id)
             recordData.task_id = body.task_id;
+        if (body.custom_values && typeof body.custom_values === 'object') {
+            Object.assign(recordData, body.custom_values);
+        }
+        // Enforce required custom fields up-front for a clear error message.
+        const tsCustomFields = await (0, schemaCache_1.getCustomFields)(tenantId, client, uid, 'account.analytic.line');
+        const missingCustom = (0, schemaCache_1.validateRequiredCustomFields)(tsCustomFields, body.custom_values);
+        if (missingCustom.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', missing_required: missingCustom });
+        }
         // Pre-validate payload against live Odoo schema
         const validation = await (0, schemaCache_1.validatePayload)(tenantId, client, uid, 'account.analytic.line', recordData);
         if (!validation.valid) {
@@ -172,7 +217,7 @@ router.post('/', async (req, res) => {
         }
         let newId;
         try {
-            newId = await client.createRecord(uid, 'account.analytic.line', recordData);
+            newId = await client.createRecord(uid, 'account.analytic.line', recordData, ctx);
         }
         catch (createErr) {
             const msg = String(createErr?.faultString || createErr?.message || '').toLowerCase();

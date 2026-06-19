@@ -157,7 +157,7 @@ describe('Type label resolution (mirrors labelForType)', () => {
             case 'timeoff': return 'Time Off Request';
             case 'expense': return 'Expense Claim';
             case 'timesheet': return 'Timesheet Entry';
-            case 'helpdesk': return 'IT Support Ticket';
+            case 'helpdesk': return 'Helpdesk Ticket';
             case 'maintenance': return 'Maintenance Request';
             default: return 'Request';
         }
@@ -167,7 +167,7 @@ describe('Type label resolution (mirrors labelForType)', () => {
         expect(labelForType('timeoff')).toBe('Time Off Request');
         expect(labelForType('expense')).toBe('Expense Claim');
         expect(labelForType('timesheet')).toBe('Timesheet Entry');
-        expect(labelForType('helpdesk')).toBe('IT Support Ticket');
+        expect(labelForType('helpdesk')).toBe('Helpdesk Ticket');
         expect(labelForType('maintenance')).toBe('Maintenance Request');
     });
 

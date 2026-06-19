@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
-import { authHeader, SAMPLE_TENANT, makeMockOdooClient } from './helpers';
+import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -26,12 +26,13 @@ beforeEach(() => {
 
 describe('GET /maintenance/categories', () => {
     it('returns categories when maintenance module is available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([]) // availability probe
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe → available
+            'maintenance.equipment.category': () => [
                 { id: 1, name: 'HVAC' },
                 { id: 2, name: 'Electrical' },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/maintenance/categories')
@@ -322,7 +323,40 @@ describe('POST /maintenance', () => {
         expect(mockClient.createRecord).not.toHaveBeenCalled();
     });
 
-    it('retries without schedule_date and duration when Odoo rejects them', async () => {
+    it('returns 422 when a crafted equipment_id belongs to another company', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],   // availability probe
+            'maintenance.team': () => [],
+            'maintenance.equipment': () => [{ id: 9, company_id: [2, 'Other Co'] }],
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, equipment_id: 9 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/equipment/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('pins company_id to the employee company on create', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],
+        }, { employeeCompanyId: 1 });
+        mockClient.createRecord.mockResolvedValueOnce(73);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(200);
+        expect(mockClient.createRecord.mock.calls[0][2].company_id).toBe(1);
+    });
+
+    it('retries without the rejected optional maintenance field when Odoo rejects it', async () => {
         setupAvailable();
         mockClient.createRecord
             .mockRejectedValueOnce({ faultString: 'Invalid field schedule_date on maintenance.request' })
@@ -337,7 +371,41 @@ describe('POST /maintenance', () => {
         expect(mockClient.createRecord).toHaveBeenCalledTimes(2);
         const retryData = mockClient.createRecord.mock.calls[1][2];
         expect(retryData).not.toHaveProperty('schedule_date');
-        expect(retryData).not.toHaveProperty('duration');
+        expect(retryData.duration).toBe(2.5);
+    });
+
+    it('reports a user-supplied optional field that Odoo rejected as a dropped field', async () => {
+        setupAvailable();
+        mockClient.createRecord
+            .mockRejectedValueOnce({ faultString: 'Invalid field production_id on maintenance.request' })
+            .mockResolvedValueOnce(70);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, production_id: 5 });
+
+        expect(res.status).toBe(200);
+        expect(res.body.id).toBe(70);
+        expect(res.body.partial_success).toBe(true);
+        expect(res.body.dropped_fields).toEqual(['Manufacturing Order']);
+        // The retry must not include the rejected field.
+        const retryData = mockClient.createRecord.mock.calls[1][2];
+        expect(retryData).not.toHaveProperty('production_id');
+    });
+
+    it('does not report dropped_fields on a clean create', async () => {
+        setupAvailable();
+        mockClient.createRecord.mockResolvedValueOnce(71);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, schedule_date: '2026-05-01T09:00:00Z' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.partial_success).toBeUndefined();
+        expect(res.body.dropped_fields).toBeUndefined();
     });
 
     it('formats schedule_date to YYYY-MM-DD HH:MM:SS', async () => {
@@ -353,18 +421,40 @@ describe('POST /maintenance', () => {
         // Must be formatted as 'YYYY-MM-DD HH:MM:SS', not ISO with T
         expect(createArgs.schedule_date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     });
+
+    it('passes preventive schedule end and recurrent fields when provided', async () => {
+        setupAvailable();
+        mockClient.createRecord.mockResolvedValueOnce(64);
+
+        await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({
+                ...VALID_BODY,
+                maintenance_type: 'preventive',
+                schedule_date: '2026-05-01T09:00:00.000Z',
+                schedule_end: '2026-05-01T11:00:00.000Z',
+                recurring: true,
+            });
+
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.schedule_date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+        expect(createArgs.schedule_date_end).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+        expect(createArgs.recurring_maintenance).toBe(true);
+    });
 });
 
 // ─── GET /maintenance/equipment ───────────────────────────────────────────────
 
 describe('GET /maintenance/equipment', () => {
     it('returns equipment list when module available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([
-                { id: 1, name: 'Printer A', category_id: [1, 'Office'] },
-                { id: 2, name: 'Server B', category_id: [2, 'IT'] },
-            ]);
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe
+            'maintenance.equipment': () => [
+                { id: 1, name: 'Printer A', category_id: [1, 'Office'], company_id: [1, 'Test Co'] },
+                { id: 2, name: 'Server B', category_id: [2, 'IT'], company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/maintenance/equipment')
@@ -373,6 +463,24 @@ describe('GET /maintenance/equipment', () => {
         expect(res.status).toBe(200);
         expect(res.body.available).toBe(true);
         expect(res.body.equipment).toHaveLength(2);
+    });
+
+    it('excludes equipment from a different employee company', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.equipment': () => [
+                { id: 1, name: 'My Printer', category_id: false, company_id: [1, 'My Company'] },
+                { id: 2, name: 'Shared Asset', category_id: false, company_id: false },
+                { id: 3, name: 'Other Printer', category_id: false, company_id: [2, 'Other'] },
+            ],
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/maintenance/equipment')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.equipment.map((e: any) => e.name)).toEqual(['My Printer', 'Shared Asset']);
     });
 
     it('returns available:false when module not installed', async () => {
@@ -397,12 +505,13 @@ describe('GET /maintenance/equipment', () => {
 
 describe('GET /maintenance/teams', () => {
     it('returns teams when module available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([
-                { id: 1, name: 'Facilities Team' },
-                { id: 2, name: 'IT Team' },
-            ]);
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe
+            'maintenance.team': () => [
+                { id: 1, name: 'Facilities Team', company_id: [1, 'Test Co'] },
+                { id: 2, name: 'IT Team', company_id: [1, 'Test Co'] },
+            ],
+        });
 
         const res = await request(app)
             .get('/maintenance/teams')
@@ -426,14 +535,14 @@ describe('GET /maintenance/teams', () => {
     });
 
     it('filters teams from a different employee company', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [
                 { id: 1, name: 'Same Company', company_id: [1, 'My Company'] },
                 { id: 2, name: 'Global Team', company_id: false },
                 { id: 3, name: 'Other Company', company_id: [2, 'Other'] },
-            ])
-            .mockResolvedValueOnce([{ id: 42, company_id: [1, 'My Company'] }]);
+            ],
+        }, { employeeCompanyId: 1 });
 
         const res = await request(app)
             .get('/maintenance/teams')
@@ -450,6 +559,48 @@ describe('GET /maintenance/teams', () => {
 });
 
 // ─── Resilience: unknown/custom Odoo fields ────────────────────────────────────
+
+describe('GET /maintenance/manufacturing-orders', () => {
+    it('returns company-scoped manufacturing orders when MRP is available', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'mrp.production': () => [
+                { id: 1, name: 'MO/001', company_id: [1, 'My Company'] },
+                { id: 2, name: 'MO/002', company_id: [2, 'Other'] },
+                { id: 3, name: 'MO/003', company_id: false },
+            ],
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/maintenance/manufacturing-orders')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.orders.map((order: any) => order.name)).toEqual(['MO/001', 'MO/003']);
+    });
+
+    it('returns an empty optional list when MRP is unavailable', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'mrp.production': () => {
+                throw new Error('model not found');
+            },
+        });
+
+        const res = await request(app)
+            .get('/maintenance/manufacturing-orders')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.available).toBe(false);
+        expect(res.body.orders).toEqual([]);
+    });
+
+    it('returns 401 without JWT', async () => {
+        const res = await request(app).get('/maintenance/manufacturing-orders');
+        expect(res.status).toBe(401);
+    });
+});
 
 describe('GET /maintenance — resilience: unknown Odoo fields', () => {
     it('succeeds when Odoo returns extra unknown custom fields on requests', async () => {

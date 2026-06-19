@@ -4,7 +4,8 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { buildOdooContext, getAuthenticatedEmployeeId, getOdooContext } from '../lib/authContext';
+import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { companyCompatible } from '../lib/odooCompatibility';
 
 const router = Router();
 const TIME_OFF_TASK_ERROR = 'This task is linked to a time off type. Please choose a different task or leave task blank.';
@@ -23,6 +24,10 @@ const createTimesheetSchema = z.object({
 
 function taskIsLinkedToTimeOff(task: any): boolean {
     return Boolean(task?.leave_type_id || task?.time_off_type_id || task?.holiday_status_id);
+}
+
+function companyDomain(companyId: number | null | undefined): any[] {
+    return companyId ? ['|', ['company_id', '=', false], ['company_id', '=', companyId]] : [];
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -80,11 +85,14 @@ router.get('/projects', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
+        const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+        const domain = [['active', '=', true], ...companyDomain(employeeCompanyId)];
         let projects: any;
         try {
             projects = await client.searchRead(
-                uid, 'project.project', [['active', '=', true]], ['id', 'name'],
-                { context: getOdooContext(req) }
+                uid, 'project.project', domain, ['id', 'name', 'company_id'],
+                { context: ctx }
             );
         } catch (e: any) {
             const msg = String(e?.faultString || e?.message || '').toLowerCase();
@@ -93,7 +101,10 @@ router.get('/projects', async (req, res) => {
             }
             throw e;
         }
-        res.json({ projects: Array.isArray(projects) ? projects : [] });
+        const safeProjects = Array.isArray(projects)
+            ? projects.filter((project: any) => companyCompatible(project.company_id, employeeCompanyId))
+            : [];
+        res.json({ projects: safeProjects });
     } catch (error: any) {
         console.error('Fetch Projects Error:', error);
         res.status(500).json({ error: error.message });
@@ -117,19 +128,34 @@ router.get('/tasks', async (req, res) => {
         }
 
         const uid = await client.authenticate();
+        const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+
+        const projectCheck: any = await client.searchRead(
+            uid,
+            'project.project',
+            [['id', '=', parsedProjectId], ...companyDomain(employeeCompanyId)],
+            ['id', 'company_id'],
+            { silent: true, context: ctx }
+        ).catch(() => []);
+        if (!Array.isArray(projectCheck) || projectCheck.length === 0 || !companyCompatible(projectCheck[0].company_id, employeeCompanyId)) {
+            return res.status(422).json({ error: 'Project is not available for your company.' });
+        }
+
         let tasks: any = [];
         try {
             tasks = await client.searchRead(
                 uid, 'project.task',
                 [['project_id', '=', parsedProjectId], ['active', '=', true]],
                 ['id', 'name', 'leave_type_id', 'time_off_type_id', 'holiday_status_id'],
-                { silent: true, context: getOdooContext(req) }
+                { silent: true, context: ctx }
             );
         } catch {
             tasks = await client.searchRead(
                 uid, 'project.task',
                 [['project_id', '=', parsedProjectId], ['active', '=', true]],
-                ['id', 'name']
+                ['id', 'name'],
+                { silent: true, context: ctx }
             );
         }
         const safeTasks = Array.isArray(tasks)
@@ -172,12 +198,19 @@ router.post('/', async (req, res) => {
         const body = { ...createTimesheetSchema.parse(req.body), employee_id: getAuthenticatedEmployeeId(req, req.body?.employee_id) };
         const uid = await client.authenticate();
 
+        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+
         const projects: any = await client.searchRead(
-            uid, 'project.project', [['id', '=', body.project_id]], ['id', 'name']
+            uid,
+            'project.project',
+            [['id', '=', body.project_id], ...companyDomain(employeeCompanyId)],
+            ['id', 'name', 'company_id'],
+            { context: ctx }
         );
 
-        if (!Array.isArray(projects) || projects.length === 0) {
-            return res.status(400).json({ error: 'Project not found' });
+        if (!Array.isArray(projects) || projects.length === 0 || !companyCompatible(projects[0].company_id, employeeCompanyId)) {
+            return res.status(422).json({ error: 'Project is not available for your company.' });
         }
 
         let analyticAccountId: number | false = false;
@@ -202,6 +235,7 @@ router.post('/', async (req, res) => {
             unit_amount: body.unit_amount,
         };
 
+        if (employeeCompanyId) recordData.company_id = employeeCompanyId;
         if (analyticAccountId) recordData.account_id = analyticAccountId;
         if (body.task_id) recordData.task_id = body.task_id;
         if (body.custom_values && typeof body.custom_values === 'object') {
@@ -226,7 +260,6 @@ router.post('/', async (req, res) => {
         }
 
         let newId: number;
-        const ctx = await buildOdooContext(req, client, uid, body.employee_id);
         try {
             newId = await client.createRecord(uid, 'account.analytic.line', recordData, ctx) as number;
         } catch (createErr: any) {

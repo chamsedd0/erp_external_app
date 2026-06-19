@@ -44,41 +44,41 @@ const semantic = {
 };
 
 export const lightColors = {
-  background: '#FAFAFA',
-  foreground: '#0E0E10',
+  background: '#F6F8FB',
+  foreground: '#111827',
 
   card: '#ffffff',
-  cardForeground: '#0E0E10',
+  cardForeground: '#111827',
 
   popover: '#ffffff',
-  popoverForeground: '#0E0E10',
+  popoverForeground: '#111827',
 
-  primary: '#0E0E10',
+  primary: '#2563EB',
   primaryForeground: '#ffffff',
 
-  secondary: zinc[100],
-  secondaryForeground: '#0E0E10',
+  secondary: '#EEF2F7',
+  secondaryForeground: '#1F2937',
 
-  muted: zinc[100],
-  mutedForeground: zinc[500],
+  muted: '#EEF2F7',
+  mutedForeground: '#64748B',
 
-  accent: zinc[100],
-  accentForeground: '#0E0E10',
+  accent: '#E0F2FE',
+  accentForeground: '#075985',
 
   destructive: '#ef4444',
   destructiveForeground: '#ffffff',
 
-  border: zinc[200],
-  input: zinc[200],
-  ring: zinc[400],
+  border: '#D7DEE8',
+  input: '#D7DEE8',
+  ring: '#93C5FD',
 
-  text: '#0E0E10',
-  textMuted: zinc[500],
+  text: '#111827',
+  textMuted: '#64748B',
 
-  tint: '#0E0E10',
-  icon: zinc[500],
-  tabIconDefault: zinc[400],
-  tabIconSelected: '#0E0E10',
+  tint: '#2563EB',
+  icon: '#64748B',
+  tabIconDefault: '#94A3B8',
+  tabIconSelected: '#2563EB',
 
   // Semantic mappings
   semanticSuccess: semantic.success,

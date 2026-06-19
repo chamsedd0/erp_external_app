@@ -150,7 +150,7 @@ function getOdooClient(tenantId, cfg) {
                 objectClient.methodCall('execute_kw', [
                     odoo_db, uid, odoo_password,
                     model, 'fields_get', [],
-                    { attributes: ['string', 'help', 'type', 'required', 'selection', 'relation'] }
+                    { attributes: ['string', 'help', 'type', 'required', 'selection', 'relation', 'readonly', 'store'] }
                 ], (error, fields) => {
                     if (error)
                         reject(error);
@@ -159,9 +159,12 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        createRecord: async (uid, model, data) => {
+        createRecord: async (uid, model, data, context) => {
+            const kwargs = {};
+            if (context && Object.keys(context).length > 0)
+                kwargs.context = context;
             return new Promise((resolve, reject) => {
-                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'create', [data]], (error, newId) => {
+                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'create', [data], kwargs], (error, newId) => {
                     if (error) {
                         console.error(`[${tenantId}] Create Error (${model}):`, error);
                         reject(error);
@@ -171,9 +174,19 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        searchRead: async (uid, model, domain, fields, silent = false) => {
+        // `opts` accepts a legacy boolean (silent) for backward compat, or an options
+        // object carrying an Odoo `context` (e.g. allowed_company_ids, lang).
+        searchRead: async (uid, model, domain, fields, opts = false) => {
+            const { silent = false, context, limit, offset } = typeof opts === 'boolean' ? { silent: opts, context: undefined, limit: undefined, offset: undefined } : opts;
+            const kwargs = { fields };
+            if (context && Object.keys(context).length > 0)
+                kwargs.context = context;
+            if (typeof limit === 'number' && limit > 0)
+                kwargs.limit = limit;
+            if (typeof offset === 'number' && offset > 0)
+                kwargs.offset = offset;
             return new Promise((resolve, reject) => {
-                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'search_read', [domain], { fields }], (error, records) => {
+                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'search_read', [domain], kwargs], (error, records) => {
                     if (error) {
                         if (!silent)
                             console.error(`[${tenantId}] SearchRead Error (${model}):`, error);
@@ -184,9 +197,10 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        callMethod: async (uid, model, method, recordIds, args = {}) => {
+        callMethod: async (uid, model, method, recordIds, args = {}, context) => {
+            const kwargs = context && Object.keys(context).length > 0 ? { ...args, context } : args;
             return new Promise((resolve, reject) => {
-                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, method, [recordIds], args], (error, result) => {
+                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, method, [recordIds], kwargs], (error, result) => {
                     if (error) {
                         console.error(`[${tenantId}] CallMethod Error (${model}.${method}):`, error);
                         reject(error);
@@ -196,9 +210,12 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        writeRecord: async (uid, model, recordIds, data) => {
+        writeRecord: async (uid, model, recordIds, data, context) => {
+            const kwargs = {};
+            if (context && Object.keys(context).length > 0)
+                kwargs.context = context;
             return new Promise((resolve, reject) => {
-                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'write', [recordIds, data]], (error, result) => {
+                objectClient.methodCall('execute_kw', [odoo_db, uid, odoo_password, model, 'write', [recordIds, data], kwargs], (error, result) => {
                     if (error) {
                         console.error(`[${tenantId}] Write Error (${model}):`, error);
                         reject(error);
@@ -208,12 +225,16 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        createAttachment: async (uid, name, datas, res_model, res_id, mimetype = 'image/jpeg') => {
+        createAttachment: async (uid, name, datas, res_model, res_id, mimetype = 'image/jpeg', context) => {
+            const kwargs = {};
+            if (context && Object.keys(context).length > 0)
+                kwargs.context = context;
             return new Promise((resolve, reject) => {
                 objectClient.methodCall('execute_kw', [
                     odoo_db, uid, odoo_password,
                     'ir.attachment', 'create',
-                    [{ name, datas, res_model, res_id, mimetype, type: 'binary' }]
+                    [{ name, datas, res_model, res_id, mimetype, type: 'binary' }],
+                    kwargs,
                 ], (error, attachmentId) => {
                     if (error) {
                         console.error(`[${tenantId}] Create Attachment Error:`, error);
@@ -224,15 +245,20 @@ function getOdooClient(tenantId, cfg) {
                 });
             });
         },
-        uploadAttachments: async (uid, attachments, res_model, res_id) => {
+        uploadAttachments: async (uid, attachments, res_model, res_id, context) => {
+            const failed = [];
+            let uploaded = 0;
             for (const att of attachments) {
                 try {
-                    await client.createAttachment(uid, att.name, att.data, res_model, res_id, att.mimetype);
+                    await client.createAttachment(uid, att.name, att.data, res_model, res_id, att.mimetype, context);
+                    uploaded++;
                 }
                 catch (e) {
                     console.error(`[${tenantId}] Attachment upload failed (${att.name}):`, e);
+                    failed.push(att.name);
                 }
             }
+            return { uploaded, failed };
         },
     };
     return client;

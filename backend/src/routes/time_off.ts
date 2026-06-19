@@ -4,7 +4,7 @@ import { getOdooClient, OdooClientInstance } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
-import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
 import { attachmentsSchema } from '../lib/attachments';
 
 const router = Router();
@@ -148,6 +148,8 @@ router.get('/types', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
+        // Leave types can be company-specific; scope to the employee's company.
+        const ctx = await buildReadContext(req, client, uid);
 
         try {
             const types: any = await client.searchRead(
@@ -155,7 +157,7 @@ router.get('/types', async (req, res) => {
                 'hr.leave.type',
                 [],
                 ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'],
-                true
+                { silent: true, context: ctx }
             );
             if (Array.isArray(types) && types.length > 0) {
                 return res.json({ types: types.map(enrichLeaveType) });
@@ -163,7 +165,7 @@ router.get('/types', async (req, res) => {
         } catch {
             try {
                 const types: any = await client.searchRead(
-                    uid, 'hr.leave.type', [], ['id', 'name'], true
+                    uid, 'hr.leave.type', [], ['id', 'name'], { silent: true, context: ctx }
                 );
                 if (Array.isArray(types) && types.length > 0) {
                     return res.json({ types: types.map(enrichLeaveType) });
@@ -175,7 +177,7 @@ router.get('/types', async (req, res) => {
 
         try {
             const allTypes: any = await client.searchRead(
-                uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], true
+                uid, 'hr.work.entry.type', [], ['id', 'name', 'code'], { silent: true, context: ctx }
             );
             if (Array.isArray(allTypes)) {
                 const seen = new Set<string>();

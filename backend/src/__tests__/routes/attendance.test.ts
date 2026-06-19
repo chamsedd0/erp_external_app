@@ -362,7 +362,6 @@ describe('POST /attendance/justification', () => {
     };
 
     it('creates hr.leave record using detected leave type field', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]); // leave type field probe → holiday_status_id
         mockClient.createRecord.mockResolvedValueOnce(88);
 
         const res = await request(app)
@@ -376,7 +375,6 @@ describe('POST /attendance/justification', () => {
     });
 
     it('uses justification text as the leave name field', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]);
         mockClient.createRecord.mockResolvedValueOnce(88);
 
         await request(app)
@@ -390,7 +388,6 @@ describe('POST /attendance/justification', () => {
 
     it('falls back to holiday_status_id on KeyError', async () => {
         const justifTenant = 'justif-fallback-tenant';
-        mockClient.searchRead.mockResolvedValueOnce([]); // probe → holiday_status_id
         mockClient.createRecord
             .mockRejectedValueOnce({ faultString: 'KeyError: None' })
             .mockResolvedValueOnce(88);
@@ -407,7 +404,6 @@ describe('POST /attendance/justification', () => {
     });
 
     it('uploads attachments when provided', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]);
         mockClient.createRecord.mockResolvedValueOnce(88);
 
         await request(app)

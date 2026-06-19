@@ -114,7 +114,7 @@ export default function RequestDetails() {
             case 'timeoff': return 'Time Off Request';
             case 'expense': return 'Expense Claim';
             case 'timesheet': return 'Timesheet Entry';
-            case 'helpdesk': return 'IT Support Ticket';
+            case 'helpdesk': return 'Helpdesk Ticket';
             case 'maintenance': return 'Maintenance Request';
         }
     };
@@ -125,7 +125,7 @@ export default function RequestDetails() {
             case 'timeoff': return request.leave_type_id?.[1] || 'Leave';
             case 'expense': return request.name || 'Expense';
             case 'timesheet': return request.name || 'Work Entry';
-            case 'helpdesk': return request.name || 'Support Ticket';
+            case 'helpdesk': return request.name || 'Helpdesk Ticket';
             case 'maintenance': return request.name || 'Maintenance';
         }
     };
@@ -343,7 +343,7 @@ export default function RequestDetails() {
                     </>
                 )}
 
-                {/* ─── IT Support Details ─── */}
+                {/* ─── Helpdesk Details ─── */}
                 {type === 'helpdesk' && (
                     <>
                         {Array.isArray(request.team_id) && (

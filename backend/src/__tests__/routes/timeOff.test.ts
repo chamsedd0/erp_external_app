@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
-import { authHeader, SAMPLE_TENANT, makeMockOdooClient } from './helpers';
+import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -69,10 +69,12 @@ describe('GET /time-off', () => {
 
 describe('GET /time-off/types', () => {
     it('returns leave types from hr.leave.type', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 1, name: 'Annual Leave' },
-            { id: 2, name: 'Sick Leave' },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => [
+                { id: 1, name: 'Annual Leave' },
+                { id: 2, name: 'Sick Leave' },
+            ],
+        });
 
         const res = await request(app)
             .get('/time-off/types')
@@ -83,13 +85,14 @@ describe('GET /time-off/types', () => {
     });
 
     it('falls back to hr.work.entry.type when hr.leave.type returns empty', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([]) // hr.leave.type returns nothing
-            .mockResolvedValueOnce([  // hr.work.entry.type
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => [],
+            'hr.work.entry.type': () => [
                 { id: 10, name: 'Annual Leave', code: 'LEAVE_ANNUAL' },
                 { id: 11, name: 'Sick Leave', code: 'LEAVE_SICK' },
                 { id: 12, name: 'Work Entry', code: 'WORK_NORMAL' },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/time-off/types')
@@ -101,10 +104,12 @@ describe('GET /time-off/types', () => {
     });
 
     it('adds requestability metadata when leave balance fields are available', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([
-            { id: 1, name: 'Annual Leave', requires_allocation: 'yes', virtual_remaining_leaves: 0, max_leaves: 0 },
-            { id: 2, name: 'Unpaid Leave', requires_allocation: 'no', virtual_remaining_leaves: 0, max_leaves: 0 },
-        ]);
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => [
+                { id: 1, name: 'Annual Leave', requires_allocation: 'yes', virtual_remaining_leaves: 0, max_leaves: 0 },
+                { id: 2, name: 'Unpaid Leave', requires_allocation: 'no', virtual_remaining_leaves: 0, max_leaves: 0 },
+            ],
+        });
 
         const res = await request(app)
             .get('/time-off/types')
@@ -146,7 +151,6 @@ describe('POST /time-off', () => {
     };
 
     it('creates leave record and returns 200 with id', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]); // probe
         mockClient.createRecord.mockResolvedValueOnce(101);
 
         const res = await request(app)
@@ -184,7 +188,6 @@ describe('POST /time-off', () => {
     });
 
     it('returns 500 when Odoo createRecord throws', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]); // probe
         mockClient.createRecord.mockRejectedValueOnce(new Error('Odoo RPC error'));
 
         const res = await request(app)
@@ -196,7 +199,6 @@ describe('POST /time-off', () => {
     });
 
     it('calls uploadAttachments when attachments are provided', async () => {
-        mockClient.searchRead.mockResolvedValueOnce([]);
         mockClient.createRecord.mockResolvedValueOnce(55);
 
         await request(app)
@@ -216,9 +218,8 @@ describe('POST /time-off', () => {
         mockTenantStore.getTenant.mockResolvedValue(SAMPLE_TENANT);
 
         // Probe order in time_off.ts: ['holiday_status_id', 'leave_type_id', 'time_off_type_id', 'work_entry_type_id']
-        // holiday_status_id is the FIRST candidate — resolve on first probe to cache and use it
-        mockClient.searchRead
-            .mockResolvedValueOnce([]); // holiday_status_id probe succeeds immediately
+        // holiday_status_id is the FIRST candidate — the default searchRead mock
+        // resolves it (and the hr.employee company lookup) so it caches and is used.
         mockClient.createRecord.mockResolvedValueOnce(200);
 
         const res = await request(app)

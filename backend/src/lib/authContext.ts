@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import { companyContext } from './odooCompatibility';
-import { assertEmployeeCanUseCompany } from './odooCompatibility';
+import { assertEmployeeCanUseCompany, getEmployeeCompanyId } from './odooCompatibility';
 
 export interface JwtEmployeePayload {
     id?: number;
@@ -57,14 +57,13 @@ export function getAuthenticatedTenantId(req: Request): string {
     return tenantId;
 }
 
-// ── Operating company + language (sent by the app as request headers) ──────────
-
-/** Active res.company chosen in the app's company switcher (X-Company-Id header). */
-export function getActiveCompanyId(req: Request): number | null {
-    const raw = req.headers['x-company-id'];
-    const parsed = Number.parseInt(Array.isArray(raw) ? raw[0] : String(raw ?? ''), 10);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
+// ── Company + language context ─────────────────────────────────────────────────
+//
+// Business rule: one mobile account = one hr.employee = one res.company. The
+// employee's company is ALWAYS derived server-side from the authenticated JWT
+// employee id — never from a client-supplied header. There is no operating
+// company switcher; an employee only ever sees/creates records for their own
+// company.
 
 const LANG_MAP: Record<string, string> = {
     ar: 'ar_001',
@@ -80,18 +79,63 @@ export function getLang(req: Request): string | undefined {
 }
 
 /**
- * Combined Odoo context for a request: company scoping + UI language.
- * Pass this into searchRead/createRecord so reads are company-scoped and
- * Odoo-sourced labels come back localized.
+ * Language-only context — no company scoping. Use only for reads that are not
+ * company-specific (rare). Prefer buildReadContext for anything that returns
+ * company-scoped records or options.
  */
-export function getOdooContext(req: Request): Record<string, any> {
+export function getLangContext(req: Request): Record<string, any> {
     const lang = getLang(req);
+    return lang ? { lang } : {};
+}
+
+/**
+ * Validated read/options context, scoped to the authenticated employee's own
+ * company. Resolves the company from the JWT employee id (or an explicit
+ * employeeId) and pins Odoo's allowed_company_ids/company_id to it, so list and
+ * option endpoints can never leak another company's records. Adds UI language.
+ *
+ * Fails closed when the employee has no resolvable company. Falling back to the
+ * integration user's default company can leak options in multi-company tenants.
+ */
+export async function buildReadContext(
+    req: Request,
+    client: any,
+    uid: number,
+    employeeId?: number,
+): Promise<Record<string, any>> {
+    const lang = getLang(req);
+    const empId = employeeId ?? getAuthenticatedEmployeeId(req, req.query?.employee_id);
+
+    let companyId: number | null = null;
+    try {
+        companyId = await getEmployeeCompanyId(client, uid, empId);
+    } catch {
+        // handled below as a closed failure
+    }
+
+    if (!companyId) {
+        throw Object.assign(
+            new Error('Employee company is not configured. Please contact your administrator.'),
+            { statusCode: 422, code: 'EMPLOYEE_COMPANY_REQUIRED' }
+        );
+    }
+
     return {
-        ...companyContext(getActiveCompanyId(req)),
+        ...companyContext(companyId),
         ...(lang ? { lang } : {}),
     };
 }
 
+/**
+ * Validated write context. Creates/writes always target the employee's own
+ * company and return the pinned company context.
+ *
+ * Fails closed (422) when an employeeId is given but no company can be resolved,
+ * mirroring buildReadContext. An unscoped write in a multi-company tenant could
+ * land the record in the integration user's default company rather than the
+ * employee's, so we refuse rather than guess. (Business rule: one mobile account
+ * = one hr.employee = one res.company.)
+ */
 export async function buildOdooContext(
     req: Request,
     client: any,
@@ -99,13 +143,17 @@ export async function buildOdooContext(
     employeeId?: number,
 ): Promise<Record<string, any>> {
     const lang = getLang(req);
-    let companyId = getActiveCompanyId(req);
+    let companyId: number | null = null;
 
     if (employeeId) {
-        const result = await assertEmployeeCanUseCompany(client, uid, employeeId, companyId);
+        // selectedCompanyId is null: there is no switcher — always the employee's own company.
+        const result = await assertEmployeeCanUseCompany(client, uid, employeeId, null);
         companyId = result.companyId;
-        if (result.fallback && companyId) {
-            console.warn('[odoo-context] employee company could not be resolved; validated selected company against integration user only');
+        if (!companyId) {
+            throw Object.assign(
+                new Error('Employee company is not configured. Please contact your administrator.'),
+                { statusCode: 422, code: 'EMPLOYEE_COMPANY_REQUIRED' }
+            );
         }
     }
 

@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
-import { authHeader, SAMPLE_TENANT, makeMockOdooClient } from './helpers';
+import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -26,12 +26,13 @@ beforeEach(() => {
 
 describe('GET /helpdesk/teams', () => {
     it('returns teams when helpdesk module is available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([]) // availability probe
-            .mockResolvedValueOnce([   // helpdesk.team
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [], // availability probe
+            'helpdesk.team': () => [
                 { id: 1, name: 'Support Team' },
                 { id: 2, name: 'Technical Team' },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/helpdesk/teams')
@@ -273,6 +274,40 @@ describe('POST /helpdesk', () => {
         expect(ticketData.ticket_type_id).toBe(3);
     });
 
+    it('returns 422 when a crafted team_id belongs to another company', async () => {
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [], // availability probe
+            'hr.employee': () => [{ id: 42, name: 'Alice', user_id: false }], // partner lookup
+            'helpdesk.team': () => [{ id: 8, company_id: [2, 'Other Co'] }],
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, team_id: 8 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/team is not available/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('pins company_id to the employee company on create', async () => {
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'hr.employee': () => [{ id: 42, name: 'Alice', user_id: false }],
+            'helpdesk.team': () => [{ id: 1, company_id: [1, 'Test Co'] }],
+        }, { employeeCompanyId: 1 });
+        mockClient.createRecord.mockResolvedValueOnce(211);
+
+        const res = await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(200);
+        expect(mockClient.createRecord.mock.calls[0][2].company_id).toBe(1);
+    });
+
     it('sends tag_ids as Many2many command [[6,0,[...]]]', async () => {
         setupAvailableWithEmployee(99);
         mockClient.createRecord.mockResolvedValueOnce(211);
@@ -328,12 +363,13 @@ describe('POST /helpdesk', () => {
 
 describe('GET /helpdesk/ticket-types', () => {
     it('returns ticket types when helpdesk available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [], // availability probe
+            'helpdesk.ticket.type': () => [
                 { id: 1, name: 'Hardware Issue' },
                 { id: 2, name: 'Software Issue' },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/helpdesk/ticket-types')
@@ -366,12 +402,13 @@ describe('GET /helpdesk/ticket-types', () => {
 
 describe('GET /helpdesk/tags', () => {
     it('returns tags when helpdesk available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'helpdesk.tag': () => [
                 { id: 10, name: 'Urgent', color: 1 },
                 { id: 11, name: 'Bug', color: 2 },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/helpdesk/tags')
@@ -395,9 +432,10 @@ describe('GET /helpdesk/tags', () => {
     });
 
     it('handles searchRead throwing on tags fetch (available but empty)', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // probe ok
-            .mockRejectedValueOnce(new Error('access denied'));
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'helpdesk.tag': () => { throw new Error('access denied'); },
+        });
 
         const res = await request(app)
             .get('/helpdesk/tags')
@@ -417,12 +455,13 @@ describe('GET /helpdesk/tags', () => {
 
 describe('GET /helpdesk/agents', () => {
     it('returns internal users when helpdesk available', async () => {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'res.users': () => [
                 { id: 1, name: 'Bob Agent' },
                 { id: 2, name: 'Carol Agent' },
-            ]);
+            ],
+        });
 
         const res = await request(app)
             .get('/helpdesk/agents')
@@ -431,6 +470,48 @@ describe('GET /helpdesk/agents', () => {
         expect(res.status).toBe(200);
         expect(res.body.available).toBe(true);
         expect(res.body.agents).toHaveLength(2);
+    });
+
+    it('scopes res.users to the employee company (company_ids domain)', async () => {
+        let seenDomain: any[] = [];
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'res.users': (domain) => {
+                seenDomain = domain;
+                return [{ id: 1, name: 'Same Co Agent' }];
+            },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/helpdesk/agents')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.agents).toHaveLength(1);
+        expect(seenDomain).toEqual(expect.arrayContaining([['company_ids', 'in', [1]]]));
+    });
+
+    it('falls back to the unscoped query when company_ids is not a valid field', async () => {
+        let calls = 0;
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'res.users': (domain) => {
+                calls++;
+                // First (company-scoped) call rejects; second (fallback) succeeds.
+                if (domain.some((d: any) => Array.isArray(d) && d[0] === 'company_ids')) {
+                    throw new Error('Invalid field company_ids on res.users');
+                }
+                return [{ id: 1, name: 'Agent' }];
+            },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/helpdesk/agents')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.agents).toHaveLength(1);
+        expect(calls).toBe(2); // scoped attempt + fallback
     });
 
     it('returns available:false when helpdesk unavailable', async () => {

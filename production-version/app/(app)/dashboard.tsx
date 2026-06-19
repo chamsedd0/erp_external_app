@@ -123,7 +123,7 @@ export default function Dashboard() {
             }));
             const formattedTickets = tickets.map((t: any) => ({
                 id: t.id, type: 'helpdesk',
-                title: t.name || 'IT Support Ticket',
+                title: t.name || 'Helpdesk Ticket',
                 date: t.create_date,
                 status: Array.isArray(t.stage_id) ? t.stage_id[1] : 'submitted',
                 amount: null,

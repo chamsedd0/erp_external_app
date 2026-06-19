@@ -1,7 +1,7 @@
 import { View, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight, Building2, Briefcase, Languages } from 'lucide-react-native';
+import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight, Building2, Palette, Languages } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../../providers/toast-context';
@@ -11,10 +11,13 @@ import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SearchableSelect } from '../../components/ui/searchable-select';
 import { i18n, setLocale, t, type Lang } from '../../lib/i18n';
+import { useModeToggle } from '../../hooks/useModeToggle';
+import type { ThemeMode } from '../../lib/theme-preference';
 
 export default function Settings() {
     const toast = useToast();
-    const { user, tenantName, tenantCode, hrEmail, clearTenant, signOut, companies, operatingCompanyId, setOperatingCompany } = useSession();
+    const { user, tenantName, tenantCode, hrEmail, clearTenant, signOut } = useSession();
+    const { mode: themeMode, setMode } = useModeToggle();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [markingAllRead, setMarkingAllRead] = useState(false);
     const [clearingCache, setClearingCache] = useState(false);
@@ -275,26 +278,27 @@ export default function Settings() {
             <View style={{ marginBottom: 32 }}>
                 <SectionHeader title={t('settings.preferences')} />
                 <View style={{ backgroundColor: cardColor, borderRadius: 24, padding: 18, gap: 18 }}>
-                    {/* Operating Company */}
+                    {/* Appearance (light / dark / system) */}
                     <View style={{ gap: 8 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <Briefcase size={18} color={semanticInfo} />
+                            <Palette size={18} color={semanticInfo} />
                             <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 15, color: text }}>
-                                {t('settings.operatingCompany')}
+                                {t('settings.appearance')}
                             </Text>
                         </View>
                         <SearchableSelect
-                            options={companies.map((c) => ({ id: c.id, name: c.name }))}
-                            value={operatingCompanyId}
-                            onChange={(id) => id != null && setOperatingCompany(Number(id))}
-                            placeholder={t('settings.operatingCompany')}
+                            options={[
+                                { id: 'light', name: t('settings.themeLight') },
+                                { id: 'dark', name: t('settings.themeDark') },
+                                { id: 'system', name: t('settings.themeSystem') },
+                            ]}
+                            value={themeMode}
+                            onChange={(id) => id != null && setMode(id as ThemeMode)}
+                            placeholder={t('settings.appearance')}
                             searchPlaceholder={t('common.search')}
-                            label={t('settings.operatingCompany')}
+                            label={t('settings.appearance')}
                             accent={semanticInfo}
                         />
-                        <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: muted }}>
-                            {t('settings.operatingCompanyHint')}
-                        </Text>
                     </View>
 
                     {/* Language */}
@@ -308,7 +312,7 @@ export default function Settings() {
                         <SearchableSelect
                             options={[{ id: 'en', name: 'English' }, { id: 'ar', name: 'العربية' }]}
                             value={lang}
-                            onChange={(id) => handleLanguageChange(id as Lang)}
+                            onChange={(id) => id != null && handleLanguageChange(id as Lang)}
                             placeholder={t('settings.language')}
                             searchPlaceholder={t('common.search')}
                             label={t('settings.language')}

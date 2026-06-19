@@ -29,20 +29,7 @@ const TARGETS = (process.env.SMOKE_BASE_URLS
         : ['http://localhost:3000', PRODUCTION_URL])
     .map(s => s.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-const CREDENTIALS = [
-    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'Jehad Hussain', barcode: '19200002', pin: '2222' },
-    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'Bashar Quraishi', barcode: '19200003', pin: '3333' },
-    { company: 'energytracks', spNumber: 'SP-00001', employeeName: 'HANI YES', barcode: '19200029', pin: '2929' },
-    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'AASEM AHMAD', barcode: '45164705', pin: '4248' },
-    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'ABDALLA MOHAMED', barcode: '74882741', pin: '4568' },
-    { company: 'Isec (V17)', spNumber: 'SP-00002', employeeName: 'ABDULAZIZ ABDULRAHMAN', barcode: '46131080', pin: '1365' },
-    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Ali Shaikh', barcode: '78800001', pin: '4444' },
-    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Nazir', barcode: '14100003', pin: '6666' },
-    { company: 'Lavendary (V18)', spNumber: 'SP-00003', employeeName: 'Aadil Nazir', barcode: '73800002', pin: '5555' },
-    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'SHAHIEZ', barcode: '18200001', pin: '1111' },
-    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'Mohammed', barcode: '24600002', pin: '2222' },
-    { company: 'Zahr (V15)', spNumber: 'SP-00004', employeeName: 'DAFER', barcode: '0300003', pin: '3333' },
-];
+const CREDENTIALS = loadCredentials();
 const CREDENTIAL_BARCODES = new Set(CREDENTIALS.map(credential => credential.barcode));
 const TINY_PNG_ATTACHMENT = {
     name: 'smoke.png',
@@ -62,6 +49,26 @@ function makeRunId() {
         String(d.getUTCSeconds()).padStart(2, '0'),
     ].join('');
     return `SMOKE-${stamp}`;
+}
+function loadCredentials() {
+    const fixturePath = process.env.SMOKE_CREDENTIALS_FILE
+        ? path_1.default.resolve(process.env.SMOKE_CREDENTIALS_FILE)
+        : path_1.default.resolve(__dirname, 'credentials.local.json');
+    if (!fs_1.default.existsSync(fixturePath)) {
+        throw new Error(`Smoke credentials fixture not found: ${fixturePath}. Copy credentials.example.json to credentials.local.json and fill it locally.`);
+    }
+    const parsed = JSON.parse(fs_1.default.readFileSync(fixturePath, 'utf8'));
+    if (!Array.isArray(parsed)) {
+        throw new Error('Smoke credentials fixture must be an array.');
+    }
+    return parsed.map((entry, index) => {
+        for (const key of ['company', 'spNumber', 'employeeName', 'barcode', 'pin']) {
+            if (typeof entry?.[key] !== 'string' || !entry[key].trim()) {
+                throw new Error(`Smoke credential #${index + 1} is missing string field "${key}".`);
+            }
+        }
+        return entry;
+    });
 }
 function safeName(value) {
     return value.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
