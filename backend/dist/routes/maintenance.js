@@ -46,6 +46,37 @@ async function fetchMaintenanceTeams(client, uid, context, companyId) {
         }
     }
 }
+/**
+ * Resolve the field on `maintenance.request` that links to a Manufacturing Order.
+ * The mobile app always sends `production_id`, but the real field name depends on
+ * the Odoo version / installed bridge module (e.g. `mrp_maintenance`). Discover it
+ * from the live schema — the many2one whose relation is `mrp.production` — so the
+ * link persists regardless of the exact name. Returns `undefined` when the model
+ * has no such field (the instance simply doesn't support the link) and falls back
+ * to the conventional `production_id` only when the schema can't be read, which
+ * preserves the prior behaviour (the create-retry loop drops it if Odoo rejects it).
+ */
+async function resolveProductionField(tenantId, client, uid) {
+    let schemaKnown = false;
+    try {
+        const schema = await (0, schemaCache_1.getModelSchema)(tenantId, client, uid, 'maintenance.request');
+        if (schema && Object.keys(schema).length > 0) {
+            schemaKnown = true;
+            if (schema.production_id?.type === 'many2one' && schema.production_id.relation === 'mrp.production') {
+                return 'production_id';
+            }
+            const match = Object.entries(schema).find(([, def]) => def.type === 'many2one' && def.relation === 'mrp.production');
+            if (match)
+                return match[0];
+        }
+    }
+    catch {
+        // fall through
+    }
+    // Schema known but no MO link → field genuinely absent (undefined → reported as
+    // dropped). Schema unreadable → keep the conventional name and let Odoo decide.
+    return schemaKnown ? undefined : 'production_id';
+}
 // ── Schema ────────────────────────────────────────────────────────────────────
 function formatOdooDatetime(value) {
     const d = new Date(value);
@@ -338,8 +369,18 @@ router.post('/', async (req, res) => {
         }
         if (body.request_date)
             extendedFields.request_date = body.request_date.split('T')[0];
-        if (body.production_id)
-            extendedFields.production_id = body.production_id;
+        // Resolve the live MO-link field name (varies by Odoo version). undefined
+        // means this instance has no such field, so the link can't persist and is
+        // reported as a dropped field below rather than silently lost.
+        let productionField;
+        let productionFieldUnsupported = false;
+        if (body.production_id) {
+            productionField = await resolveProductionField(tenantId, client, uid);
+            if (productionField)
+                extendedFields[productionField] = body.production_id;
+            else
+                productionFieldUnsupported = true;
+        }
         if (body.duration !== undefined)
             extendedFields.duration = body.duration;
         // Pre-validate base payload against live Odoo schema
@@ -358,9 +399,11 @@ router.post('/', async (req, res) => {
             schedule_date_end: 'Scheduled End',
             recurring_maintenance: 'Recurrent',
             request_date: 'Request Date',
-            production_id: 'Manufacturing Order',
             duration: 'Duration',
         };
+        // Label whatever the live schema named the MO link so a drop reads cleanly.
+        if (productionField)
+            FIELD_LABELS[productionField] = 'Manufacturing Order';
         // Create with all optional fields, then on an "invalid field" rejection
         // drop the offending field(s) one at a time and retry. Tracks exactly
         // which optional fields had to be dropped so we can report them.
@@ -404,15 +447,18 @@ router.post('/', async (req, res) => {
         }
         // Only report fields the user actually supplied (others were never sent).
         const droppedUserFields = droppedFields.filter((f) => f in extendedFields);
-        const partial = failedAttachments.length > 0 || droppedUserFields.length > 0;
+        const droppedLabels = droppedUserFields.map((f) => FIELD_LABELS[f] ?? f);
+        // The MO link field doesn't exist on this Odoo instance — the user asked to
+        // link an order but it can't persist, so tell them rather than silently lose it.
+        if (productionFieldUnsupported)
+            droppedLabels.push('Manufacturing Order');
+        const partial = failedAttachments.length > 0 || droppedLabels.length > 0;
         res.json({
             status: 'success',
             id: newId,
             ...(partial ? { partial_success: true } : {}),
             ...(failedAttachments.length > 0 ? { failed_attachments: failedAttachments } : {}),
-            ...(droppedUserFields.length > 0
-                ? { dropped_fields: droppedUserFields.map((f) => FIELD_LABELS[f] ?? f) }
-                : {}),
+            ...(droppedLabels.length > 0 ? { dropped_fields: droppedLabels } : {}),
         });
     }
     catch (error) {

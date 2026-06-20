@@ -493,6 +493,56 @@ describe('POST /maintenance', () => {
         expect(retryData).not.toHaveProperty('production_id');
     });
 
+    it('writes the MO link to whatever field the live schema names it', async () => {
+        // This instance exposes the Manufacturing Order link as `x_mo_link`, not the
+        // conventional `production_id`. The create must discover and use it.
+        mockClient.getSchema.mockResolvedValue({
+            x_mo_link: { type: 'many2one', relation: 'mrp.production', string: 'MO', required: false },
+        });
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'mrp.production': () => [{ id: 5, company_id: [1, 'My Company'] }],
+        }, { employeeCompanyId: 1 });
+        mockClient.createRecord.mockResolvedValueOnce(80);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, production_id: 5 });
+
+        expect(res.status).toBe(200);
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs.x_mo_link).toBe(5);
+        expect(createArgs).not.toHaveProperty('production_id');
+        expect(res.body.partial_success).toBeUndefined();
+    });
+
+    it('reports the MO link as dropped when the instance has no such field', async () => {
+        // Schema is known and contains no many2one to mrp.production → the link
+        // cannot persist. Report it instead of silently sending an invalid field.
+        mockClient.getSchema.mockResolvedValue({
+            name: { type: 'char', relation: undefined, string: 'Name', required: true },
+        });
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'mrp.production': () => [{ id: 5, company_id: [1, 'My Company'] }],
+        }, { employeeCompanyId: 1 });
+        mockClient.createRecord.mockResolvedValueOnce(81);
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, production_id: 5 });
+
+        expect(res.status).toBe(200);
+        expect(res.body.id).toBe(81);
+        expect(res.body.partial_success).toBe(true);
+        expect(res.body.dropped_fields).toContain('Manufacturing Order');
+        // No production_id / MO field was ever sent to Odoo.
+        const createArgs = mockClient.createRecord.mock.calls[0][2];
+        expect(createArgs).not.toHaveProperty('production_id');
+    });
+
     it('does not report dropped_fields on a clean create', async () => {
         setupAvailable();
         mockClient.createRecord.mockResolvedValueOnce(71);
