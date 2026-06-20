@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.companyContext = companyContext;
 exports.relationId = relationId;
 exports.companyCompatible = companyCompatible;
+exports.companyAllowedStrict = companyAllowedStrict;
+exports.companyDomain = companyDomain;
 exports.getIntegrationCompanyIds = getIntegrationCompanyIds;
 exports.getEmployeeCompanyId = getEmployeeCompanyId;
 exports.getEmployeeAllowedCompanyIds = getEmployeeAllowedCompanyIds;
@@ -29,6 +31,41 @@ function companyCompatible(recordCompany, employeeCompanyId) {
         return true;
     const recordCompanyId = relationId(recordCompany);
     return recordCompanyId === null || recordCompanyId === employeeCompanyId;
+}
+/**
+ * Strict company filter for records whose `company_id` MUST be present to be
+ * trusted. Unlike `companyCompatible`, a missing/undefined `company_id` is
+ * treated as NOT compatible — so a record returned by a fallback query that
+ * dropped the `company_id` field can never be silently accepted as "global".
+ *
+ * `hasCompanyField` indicates whether the query actually selected `company_id`;
+ * when false (a degraded fallback that omitted the field) every record is
+ * rejected, failing closed for the "one employee, one company" rule.
+ */
+function companyAllowedStrict(record, employeeCompanyId, hasCompanyField) {
+    if (!employeeCompanyId)
+        return true; // no company context → unchanged behavior
+    if (!hasCompanyField)
+        return false; // company unknown → fail closed
+    if (!('company_id' in record))
+        return false; // field missing on this record → fail closed
+    const recordCompanyId = relationId(record.company_id);
+    // false/empty company_id = a genuinely global record (shared) → allowed.
+    return recordCompanyId === null || recordCompanyId === employeeCompanyId;
+}
+/**
+ * Explicit company-scoping domain for an Odoo search_read.
+ *
+ * Odoo's `allowed_company_ids` context affects access/defaults but does NOT
+ * reliably restrict which records `search_read` returns — multi-company
+ * instances still return records from every company the integration user can
+ * see. So company-scoped option lists must pass this domain explicitly.
+ *
+ * Returns records belonging to the employee's company OR with no company (global
+ * records, e.g. shared products/projects). Empty when no company is known.
+ */
+function companyDomain(companyId) {
+    return companyId ? ['|', ['company_id', '=', false], ['company_id', '=', companyId]] : [];
 }
 /** Companies the integration user may operate in, used only by admin/certification helpers. */
 async function getIntegrationCompanyIds(client, uid) {

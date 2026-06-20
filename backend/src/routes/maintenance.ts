@@ -6,7 +6,7 @@ import { attachmentsSchema } from '../lib/attachments';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
 import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
-import { companyCompatible, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
+import { companyAllowedStrict, companyCompatible, companyDomain, requestableRecords, withCompanyRequestability } from '../lib/odooCompatibility';
 
 const INCOMPATIBLE_MAINTENANCE_EQUIPMENT = 'This equipment belongs to a different company than your employee profile.';
 
@@ -24,17 +24,33 @@ const isMaintenanceAvailable = async (client: OdooClientInstance, uid: number): 
 };
 const INCOMPATIBLE_MAINTENANCE_TEAM = 'No maintenance team is available for your employee company. Please contact your administrator.';
 
-async function fetchMaintenanceTeams(client: OdooClientInstance, uid: number, context?: Record<string, any>): Promise<any[]> {
+/**
+ * Fetch maintenance teams scoped to a company. Returns `{ teams, hasCompanyField }`
+ * — `hasCompanyField` is false only if every query failed to return `company_id`,
+ * in which case callers must fail closed rather than assume the teams are global.
+ */
+async function fetchMaintenanceTeams(
+    client: OdooClientInstance, uid: number, context?: Record<string, any>, companyId?: number | null,
+): Promise<{ teams: any[]; hasCompanyField: boolean }> {
     try {
         const teams: any = await client.searchRead(
-            uid, 'maintenance.team', [], ['id', 'name', 'company_id'], { silent: true, context }
+            uid, 'maintenance.team', companyDomain(companyId), ['id', 'name', 'company_id'], { silent: true, context }
         );
-        return Array.isArray(teams) ? teams : [];
+        return { teams: Array.isArray(teams) ? teams : [], hasCompanyField: true };
     } catch {
-        const teams: any = await client.searchRead(
-            uid, 'maintenance.team', [], ['id', 'name'], { silent: true, context }
-        );
-        return Array.isArray(teams) ? teams : [];
+        // Keep company_id so company can still be verified; if the field itself is
+        // unsupported, signal it so the caller fails closed.
+        try {
+            const teams: any = await client.searchRead(
+                uid, 'maintenance.team', [], ['id', 'name', 'company_id'], { silent: true, context }
+            );
+            return { teams: Array.isArray(teams) ? teams : [], hasCompanyField: true };
+        } catch {
+            const teams: any = await client.searchRead(
+                uid, 'maintenance.team', [], ['id', 'name'], { silent: true, context }
+            ).catch(() => []);
+            return { teams: Array.isArray(teams) ? teams : [], hasCompanyField: false };
+        }
     }
 }
 
@@ -82,17 +98,24 @@ router.get('/equipment', async (req, res) => {
         const ctx = await buildReadContext(req, client, uid);
         const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
 
-        // maintenance.equipment is per-company; fetch with company context and
-        // defense-in-depth filter so only the employee's company equipment shows.
+        // maintenance.equipment is per-company; scope with an explicit company
+        // domain (context alone does not filter search_read). The fallback keeps
+        // company_id so we never lose the ability to verify company; if even that
+        // fails we return nothing rather than leak cross-company equipment.
+        let equipmentHasCompanyField = true;
         let equipment: any = await client.searchRead(
-            uid, 'maintenance.equipment', [], ['id', 'name', 'category_id', 'company_id'],
+            uid, 'maintenance.equipment', companyDomain(employeeCompanyId), ['id', 'name', 'category_id', 'company_id'],
             { silent: true, context: ctx }
         ).catch(() =>
-            client.searchRead(uid, 'maintenance.equipment', [], ['id', 'name', 'category_id'], { silent: true, context: ctx }).catch(() => [])
+            client.searchRead(uid, 'maintenance.equipment', [], ['id', 'name', 'category_id', 'company_id'], { silent: true, context: ctx })
+                .catch(() => { equipmentHasCompanyField = false; return []; })
         );
         const list = Array.isArray(equipment) ? equipment : [];
+        // Fail closed: keep only equipment we can confirm is the employee's company
+        // (or genuinely global). A query that couldn't return company_id yields none.
+        const companyScoped = list.filter((e: any) => companyAllowedStrict(e, employeeCompanyId, equipmentHasCompanyField));
         const scoped = requestableRecords(
-            withCompanyRequestability(list, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_EQUIPMENT)
+            withCompanyRequestability(companyScoped, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_EQUIPMENT)
         );
         res.json({ available: true, equipment: scoped });
     } catch (error: any) {
@@ -116,8 +139,10 @@ router.get('/teams', async (req, res) => {
 
         const ctx = await buildReadContext(req, client, uid);
         const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
-        const teams = await fetchMaintenanceTeams(client, uid, ctx);
-        const enriched = withCompanyRequestability(teams, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM);
+        const { teams, hasCompanyField } = await fetchMaintenanceTeams(client, uid, ctx, employeeCompanyId);
+        // Fail closed: drop teams whose company we couldn't verify.
+        const companyScoped = teams.filter((team: any) => companyAllowedStrict(team, employeeCompanyId, hasCompanyField));
+        const enriched = withCompanyRequestability(companyScoped, employeeCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM);
         res.json({ available: true, teams: requestableRecords(enriched) });
     } catch (error: any) {
         console.error('Fetch Maintenance Teams Error:', error);
@@ -147,7 +172,7 @@ router.get('/manufacturing-orders', async (req, res) => {
             orders = await client.searchRead(
                 uid,
                 'mrp.production',
-                [['state', 'not in', ['done', 'cancel']]],
+                [['state', 'not in', ['done', 'cancel']], ...companyDomain(employeeCompanyId)],
                 ['id', 'name', 'company_id'],
                 { silent: true, context: ctx, limit: 500 }
             );
@@ -297,30 +322,45 @@ router.post('/', async (req, res) => {
         // let Odoo default it to the integration user's company).
         if (filterCompanyId) recordData.company_id = filterCompanyId;
 
-        // Re-validate a client-supplied equipment_id against the employee company:
-        // the filtered GET only constrains the UI, a crafted body could still
-        // reference another company's equipment.
+        // Re-validate a client-supplied equipment_id against the employee company.
+        // Fail closed: the record MUST be found and verifiably belong to the
+        // employee's company (or be global). If the lookup errors, returns nothing,
+        // or can't return company_id, reject — a crafted body must never slip an
+        // unverified equipment_id through to Odoo.
         if (body.equipment_id) {
-            const equipment: any = await client.searchRead(
-                uid, 'maintenance.equipment', [['id', '=', body.equipment_id]], ['id', 'company_id'],
-                { silent: true, context: ctx }
-            ).catch(() => []);
-            if (Array.isArray(equipment) && equipment.length > 0 &&
-                !companyCompatible(equipment[0].company_id, filterCompanyId)) {
+            let equipment: any[] = [];
+            let lookupOk = true;
+            try {
+                const result: any = await client.searchRead(
+                    uid, 'maintenance.equipment', [['id', '=', body.equipment_id]], ['id', 'company_id'],
+                    { silent: true, context: ctx }
+                );
+                equipment = Array.isArray(result) ? result : [];
+            } catch {
+                lookupOk = false;
+            }
+            if (!lookupOk || equipment.length === 0 ||
+                !companyAllowedStrict(equipment[0], filterCompanyId, true)) {
                 return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_EQUIPMENT });
             }
         }
 
-        const teams = await fetchMaintenanceTeams(client, uid, ctx).catch(() => []);
+        const { teams, hasCompanyField: teamsHaveCompany } = await fetchMaintenanceTeams(client, uid, ctx, filterCompanyId)
+            .catch(() => ({ teams: [] as any[], hasCompanyField: false }));
         if (body.maintenance_team_id) {
+            // Fail closed: the supplied team must be present in the company-scoped
+            // fetch AND verifiably belong to the employee's company. A crafted ID
+            // that isn't in the verified list (or an unverifiable fallback) → 422.
             const selectedTeam = teams.find((team: any) => team.id === body.maintenance_team_id);
-            if (selectedTeam && !companyCompatible(selectedTeam.company_id, filterCompanyId)) {
+            if (!selectedTeam || !companyAllowedStrict(selectedTeam, filterCompanyId, teamsHaveCompany)) {
                 return res.status(422).json({ error: INCOMPATIBLE_MAINTENANCE_TEAM });
             }
             recordData.maintenance_team_id = body.maintenance_team_id;
         } else if (teams.length > 0) {
+            // Auto-assign a default team — only from teams whose company we verified.
+            const companyScoped = teams.filter((team: any) => companyAllowedStrict(team, filterCompanyId, teamsHaveCompany));
             const compatibleTeams = requestableRecords(
-                withCompanyRequestability(teams, filterCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM)
+                withCompanyRequestability(companyScoped, filterCompanyId, INCOMPATIBLE_MAINTENANCE_TEAM)
             );
             if (compatibleTeams.length > 0) {
                 recordData.maintenance_team_id = compatibleTeams[0].id;
@@ -329,17 +369,25 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // schedule_date and duration — may not exist on older Odoo versions; retry without if rejected
+        // Re-validate a client-supplied production_id. Fail closed: the MO must be
+        // found and verifiably belong to the employee's company (or be global).
         if (body.production_id) {
-            const orders: any = await client.searchRead(
-                uid,
-                'mrp.production',
-                [['id', '=', body.production_id]],
-                ['id', 'company_id'],
-                { silent: true, context: ctx }
-            ).catch(() => []);
-            const selectedOrder = Array.isArray(orders) ? orders[0] : null;
-            if (selectedOrder && !companyCompatible(selectedOrder.company_id, filterCompanyId)) {
+            let orders: any[] = [];
+            let lookupOk = true;
+            try {
+                const result: any = await client.searchRead(
+                    uid,
+                    'mrp.production',
+                    [['id', '=', body.production_id]],
+                    ['id', 'company_id'],
+                    { silent: true, context: ctx }
+                );
+                orders = Array.isArray(result) ? result : [];
+            } catch {
+                lookupOk = false;
+            }
+            if (!lookupOk || orders.length === 0 ||
+                !companyAllowedStrict(orders[0], filterCompanyId, true)) {
                 return res.status(422).json({
                     error: 'This manufacturing order belongs to a different company than your employee profile.',
                 });

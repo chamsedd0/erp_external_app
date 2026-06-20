@@ -9,6 +9,7 @@ const tenantStore_1 = require("../lib/tenantStore");
 const schemaCache_1 = require("../lib/schemaCache");
 const parseError_1 = require("../odoo/parseError");
 const authContext_1 = require("../lib/authContext");
+const odooCompatibility_1 = require("../lib/odooCompatibility");
 const attachments_1 = require("../lib/attachments");
 const router = (0, express_1.Router)();
 // Validation Schema for Time Off Request
@@ -136,17 +137,20 @@ router.get('/types', async (req, res) => {
             return res.status(401).json({ error: 'Unknown tenant' });
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
-        // Leave types can be company-specific; scope to the employee's company.
+        // Leave types can be company-specific; scope to the employee's company
+        // with an explicit domain (context alone does not filter search_read).
         const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const employeeCompanyId = ctx.company_id ?? null;
+        const leaveTypeDomain = (0, odooCompatibility_1.companyDomain)(employeeCompanyId);
         try {
-            const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'], { silent: true, context: ctx });
+            const types = await client.searchRead(uid, 'hr.leave.type', leaveTypeDomain, ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'], { silent: true, context: ctx });
             if (Array.isArray(types) && types.length > 0) {
                 return res.json({ types: types.map(enrichLeaveType) });
             }
         }
         catch {
             try {
-                const types = await client.searchRead(uid, 'hr.leave.type', [], ['id', 'name'], { silent: true, context: ctx });
+                const types = await client.searchRead(uid, 'hr.leave.type', leaveTypeDomain, ['id', 'name'], { silent: true, context: ctx });
                 if (Array.isArray(types) && types.length > 0) {
                     return res.json({ types: types.map(enrichLeaveType) });
                 }

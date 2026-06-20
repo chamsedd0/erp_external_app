@@ -5,6 +5,7 @@ import { tenantStore } from '../lib/tenantStore';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
 import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
+import { companyDomain } from '../lib/odooCompatibility';
 import { attachmentsSchema } from '../lib/attachments';
 
 const router = Router();
@@ -148,14 +149,17 @@ router.get('/types', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
 
         const uid = await client.authenticate();
-        // Leave types can be company-specific; scope to the employee's company.
+        // Leave types can be company-specific; scope to the employee's company
+        // with an explicit domain (context alone does not filter search_read).
         const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+        const leaveTypeDomain = companyDomain(employeeCompanyId);
 
         try {
             const types: any = await client.searchRead(
                 uid,
                 'hr.leave.type',
-                [],
+                leaveTypeDomain,
                 ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'],
                 { silent: true, context: ctx }
             );
@@ -165,7 +169,7 @@ router.get('/types', async (req, res) => {
         } catch {
             try {
                 const types: any = await client.searchRead(
-                    uid, 'hr.leave.type', [], ['id', 'name'], { silent: true, context: ctx }
+                    uid, 'hr.leave.type', leaveTypeDomain, ['id', 'name'], { silent: true, context: ctx }
                 );
                 if (Array.isArray(types) && types.length > 0) {
                     return res.json({ types: types.map(enrichLeaveType) });

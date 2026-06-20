@@ -89,7 +89,8 @@ router.get('/taxes', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
         const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
-        const taxes = await client.searchRead(uid, 'account.tax', [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']]], ['id', 'name', 'amount', 'amount_type'], { context: ctx });
+        const employeeCompanyId = ctx.company_id ?? null;
+        const taxes = await client.searchRead(uid, 'account.tax', [['active', '=', true], ['type_tax_use', 'in', ['purchase', 'all']], ...(0, odooCompatibility_1.companyDomain)(employeeCompanyId)], ['id', 'name', 'amount', 'amount_type'], { context: ctx });
         res.json({ taxes: Array.isArray(taxes) ? taxes : [] });
     }
     catch (error) {
@@ -107,16 +108,23 @@ router.get('/products', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
         const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const employeeCompanyId = ctx.company_id ?? null;
         let products = [];
+        // Whether the records we ended up with came from a query that actually
+        // selected `company_id`. If a degraded fallback dropped that field, we
+        // can no longer verify company and must fail closed (strict filter below).
+        let productsHaveCompanyField = false;
         try {
-            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'company_id'], { silent: true, context: ctx });
+            const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true], ...(0, odooCompatibility_1.companyDomain)(employeeCompanyId)], ['id', 'name', 'standard_price', 'company_id'], { silent: true, context: ctx });
             products = Array.isArray(result) ? result : [];
+            productsHaveCompanyField = true;
         }
         catch (e) {
             console.warn('product.product can_be_expensed query failed, trying product.product fallback without company:', e);
             try {
                 const result = await client.searchRead(uid, 'product.product', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price'], { silent: true, context: ctx });
                 products = Array.isArray(result) ? result : [];
+                productsHaveCompanyField = false; // company unverifiable → fail closed
             }
             catch (fallbackError) {
                 console.warn('product.product fallback also failed, trying product.template:', fallbackError);
@@ -124,7 +132,7 @@ router.get('/products', async (req, res) => {
         }
         if (products.length === 0) {
             try {
-                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true]], ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'], { silent: true, context: ctx });
+                const templates = await client.searchRead(uid, 'product.template', [['can_be_expensed', '=', true], ...(0, odooCompatibility_1.companyDomain)(employeeCompanyId)], ['id', 'name', 'standard_price', 'product_variant_ids', 'company_id'], { silent: true, context: ctx });
                 if (Array.isArray(templates)) {
                     products = templates
                         .filter((t) => Array.isArray(t.product_variant_ids) && t.product_variant_ids.length > 0)
@@ -134,6 +142,7 @@ router.get('/products', async (req, res) => {
                         standard_price: t.standard_price,
                         company_id: t.company_id,
                     }));
+                    productsHaveCompanyField = true;
                 }
             }
             catch (e) {
@@ -148,6 +157,7 @@ router.get('/products', async (req, res) => {
                             name: t.name,
                             standard_price: t.standard_price,
                         }));
+                        productsHaveCompanyField = false; // company unverifiable → fail closed
                     }
                 }
                 catch (fallbackError) {
@@ -155,9 +165,11 @@ router.get('/products', async (req, res) => {
                 }
             }
         }
-        // ctx.company_id is the employee's own company (derived server-side).
-        const employeeCompanyId = ctx.company_id ?? null;
-        const enriched = (0, odooCompatibility_1.withCompanyRequestability)(products, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
+        // Fail closed: only keep products we can positively confirm belong to the
+        // employee's company (or are genuinely global). A degraded fallback that
+        // dropped company_id is rejected rather than assumed global.
+        const scoped = products.filter((p) => (0, odooCompatibility_1.companyAllowedStrict)(p, employeeCompanyId, productsHaveCompanyField));
+        const enriched = (0, odooCompatibility_1.withCompanyRequestability)(scoped, employeeCompanyId, INCOMPATIBLE_EXPENSE_PRODUCT);
         res.json({ products: (0, odooCompatibility_1.requestableRecords)(enriched) });
     }
     catch (error) {
@@ -175,8 +187,9 @@ router.get('/analytic-accounts', async (req, res) => {
         const client = (0, client_1.getOdooClient)(tenantId, tenantConfig);
         const uid = await client.authenticate();
         const ctx = await (0, authContext_1.buildReadContext)(req, client, uid);
+        const employeeCompanyId = ctx.company_id ?? null;
         const accounts = await client
-            .searchRead(uid, 'account.analytic.account', [], ['id', 'name'], {
+            .searchRead(uid, 'account.analytic.account', (0, odooCompatibility_1.companyDomain)(employeeCompanyId), ['id', 'name'], {
             silent: true,
             context: ctx,
             limit: 500,

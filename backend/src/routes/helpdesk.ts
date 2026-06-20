@@ -6,7 +6,7 @@ import { getCustomFieldReport, getCustomFields, validatePayload, validateRequire
 import { sendOdooError } from '../odoo/parseError';
 import { buildOdooContext, buildReadContext, getAuthenticatedEmployeeId } from '../lib/authContext';
 import { attachmentSchema, attachmentsSchema } from '../lib/attachments';
-import { companyCompatible } from '../lib/odooCompatibility';
+import { companyAllowedStrict, companyCompatible, companyDomain } from '../lib/odooCompatibility';
 
 const router = Router();
 
@@ -153,7 +153,7 @@ router.get('/teams', async (req, res) => {
 
         const ctx = await buildReadContext(req, client, uid);
         const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
-        const teams: any = await client.searchRead(uid, 'helpdesk.team', [], ['id', 'name', 'company_id'], { silent: true, context: ctx });
+        const teams: any = await client.searchRead(uid, 'helpdesk.team', companyDomain(employeeCompanyId), ['id', 'name', 'company_id'], { silent: true, context: ctx });
         const scoped = Array.isArray(teams) ? teams.filter((team: any) => companyCompatible(team.company_id, employeeCompanyId)) : [];
         res.json({ available: true, teams: scoped });
     } catch (error: any) {
@@ -273,16 +273,23 @@ router.post('/', async (req, res) => {
         const ctx = await buildOdooContext(req, client, uid, body.employee_id);
         const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
 
-        // Re-validate a client-supplied team_id against the employee company: the
-        // filtered GET /teams only constrains the UI, a crafted body could still
-        // reference another company's team.
+        // Re-validate a client-supplied team_id against the employee company.
+        // Fail closed: the team MUST be found and verifiably belong to the
+        // employee's company (or be global). A crafted/unverifiable team_id → 422.
         if (body.team_id) {
-            const teams: any = await client.searchRead(
-                uid, 'helpdesk.team', [['id', '=', body.team_id]], ['id', 'company_id'],
-                { silent: true, context: ctx }
-            ).catch(() => []);
-            if (Array.isArray(teams) && teams.length > 0 &&
-                !companyCompatible(teams[0].company_id, employeeCompanyId)) {
+            let teams: any[] = [];
+            let lookupOk = true;
+            try {
+                const result: any = await client.searchRead(
+                    uid, 'helpdesk.team', [['id', '=', body.team_id]], ['id', 'company_id'],
+                    { silent: true, context: ctx }
+                );
+                teams = Array.isArray(result) ? result : [];
+            } catch {
+                lookupOk = false;
+            }
+            if (!lookupOk || teams.length === 0 ||
+                !companyAllowedStrict(teams[0], employeeCompanyId, true)) {
                 return res.status(422).json({ error: 'This helpdesk team is not available for your company.' });
             }
         }

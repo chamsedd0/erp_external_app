@@ -150,14 +150,22 @@ describe('POST /helpdesk', () => {
         team_id: 1,
     };
 
+    // Order-independent setup: helpdesk POST issues several reads (availability
+    // probe, hr.employee partner lookup, hr.employee company lookup, res.users,
+    // and the helpdesk.team verification). The model-keyed dispatcher serves them
+    // all regardless of call order. team_id=1 resolves to the employee's company.
     function setupAvailableWithEmployee(partnerId: number | null = 99) {
-        mockClient.searchRead
-            .mockResolvedValueOnce([])  // availability probe
-            .mockResolvedValueOnce([{ id: 42, name: 'Alice', user_id: [10, 'alice'], work_email: 'alice@test.com' }]) // hr.employee
-            .mockResolvedValueOnce(partnerId !== null
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [], // availability probe
+            'hr.employee': (_domain, fields) =>
+                fields.includes('company_id')
+                    ? [{ id: 42, company_id: [1, 'Test Co'] }]
+                    : [{ id: 42, name: 'Alice', user_id: [10, 'alice'], work_email: 'alice@test.com' }],
+            'res.users': () => partnerId !== null
                 ? [{ id: 10, partner_id: [partnerId, 'Alice Partner'] }]
-                : [{ id: 10, partner_id: false }]
-            ); // res.users
+                : [{ id: 10, partner_id: false }],
+            'helpdesk.team': () => [{ id: 1, company_id: [1, 'Test Co'] }],
+        }, { employeeCompanyId: 1 });
     }
 
     it('creates ticket and returns 200 with id', async () => {
@@ -285,6 +293,42 @@ describe('POST /helpdesk', () => {
             .post('/helpdesk')
             .set('Authorization', authHeader())
             .send({ ...VALID_BODY, team_id: 8 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/team is not available/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    // Unverified-ID write cases: the create must fail closed when the team lookup
+    // cannot confirm the record (not found, or the read itself failed).
+    it('returns 422 when a crafted team_id cannot be found', async () => {
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'hr.employee': () => [{ id: 42, name: 'Alice', user_id: false }],
+            'helpdesk.team': () => [], // lookup returns nothing
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, team_id: 999 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/team is not available/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('returns 422 when the team_id lookup itself fails', async () => {
+        mockSearchReadByModel(mockClient, {
+            'helpdesk.ticket': () => [],
+            'hr.employee': () => [{ id: 42, name: 'Alice', user_id: false }],
+            'helpdesk.team': () => { throw new Error('odoo unavailable'); },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/helpdesk')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, team_id: 1 });
 
         expect(res.status).toBe(422);
         expect(res.body.error).toMatch(/team is not available/i);

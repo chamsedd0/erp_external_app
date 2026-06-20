@@ -274,7 +274,13 @@ describe('POST /maintenance', () => {
     });
 
     it('passes equipment_id, maintenance_team_id and priority when provided', async () => {
-        setupAvailable();
+        // The create verifies the supplied equipment_id and team_id against the
+        // employee company before accepting them — both resolve to company 1 here.
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe
+            'maintenance.equipment': () => [{ id: 5, company_id: [1, 'My Company'] }],
+            'maintenance.team': () => [{ id: 2, name: 'My Team', company_id: [1, 'My Company'] }],
+        }, { employeeCompanyId: 1 });
         mockClient.createRecord.mockResolvedValueOnce(61);
 
         await request(app)
@@ -340,6 +346,93 @@ describe('POST /maintenance', () => {
         expect(mockClient.createRecord).not.toHaveBeenCalled();
     });
 
+    // Unverified-ID write cases: when the verification lookup cannot confirm the
+    // record (not found, or the read itself failed), the create must fail closed
+    // rather than trusting the client-supplied id.
+    it('returns 422 when a crafted equipment_id cannot be found', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],
+            'maintenance.equipment': () => [],   // lookup returns nothing
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, equipment_id: 999 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/equipment/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('returns 422 when the equipment_id lookup itself fails', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],
+            'maintenance.equipment': () => { throw new Error('odoo unavailable'); },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, equipment_id: 5 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/equipment/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('returns 422 when a crafted maintenance_team_id cannot be found', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],   // selected team not among the company teams
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, maintenance_team_id: 999 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/maintenance team/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('returns 422 when a crafted production_id cannot be found', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],
+            'mrp.production': () => [],   // MO not found
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, production_id: 999 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/manufacturing order/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('returns 422 when a crafted production_id belongs to another company', async () => {
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [],
+            'maintenance.team': () => [],
+            'mrp.production': () => [{ id: 5, company_id: [2, 'Other Co'] }],
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .post('/maintenance')
+            .set('Authorization', authHeader())
+            .send({ ...VALID_BODY, production_id: 5 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatch(/manufacturing order/i);
+        expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
     it('pins company_id to the employee company on create', async () => {
         mockSearchReadByModel(mockClient, {
             'maintenance.request': () => [],
@@ -375,7 +468,13 @@ describe('POST /maintenance', () => {
     });
 
     it('reports a user-supplied optional field that Odoo rejected as a dropped field', async () => {
-        setupAvailable();
+        // The supplied production_id is verified against the employee company
+        // before the create; it resolves to company 1 here, then Odoo rejects the
+        // field at write time and the route drops it on retry.
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe
+            'mrp.production': () => [{ id: 5, company_id: [1, 'My Company'] }],
+        }, { employeeCompanyId: 1 });
         mockClient.createRecord
             .mockRejectedValueOnce({ faultString: 'Invalid field production_id on maintenance.request' })
             .mockResolvedValueOnce(70);
@@ -481,6 +580,22 @@ describe('GET /maintenance/equipment', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.equipment.map((e: any) => e.name)).toEqual(['My Printer', 'Shared Asset']);
+    });
+
+    it('fails closed when the company-aware query fails and the fallback cannot return company_id', async () => {
+        // Primary domain'd query throws; the fallback also fails (e.g. company_id
+        // unsupported). The route must return nothing rather than leak.
+        mockSearchReadByModel(mockClient, {
+            'maintenance.request': () => [], // availability probe
+            'maintenance.equipment': () => { throw new Error('company_id unsupported'); },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/maintenance/equipment')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.equipment).toEqual([]); // failed closed
     });
 
     it('returns available:false when module not installed', async () => {

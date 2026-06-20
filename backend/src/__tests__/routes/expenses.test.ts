@@ -149,6 +149,29 @@ describe('GET /expenses/products', () => {
         expect(res.body.products).toHaveLength(1);
     });
 
+    it('fails closed: rejects fallback products whose company_id was not selected', async () => {
+        // Primary (company-aware) query throws; the degraded fallback returns
+        // products WITHOUT a company_id field. For a multi-company employee these
+        // must NOT be assumed global — the route returns nothing.
+        let productCall = 0;
+        mockSearchReadByModel(mockClient, {
+            'product.product': (_domain, fields) => {
+                productCall++;
+                if (fields.includes('company_id')) throw new Error('company query failed');
+                // Fallback omitted company_id (mirrors the route's field list).
+                return [{ id: 99, name: 'Unverifiable Product', standard_price: 0 }];
+            },
+        }, { employeeCompanyId: 1 });
+
+        const res = await request(app)
+            .get('/expenses/products')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.products).toEqual([]); // failed closed
+        expect(productCall).toBeGreaterThanOrEqual(2); // primary + fallback attempted
+    });
+
     it('returns empty products when both sources fail', async () => {
         mockSearchReadByModel(mockClient, {
             'product.product': () => { throw new Error('product.product error'); },
@@ -195,6 +218,26 @@ describe('GET /expenses/products', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.products.map((p: any) => p.name)).toEqual(['Same Company', 'Global Product']);
+    });
+
+    it('queries product.product with an explicit company domain (context alone does not filter)', async () => {
+        let seenDomain: any[] = [];
+        mockSearchReadByModel(mockClient, {
+            'product.product': (domain) => {
+                seenDomain = domain;
+                return [{ id: 10, name: 'Same Company', standard_price: 0, company_id: [1, 'My Company'] }];
+            },
+        }, { employeeCompanyId: 1 });
+
+        await request(app)
+            .get('/expenses/products')
+            .set('Authorization', authHeader());
+
+        expect(seenDomain).toEqual(expect.arrayContaining([
+            ['can_be_expensed', '=', true],
+            ['company_id', '=', false],
+            ['company_id', '=', 1],
+        ]));
     });
 });
 

@@ -3,6 +3,7 @@ import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { buildReadContext } from '../lib/authContext';
 import { getModelSchema } from '../lib/schemaCache';
+import { companyDomain } from '../lib/odooCompatibility';
 
 const router = Router();
 
@@ -49,6 +50,7 @@ router.get('/', async (req, res) => {
         const client = getOdooClient(tenantId, tenantConfig);
         const uid = await client.authenticate();
         const ctx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
 
         // Resolve the relation target from the field definition.
         const schema = await getModelSchema(tenantId, client, uid, sourceModel);
@@ -58,9 +60,25 @@ router.get('/', async (req, res) => {
         }
         const relationModel = def.relation;
 
-        // Name search domain (Odoo `name` ilike). Falls back to no domain if the
-        // model has no name field (rare); company scoping comes from ctx.
-        const domain = search ? [['name', 'ilike', search]] : [];
+        // Determine whether the relation model exposes a `company_id` to scope on.
+        // CRITICAL: distinguish "schema known, no company_id" from "schema could
+        // not be determined". getModelSchema returns {} on RPC/cache failure, so
+        // an empty schema means UNKNOWN — we must NOT then run an unscoped query
+        // (that would leak cross-company records). Fail closed instead.
+        const relSchema = await getModelSchema(tenantId, client, uid, relationModel);
+        const schemaKnown = Object.keys(relSchema).length > 0;
+        if (!schemaKnown) {
+            // Relation schema undeterminable → cannot prove company scoping is safe.
+            return res.json({ options: [], relation_model: relationModel, scoped: false });
+        }
+        const relationHasCompany = !!relSchema.company_id;
+
+        // Name search domain (Odoo `name` ilike) + explicit company scoping.
+        // Odoo context alone does not filter search_read on multi-company
+        // instances, so dimension options must carry the company domain.
+        const searchDomain = search ? [['name', 'ilike', search]] : [];
+        const scopeDomain = relationHasCompany ? companyDomain(employeeCompanyId) : [];
+        const domain = [...searchDomain, ...scopeDomain];
 
         let records: any = await client
             .searchRead(uid, relationModel, domain, ['id', 'display_name'], { silent: true, context: ctx, limit, offset })

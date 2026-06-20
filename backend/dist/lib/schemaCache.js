@@ -44,24 +44,53 @@ const NATIVE_RELATION_MODELS = {
 };
 const NATIVE_FIELD_NAME_PATTERNS = {
     'account.analytic.line': [
-        /(^|_)project(_id)?$/i,
-        /(^|_)task(_id)?$/i,
+        /(^|_)project(_id|s)?$/i,
+        /(^|_)task(_id|s)?$/i,
         /project.*task/i,
+        /analytic/i,
+        /(^|_)ispc(_id)?$/i,
     ],
 };
 /**
+ * Relation models that are "analytic/project dimensions". A custom (x_) many2one
+ * pointing at any of these is a structural dimension the app handles through its
+ * native Project/Task/Analytic-Account flow — never a free-form picker. Hidden on
+ * EVERY source model to avoid duplicate selectors (e.g. a Studio `x_studio_ispc`
+ * → account.analytic.account on a timesheet line).
+ */
+const DIMENSION_RELATION_MODELS = new Set([
+    'project.project',
+    'project.task',
+    'account.analytic.account',
+    'account.analytic.plan',
+]);
+/**
  * True when a custom field on `model` should be hidden from the dynamic renderer
- * because the create form already covers it with a native control:
- *  - many2one fields whose relation is already a native selector for this model;
- *  - the well-known scalar fields the form sets itself (dates, duration, etc.).
+ * because the create form already covers it natively (or it's a structural
+ * project/analytic dimension that should never be a free-form picker):
+ *  - ANY custom many2one on account.analytic.line (timesheet lines are fully
+ *    described by the native Project + Task selectors; extra dimension pickers
+ *    like "ISPC" are duplicates);
+ *  - many2one fields whose relation is a native selector for this model;
+ *  - many2one fields whose relation is a project/analytic dimension (any model);
+ *  - fields whose name matches a known native pattern for this model.
  */
 function isNativelyHandled(model, fieldName, def) {
-    if (def.type === 'many2one' && def.relation) {
+    if (def.type !== 'many2one')
+        return false;
+    // Timesheet lines: the native Project/Task selectors are the single source of
+    // truth — hide every custom many2one so no duplicate dimension picker renders.
+    if (model === 'account.analytic.line')
+        return true;
+    if (def.relation) {
         const natives = NATIVE_RELATION_MODELS[model];
         if (natives?.has(def.relation))
             return true;
+        // Project/analytic dimension relation on any model → hide.
+        if (DIMENSION_RELATION_MODELS.has(def.relation))
+            return true;
     }
-    if (def.type === 'many2one' && NATIVE_FIELD_NAME_PATTERNS[model]?.some(re => re.test(fieldName))) {
+    if (NATIVE_FIELD_NAME_PATTERNS[model]?.some(re => re.test(fieldName))) {
         return true;
     }
     return false;

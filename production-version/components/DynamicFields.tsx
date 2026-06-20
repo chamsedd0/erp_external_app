@@ -46,10 +46,28 @@ export function DynamicFields({ sourceModel, fields, values, onChange, accent }:
     );
 }
 
+// Mirrors backend schemaCache.isNativelyHandled (belt-and-suspenders): hide
+// custom dimension/project pickers that duplicate native selectors.
+const DIMENSION_RELATIONS = new Set([
+    'project.project',
+    'project.task',
+    'account.analytic.account',
+    'account.analytic.plan',
+]);
+
 function isNativeDuplicate(sourceModel: string, name: string, def: OdooFieldDef): boolean {
-    if (sourceModel !== 'account.analytic.line' || def.type !== 'many2one') return false;
-    if (def.relation === 'project.project' || def.relation === 'project.task') return true;
-    return /(^|_)project(_id)?$/i.test(name) || /(^|_)task(_id)?$/i.test(name) || /project.*task/i.test(name);
+    if (def.type !== 'many2one') return false;
+    // Timesheet lines: native Project + Task selectors are the single source of
+    // truth — hide every custom many2one (e.g. duplicate "Projects"/"ISPC").
+    if (sourceModel === 'account.analytic.line') return true;
+    // Relation-based dimension filter applies to every model (matches backend).
+    if (def.relation && DIMENSION_RELATIONS.has(def.relation)) return true;
+    // Name-based matching is scoped to account.analytic.line ONLY (matches the
+    // backend's NATIVE_FIELD_NAME_PATTERNS) so a legitimate custom many2one like
+    // x_analytic_reviewer on Helpdesk/Maintenance/Time-Off is not hidden.
+    // (sourceModel === 'account.analytic.line' already returned true above, so
+    // reaching here means a different model — never apply name patterns.)
+    return false;
 }
 
 function DynamicField({
