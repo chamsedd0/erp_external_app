@@ -273,6 +273,49 @@ describe('DELETE /auth/registration', () => {
     });
 });
 
+describe('DELETE /auth/account', () => {
+    it('deletes registration, notifications, and credential for the authenticated employee', async () => {
+        mockPushStore.deleteRegistration.mockResolvedValue(undefined);
+        mockNotificationStore.deleteForEmployee.mockResolvedValue(undefined);
+
+        const res = await request(app)
+            .delete('/auth/account')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(mockPushStore.deleteRegistration).toHaveBeenCalledWith('testcorp', 42);
+        expect(mockNotificationStore.deleteForEmployee).toHaveBeenCalledWith('testcorp', 42);
+    });
+
+    it('returns 401 without a JWT', async () => {
+        const res = await request(app).delete('/auth/account');
+        expect(res.status).toBe(401);
+        expect(mockPushStore.deleteRegistration).not.toHaveBeenCalled();
+    });
+});
+
+describe('GET /legal pages', () => {
+    it('serves the privacy policy without authentication', async () => {
+        const res = await request(app).get('/legal/privacy');
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toMatch(/html/);
+        expect(res.text).toMatch(/Privacy Policy/);
+    });
+
+    it('serves the account-deletion page without authentication', async () => {
+        const res = await request(app).get('/legal/delete-account');
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/Delete Your Account/);
+    });
+
+    it('serves the terms page without authentication', async () => {
+        const res = await request(app).get('/legal/terms');
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/Terms of Service/);
+    });
+});
+
 describe('GET /admin/tenants', () => {
     it('returns tenant array for correct admin secret', async () => {
         mockTenantStore.listTenants.mockResolvedValue({ testcorp: SAMPLE_TENANT });

@@ -120,6 +120,25 @@ describe('GET /time-off/types', () => {
         expect(res.body.types[0].unavailable_reason).toMatch(/allocation/i);
         expect(res.body.types[1].requestable).toBe(true);
     });
+
+    it('passes the authenticated employee_id in the Odoo read context (balances are employee-scoped)', async () => {
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => [
+                { id: 1, name: 'Annual Leave', requires_allocation: 'yes', virtual_remaining_leaves: 12, max_leaves: 20 },
+            ],
+        });
+
+        const res = await request(app)
+            .get('/time-off/types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        const typesCall = mockClient.searchRead.mock.calls.find((c: any[]) => c[1] === 'hr.leave.type');
+        expect(typesCall).toBeDefined();
+        expect(typesCall![4]?.context).toMatchObject({ employee_id: 42 });
+        expect(res.body.types[0].remaining_leaves).toBe(12);
+        expect(res.body.types[0].allocated_leaves).toBe(20);
+    });
 });
 
 // ─── GET /time-off/pending ─────────────────────────────────────────────────────

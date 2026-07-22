@@ -18,6 +18,7 @@ import { currencySymbol } from '../../lib/currency';
 import { SearchableSelect } from '../../components/ui/searchable-select';
 import { DynamicFields, type OdooFieldDef } from '../../components/DynamicFields';
 import { t } from '../../lib/i18n';
+import { countWeekdays } from '../../lib/leave-duration';
 
 type ViewState = 'hub' | 'time-off' | 'expense' | 'helpdesk' | 'maintenance' | 'attendance';
 // Attendance is limited to check-in/out corrections on mobile. Overtime and
@@ -230,11 +231,20 @@ export default function NewRequest() {
             toast.warning('Please select a leave type and dates.');
             return;
         }
-        if (!leaveTypes.some((type: any) => type.id === holidayStatusId)) {
+        const chosenType = leaveTypes.find((type: any) => type.id === holidayStatusId);
+        if (!chosenType) {
             toast.warning('Please select an available leave type.');
             return;
         }
+        const requested = countWeekdays(dateFrom, dateTo);
+        if (requested === null) {
+            toast.warning('End date must be after start date.');
+            return;
+        }
         if (!user?.id) { toast.error('User session not found. Please re-login.'); return; }
+        if (typeof chosenType.remaining_leaves === 'number' && requested > chosenType.remaining_leaves && chosenType.allows_negative !== true) {
+            toast.warning(`This request (≈${requested} days) exceeds your remaining balance of ${chosenType.remaining_leaves} days.`);
+        }
         setLoading(true);
         try {
             await apiClient.createTimeOffRequest({
@@ -552,6 +562,9 @@ export default function NewRequest() {
 
     // ── Render: Time Off Form ──────────────────────────────────────────────────
 
+    const selectedLeaveType = leaveTypes.find((type: any) => type.id === holidayStatusId);
+    const estimatedDays = dateFrom && dateTo ? countWeekdays(dateFrom, dateTo) : undefined;
+
     const renderTimeOffForm = () => (
         <View style={{ gap: 32 }}>
             <View style={{ gap: 4 }}>
@@ -571,6 +584,15 @@ export default function NewRequest() {
                     label="Leave Type"
                     accent={semanticInfo}
                 />
+                {typeof selectedLeaveType?.remaining_leaves === 'number' && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: cardColor, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 14 }}>
+                        <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: muted }}>Balance</Text>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: selectedLeaveType.remaining_leaves > 0 ? semanticInfo : semanticWarning }}>
+                            {selectedLeaveType.remaining_leaves} {selectedLeaveType.remaining_leaves === 1 ? 'day' : 'days'}
+                            {typeof selectedLeaveType.allocated_leaves === 'number' ? ` / ${selectedLeaveType.allocated_leaves}` : ''}
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <View style={{ gap: 16 }}>
@@ -585,6 +607,23 @@ export default function NewRequest() {
                         <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: text }}>To</Text>
                         <DatePicker value={dateTo} onChange={setDateTo} placeholder="Select end date" />
                     </View>
+                    {estimatedDays !== undefined && (
+                        estimatedDays === null ? (
+                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 14, color: semanticError }}>End date must be after start date</Text>
+                        ) : (
+                            <View style={{ gap: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 15, color: muted }}>Requested</Text>
+                                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: semanticInfo }}>
+                                        ≈ {estimatedDays} {estimatedDays === 1 ? 'day' : 'days'}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: muted }}>
+                                    Excludes weekends — final duration follows your work schedule and public holidays.
+                                </Text>
+                            </View>
+                        )
+                    )}
                 </View>
             </View>
 

@@ -63,9 +63,9 @@
         stroke-width="46"
         stroke-linecap="round"/>
 
-  <!-- ── Base threshold line ── -->
+  <!-- ── Base threshold line (solid: bbox gradients degenerate on h-lines) ── -->
   <line x1="244" y1="760" x2="780" y2="760"
-        stroke="url(#archGrad)"
+        stroke="#3B74E0"
         stroke-width="32"
         stroke-linecap="round"
         opacity="0.85"/>

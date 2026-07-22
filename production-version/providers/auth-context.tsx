@@ -166,7 +166,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 (Constants as any).easConfig?.projectId;
 
             if (!projectId) {
-                console.log('Push notifications: no EAS projectId in app.json yet — skipping token registration. Run `eas init` to enable.');
+                if (__DEV__) console.log('Push notifications: no EAS projectId in app.json yet — skipping token registration. Run `eas init` to enable.');
                 return;
             }
 

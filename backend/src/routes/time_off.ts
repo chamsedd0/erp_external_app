@@ -151,9 +151,13 @@ router.get('/types', async (req, res) => {
         const uid = await client.authenticate();
         // Leave types can be company-specific; scope to the employee's company
         // with an explicit domain (context alone does not filter search_read).
-        const ctx = await buildReadContext(req, client, uid);
-        const employeeCompanyId = (ctx.company_id as number | undefined) ?? null;
+        const baseCtx = await buildReadContext(req, client, uid);
+        const employeeCompanyId = (baseCtx.company_id as number | undefined) ?? null;
         const leaveTypeDomain = companyDomain(employeeCompanyId);
+        // virtual_remaining_leaves / remaining_leaves are computed per the employee
+        // in the Odoo context; without employee_id they reflect the integration user.
+        const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
+        const ctx = { ...baseCtx, employee_id: employeeId, default_employee_id: employeeId };
 
         try {
             const types: any = await client.searchRead(

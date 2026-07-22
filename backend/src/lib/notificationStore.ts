@@ -91,6 +91,12 @@ export const notificationStore = {
         await writeAll(tenantId, all.map(n => n.employeeId === employeeId ? { ...n, read: true } : n));
     },
 
+    /** Remove every notification belonging to an employee (account deletion). */
+    deleteForEmployee: async (tenantId: string, employeeId: number): Promise<void> => {
+        const all = await readAll(tenantId);
+        await writeAll(tenantId, all.filter(n => n.employeeId !== employeeId));
+    },
+
     /**
      * List all notifications for a tenant (admin view).
      * Returns newest-first, supports pagination.

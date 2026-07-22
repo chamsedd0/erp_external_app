@@ -9,7 +9,7 @@ import { notificationStore } from '../lib/notificationStore';
 import { planStore, SubscriptionPlan } from '../lib/planStore';
 import { getErrors, clearErrors } from '../lib/errorLog';
 import { generateQuotationHTML } from '../lib/invoiceTemplate';
-import { redisGet, redisScan } from '../lib/redis';
+import { redisDel, redisGet, redisScan } from '../lib/redis';
 import { getAuthenticatedEmployee } from '../lib/authContext';
 import { portalAuthStore } from '../lib/portalAuthStore';
 import { getTenantBillingSnapshot } from '../lib/billing';
@@ -449,6 +449,55 @@ authRouter.delete('/registration', async (req, res) => {
     } catch (error: any) {
         console.error('Delete Registration Error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * DELETE /auth/account
+ * Permanently deletes everything Shadow Portal stores for the authenticated
+ * employee: portal credential (PIN hash + email index), push token, app
+ * registration, request cache, and notification history. The hr.employee
+ * record lives in the employer's Odoo and is not touched — HR is notified
+ * by email so employer-side requests can follow their own process.
+ * Required by Apple 5.1.1(v) and Google Play's account-deletion policy.
+ */
+authRouter.delete('/account', async (req, res) => {
+    try {
+        const auth = getAuthenticatedEmployee(req);
+        const { tenantId, employeeId } = auth;
+
+        await portalAuthStore.deleteCredential(tenantId, employeeId);
+        await pushStore.deleteRegistration(tenantId, employeeId);
+        await redisDel(`shadow:t:${tenantId}:req_cache:${employeeId}`).catch(() => undefined);
+        await notificationStore.deleteForEmployee(tenantId, employeeId).catch(() => undefined);
+
+        // Best-effort HR notification — deletion must succeed even if email fails.
+        try {
+            const tenantConfig = await tenantStore.getTenant(tenantId);
+            if (tenantConfig?.hr_email && config.resendApiKey) {
+                await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${config.resendApiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from: config.resendFromEmail,
+                        to: tenantConfig.hr_email,
+                        subject: `Shadow Portal account deleted — employee #${employeeId}`,
+                        html: `<p>Employee #${employeeId}${auth.name ? ` (${auth.name})` : ''} deleted their Shadow Portal app account. All app data (sign-in credential, push token, cached requests, notification history) has been removed. Their HR record in Odoo is unaffected. They will need a new invitation to use the app again.</p>`,
+                    }),
+                });
+            }
+        } catch (emailError) {
+            console.error('Account deletion HR email failed:', emailError);
+        }
+
+        res.json({ success: true });
+    } catch (error: any) {
+        const status = error?.statusCode ?? 500;
+        console.error('Delete Account Error:', error);
+        res.status(status).json({ error: error.message });
     }
 });
 

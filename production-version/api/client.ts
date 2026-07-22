@@ -174,6 +174,13 @@ export const apiClient = {
             method: 'DELETE',
         }),
 
+    // Permanently deletes the portal account and all server-side app data
+    // (credential, push token, registration, cache, notification history).
+    deleteAccount: () =>
+        apiFetch('/auth/account', {
+            method: 'DELETE',
+        }),
+
     // ── Employee Company (currency/display only; no operating-company switcher) ─
 
     getCompanies: (): Promise<{

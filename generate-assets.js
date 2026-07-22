@@ -1,4 +1,4 @@
-const { Resvg } = require('C:/Users/User1/AppData/Roaming/npm/node_modules/@resvg/resvg-js');
+const { Resvg } = require('@resvg/resvg-js');
 const fs = require('fs');
 const path = require('path');
 
@@ -109,9 +109,9 @@ function buildIconSVG() {
         stroke-width="${m.strokeW}"
         stroke-linecap="round"/>
 
-  <!-- ── Base threshold line ── -->
+  <!-- ── Base threshold line (solid: bbox gradients degenerate on h-lines) ── -->
   <line x1="${m.lineX1}" y1="${m.botY}" x2="${m.lineX2}" y2="${m.botY}"
-        stroke="url(#archGrad)"
+        stroke="#3B74E0"
         stroke-width="${m.lineW}"
         stroke-linecap="round"
         opacity="0.85"/>
@@ -165,9 +165,9 @@ function buildFgSVG() {
         stroke-width="${m.strokeW}"
         stroke-linecap="round"/>
 
-  <!-- Base line -->
+  <!-- Base line (solid: bbox gradients degenerate on h-lines) -->
   <line x1="${m.lineX1}" y1="${m.botY}" x2="${m.lineX2}" y2="${m.botY}"
-        stroke="url(#archGradFg)"
+        stroke="#3B74E0"
         stroke-width="${m.lineW}"
         stroke-linecap="round"
         opacity="0.85"/>
@@ -176,6 +176,26 @@ function buildFgSVG() {
   <circle cx="${m.apexX}" cy="${m.apexY}" r="14" fill="#FFFFFF" opacity="0.95" filter="url(#dotGlowFg)"/>
 </svg>`;
 }
+
+// ── MONOCHROME / NOTIFICATION SVG (white-only mark, transparent bg) ──────────
+// Android tints these itself: only the alpha channel matters, so the mark must
+// be solid white with no gradients or glows.
+function buildWhiteMarkSVG(markOpts) {
+    const size = 1024;
+    const m = portalMark(markOpts);
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  <path d="${m.archPath}" fill="none" stroke="#FFFFFF" stroke-width="${m.strokeW}" stroke-linecap="round"/>
+  <line x1="${m.lineX1}" y1="${m.botY}" x2="${m.lineX2}" y2="${m.botY}"
+        stroke="#FFFFFF" stroke-width="${m.lineW}" stroke-linecap="round"/>
+  <circle cx="${m.apexX}" cy="${m.apexY}" r="20" fill="#FFFFFF"/>
+</svg>`;
+}
+
+// Monochrome adaptive icon: same safe-zone framing as the color foreground
+const MONO_MARK = { cx: 512, cy: 475, r: 168, strokeW: 36, pillarH: 200, lineW: 24, lineOverhang: 30 };
+// Notification small icon: bolder strokes so it survives 24dp status-bar sizes
+const NOTIF_MARK = { cx: 512, cy: 470, r: 230, strokeW: 84, pillarH: 250, lineW: 64, lineOverhang: 40 };
 
 // ── LOGO SVG (wordmark + icon mark, wide format, for marketing) ──────────────
 function buildLogoSVG() {
@@ -248,9 +268,9 @@ function buildLogoSVG() {
   <path d="${m.archPath}" fill="none" stroke="url(#archGradL)"
         stroke-width="${m.strokeW}" stroke-linecap="round"/>
 
-  <!-- Base line -->
+  <!-- Base line (solid: bbox gradients degenerate on h-lines) -->
   <line x1="${m.lineX1}" y1="${m.botY}" x2="${m.lineX2}" y2="${m.botY}"
-        stroke="url(#archGradL)" stroke-width="${m.lineW}" stroke-linecap="round" opacity="0.85"/>
+        stroke="#3B74E0" stroke-width="${m.lineW}" stroke-linecap="round" opacity="0.85"/>
 
   <!-- Apex dot -->
   <circle cx="${m.apexX}" cy="${m.apexY}" r="13" fill="#FFFFFF" opacity="0.95" filter="url(#dotGlowL)"/>
@@ -294,9 +314,17 @@ fs.mkdirSync(OUT, { recursive: true });
 render(buildIconSVG(), path.join(OUT, 'icon.png'), 1024, 1024);
 
 // 2. Adaptive icon foreground — 1024×1024 transparent
+//    (splash.png kept as the expo-splash-screen image source too)
+render(buildFgSVG(), path.join(OUT, 'adaptive-icon.png'), 1024, 1024);
 render(buildFgSVG(), path.join(OUT, 'splash.png'), 1024, 1024);
 
-// 3. Logo — 1600×480 for marketing / docs
+// 3. Monochrome adaptive icon (Android 13+ themed icons) — white only
+render(buildWhiteMarkSVG(MONO_MARK), path.join(OUT, 'monochrome-icon.png'), 1024, 1024);
+
+// 4. Notification small icon — 96×96 white glyph on transparency
+render(buildWhiteMarkSVG(NOTIF_MARK), path.join(OUT, 'notification-icon.png'), 96, 96);
+
+// 5. Logo — 1600×480 for marketing / docs
 render(buildLogoSVG(), 'Shadow-Portal-Logo.png', 1600, 480);
 
 // 4. Also save SVG sources for future editing

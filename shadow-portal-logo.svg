@@ -52,9 +52,9 @@
   <path d="M 60 388 L 60 228 A 140 140 0 0 1 340 228 L 340 388" fill="none" stroke="url(#archGradL)"
         stroke-width="30" stroke-linecap="round"/>
 
-  <!-- Base line -->
+  <!-- Base line (solid: bbox gradients degenerate on h-lines) -->
   <line x1="38" y1="388" x2="362" y2="388"
-        stroke="url(#archGradL)" stroke-width="20" stroke-linecap="round" opacity="0.85"/>
+        stroke="#3B74E0" stroke-width="20" stroke-linecap="round" opacity="0.85"/>
 
   <!-- Apex dot -->
   <circle cx="200" cy="88" r="13" fill="#FFFFFF" opacity="0.95" filter="url(#dotGlowL)"/>

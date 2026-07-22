@@ -1,12 +1,14 @@
 import { View, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
-import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight, Building2, Palette, Languages } from 'lucide-react-native';
+import { Bell, CheckCheck, Info, Mail, Trash2, ChevronRight, Building2, Palette, Languages, Shield, FileText, UserX } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
 import { useToast } from '../../providers/toast-context';
 import { useSession } from '../../providers/auth-context';
 import { apiClient } from '../../api/client';
+import { API_URL } from '../../constants';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SearchableSelect } from '../../components/ui/searchable-select';
@@ -21,6 +23,7 @@ export default function Settings() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [markingAllRead, setMarkingAllRead] = useState(false);
     const [clearingCache, setClearingCache] = useState(false);
+    const [deletingAccount, setDeletingAccount] = useState(false);
     const [lang, setLang] = useState<Lang>((i18n.locale as Lang) ?? 'en');
 
     const handleLanguageChange = async (next: Lang) => {
@@ -81,6 +84,40 @@ export default function Settings() {
         } finally {
             setClearingCache(false);
         }
+    };
+
+    const openLegalPage = (path: 'privacy' | 'terms') => {
+        WebBrowser.openBrowserAsync(`${API_URL}/legal/${path}`).catch(() => {
+            toast.error('Could not open the page. Please try again.');
+        });
+    };
+
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            'Delete Account',
+            `This permanently deletes your Shadow Portal account and app data: your sign-in PIN, push notifications, and notification history. Your employment record is managed by your employer${hrEmail ? ` — contact HR at ${hrEmail} for HR data requests` : ''}. You will need a new invitation to use the app again.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete Permanently',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setDeletingAccount(true);
+                        try {
+                            await apiClient.deleteAccount();
+                            await AsyncStorage.clear().catch(() => {});
+                            toast.success('Your account has been deleted');
+                            await clearTenant();
+                            await signOut();
+                        } catch (e: any) {
+                            toast.error(e.message || 'Failed to delete account. Please try again.');
+                        } finally {
+                            setDeletingAccount(false);
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     // ── Shared Components ───────────────────────────────────────────────────────
@@ -271,6 +308,58 @@ export default function Settings() {
                             </Text>
                         </View>
                     </View>
+
+                    <RowDivider />
+
+                    {/* Privacy Policy */}
+                    <TouchableOpacity
+                        onPress={() => openLegalPage('privacy')}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: muted + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <Shield size={20} color={muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Privacy Policy
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                How your data is handled
+                            </Text>
+                        </View>
+                        <ChevronRight size={18} color={muted} />
+                    </TouchableOpacity>
+
+                    <RowDivider />
+
+                    {/* Terms of Service */}
+                    <TouchableOpacity
+                        onPress={() => openLegalPage('terms')}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: muted + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            <FileText size={20} color={muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: text }}>
+                                Terms of Service
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                Rules for using the app
+                            </Text>
+                        </View>
+                        <ChevronRight size={18} color={muted} />
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -393,6 +482,36 @@ export default function Settings() {
                             </Text>
                         </View>
                         {!clearingCache && <ChevronRight size={18} color={muted} />}
+                    </TouchableOpacity>
+
+                    <RowDivider />
+
+                    {/* Delete Account */}
+                    <TouchableOpacity
+                        onPress={handleDeleteAccount}
+                        disabled={deletingAccount}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
+                    >
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 14,
+                            backgroundColor: semanticError + '18',
+                            alignItems: 'center', justifyContent: 'center', marginRight: 14,
+                        }}>
+                            {deletingAccount
+                                ? <ActivityIndicator size="small" color={semanticError} />
+                                : <UserX size={20} color={semanticError} />
+                            }
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 16, color: semanticError }}>
+                                Delete Account
+                            </Text>
+                            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
+                                Permanently remove your account & app data
+                            </Text>
+                        </View>
+                        {!deletingAccount && <ChevronRight size={18} color={muted} />}
                     </TouchableOpacity>
                 </View>
             </View>

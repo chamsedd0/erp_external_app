@@ -12,3 +12,7 @@ ios/
 dist/
 web-build/
 *.log
+# Store credentials — never commit
+play-service-account.json
+google-services.json
+GoogleService-Info.plist

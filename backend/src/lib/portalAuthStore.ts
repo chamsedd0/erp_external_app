@@ -178,6 +178,15 @@ export const portalAuthStore = {
         return invite;
     },
 
+    /** Permanently remove an employee's portal credential and email index (account deletion). */
+    async deleteCredential(tenantId: string, employeeId: number): Promise<void> {
+        const credential = await this.getCredential(tenantId, employeeId).catch(() => null);
+        if (credential?.workEmail) {
+            await redisDel(emailIndexKey(tenantId, credential.workEmail)).catch(() => undefined);
+        }
+        await redisDel(credentialKey(tenantId, employeeId));
+    },
+
     async listCredentials(tenantId: string): Promise<Array<Omit<PortalCredential, 'pinHash'>>> {
         const keys = await redisScan(`shadow:t:${tenantId}:portal:employee:*`);
         const results: Array<Omit<PortalCredential, 'pinHash'>> = [];

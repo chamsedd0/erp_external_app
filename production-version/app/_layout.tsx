@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useCallback, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { loadStoredLang } from '../lib/i18n';
 import { loadThemePreference } from '../lib/theme-preference';
 import { ThemeProvider } from '../theme/theme-provider';
@@ -9,7 +9,6 @@ import { ToastProvider } from '../providers/toast-context';
 import * as Notifications from 'expo-notifications';
 import '../global.css';
 
-// Show notifications as banners even when the app is in the foreground
 // Show notifications as banners even when the app is in the foreground
 
 Notifications.setNotificationHandler({
@@ -21,6 +20,14 @@ Notifications.setNotificationHandler({
         shouldSetBadge: true,
     }),
 });
+
+// Android requires an explicit channel for notifications to display (API 26+)
+if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('default', {
+        name: 'Notifications',
+        importance: Notifications.AndroidImportance.DEFAULT,
+    });
+}
 import {
     useFonts,
     DMSans_400Regular,

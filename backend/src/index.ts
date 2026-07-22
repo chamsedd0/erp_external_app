@@ -13,6 +13,7 @@ import { attendanceRouter } from './routes/attendance';
 import { companiesRouter } from './routes/companies';
 import { optionsRouter } from './routes/options';
 import { cronRouter } from './routes/cron';
+import { legalRouter } from './routes/legal';
 import { pushError } from './lib/errorLog';
 import rateLimit from 'express-rate-limit';
 
@@ -82,7 +83,7 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
         /^\/auth\/tenant\/[^/]+$/,
         /^\/auth\/activation\//,
     ];
-    if (req.path.startsWith('/admin/') || req.path.startsWith('/cron/') || publicAuthPaths.some(re => re.test(req.path))) {
+    if (req.path.startsWith('/admin/') || req.path.startsWith('/cron/') || req.path.startsWith('/legal/') || publicAuthPaths.some(re => re.test(req.path))) {
         return next();
     }
     const token = (req.headers.authorization ?? '').split(' ')[1];
@@ -101,6 +102,7 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 app.use('/auth', authRouter);
 app.use('/admin', adminRouter);
 app.use('/cron', cronRouter);
+app.use('/legal', legalRouter);
 app.use('/time-off', timeOffRouter);
 app.use('/expenses', expensesRouter);
 app.use('/notifications', notificationsRouter);

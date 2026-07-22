@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "puppeteer-core": "^24.40.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
   }
 }
