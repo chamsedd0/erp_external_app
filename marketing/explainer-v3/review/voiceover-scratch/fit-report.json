@@ -1,0 +1,58 @@
+[
+  {
+    "id": "vo1",
+    "start_s": 0.3,
+    "window_s": 3.0,
+    "spoken_s": 2.72,
+    "fits": true,
+    "text": "Meet Shadow: your Odoo, in your employees' hands."
+  },
+  {
+    "id": "vo2",
+    "start_s": 3.4,
+    "window_s": 5.5,
+    "spoken_s": 4.73,
+    "fits": true,
+    "text": "It works with the Odoo you already run: versions fifteen to nineteen, no module to install."
+  },
+  {
+    "id": "vo3",
+    "start_s": 9.43,
+    "window_s": 7.07,
+    "spoken_s": 6.69,
+    "fits": true,
+    "text": "Six everyday apps, one place: time off, expenses, attendance, timesheets, helpdesk and maintenance."
+  },
+  {
+    "id": "vo4",
+    "start_s": 16.8,
+    "window_s": 3.6,
+    "spoken_s": 2.94,
+    "fits": true,
+    "text": "Here's an example. An employee requests time off."
+  },
+  {
+    "id": "vo5",
+    "start_s": 21.3,
+    "window_s": 4.37,
+    "spoken_s": 3.01,
+    "fits": true,
+    "text": "It lands in Odoo as a real record, and the manager approves it there."
+  },
+  {
+    "id": "vo6",
+    "start_s": 26.3,
+    "window_s": 3.7,
+    "spoken_s": 2.25,
+    "fits": true,
+    "text": "The employee gets the answer, right on their phone."
+  },
+  {
+    "id": "vo7",
+    "start_s": 31.5,
+    "window_s": 4.83,
+    "spoken_s": 3.85,
+    "fits": true,
+    "text": "Shadow, by Octagon9. Your Odoo, in every pocket."
+  }
+]

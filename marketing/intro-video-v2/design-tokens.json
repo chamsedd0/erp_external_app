@@ -1,0 +1,45 @@
+{
+  "note": "Film tokens with provenance. They do not change the app and are not Apple's numerical rules.",
+  "color": {
+    "ink": { "value": "#080814", "source": "shadow-portal-logo.svg background" },
+    "inkSecondary": { "value": "#131328", "source": "shadow-portal-logo.svg background" },
+    "paleStudio": { "value": "#F6F8FB", "source": "production-version/theme/colors.ts lightColors.background" },
+    "darkText": { "value": "#FFFFFF", "secondary": "#CBD5E1", "source": "identity white; secondary is a film choice" },
+    "lightText": { "value": "#111827", "secondary": "#64748B", "source": "lightColors.text / textMuted" },
+    "brandBlue": { "value": "#4F8EF7", "source": "logo arch" },
+    "deepBlue": { "value": "#2A5FD4", "source": "logo arch gradient" },
+    "highlightBlue": { "value": "#89BFFF", "source": "logo arch gradient" },
+    "approvalGreen": { "value": "#10B981", "source": "semantic success; status only" },
+    "appCard": { "value": "#FFFFFF", "source": "lightColors.card" },
+    "appBorder": { "value": "#D7DEE8", "source": "lightColors.border" },
+    "appInfo": { "value": "#3B82F6", "source": "semantic info (time off accent)" },
+    "odooPrimary": { "value": "#714B67", "source": "Odoo 17 primary button, per the official documentation screenshot" }
+  },
+  "type": {
+    "display": { "family": "Outfit", "weights": [500, 600, 700], "tracking": "-0.025em", "leading": [1.02, 1.08], "maxLines": 2 },
+    "support": { "family": "DM Sans", "weights": [400, 500] },
+    "landscape": { "headline": [104, 128], "support": [36, 44] },
+    "portrait": { "headline": [76, 96], "support": [44, 52] },
+    "logo": "exempt: shadow-portal-logo.svg (Arial Black / Arial), outlined copy in assets/logo/"
+  },
+  "layout": {
+    "landscape": { "size": [1920, 1080], "marginX": 96, "marginY": 72, "grid": 8 },
+    "portrait": { "size": [1080, 1920], "criticalBox": { "x": [96, 900], "y": [240, 1500] }, "grid": 8 },
+    "panelRadius": [24, 32]
+  },
+  "motion": {
+    "headlineIn": { "frames": [18, 24], "translatePx": [24, 40], "ease": "cubic-bezier(0.23, 1, 0.32, 1)" },
+    "headlineOut": { "frames": [10, 14] },
+    "lineOffsetFrames": 3,
+    "deviceReveal": { "frames": [60, 84], "overshoot": false },
+    "reframe": { "frames": [30, 54], "ease": "cubic-bezier(0.77, 0, 0.175, 1)" },
+    "uiPressResponseFrames": [6, 10],
+    "statusDetail": { "frames": [18, 24], "damping": "near-critical" },
+    "dissolveFrames": [8, 12],
+    "logoArrival": { "frames": [36, 60] },
+    "finalHoldFrames": 180
+  },
+  "camera": { "focalLengthMm": 85, "filmGaugeMm": 36, "readingYawDeg": [0, 12], "readingPitchDeg": [0, 5] },
+  "device": { "widthMm": 75, "heightMm": 155, "depthMm": 8, "frame": { "metalness": 1, "roughness": [0.22, 0.35] }, "glass": { "ior": [1.45, 1.5], "roughness": [0.03, 0.08] } },
+  "render": { "fps": 60, "frames": 1200, "shutterDeg": 120, "colour": "Rec.709 / sRGB, limited-range H.264 4:2:0" }
+}

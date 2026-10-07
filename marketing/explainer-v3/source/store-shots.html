@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shadow — store screenshots</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+<style>
+  /* Store screenshot compositions. One design, laid out in "u" units (1u = canvas width / 1320) so the same file
+     renders the iPhone 6.9" (1320×2868), iPhone 6.3" (1206×2622) and Android phone (1080×1920) sets, plus the
+     Google Play feature graphic (1024×500). The app screens are the same source reconstructions as the film. */
+  @font-face { font-family: 'Outfit'; src: url(../assets/fonts/Outfit_600SemiBold.ttf); font-weight: 600; }
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  #shot { position: absolute; left: 0; top: 0; overflow: hidden; background: linear-gradient(162deg, #161a3a 0%, #0b0c1e 46%, #080814 100%); }
+  #shot::before { content: ''; position: absolute; inset: 0; background: radial-gradient(70% 38% at 50% 58%, rgba(56, 98, 214, 0.34), rgba(8, 8, 20, 0) 72%); }
+  .brand { position: absolute; left: 0; right: 0; display: flex; justify-content: center; align-items: center; white-space: nowrap; }
+  .brand .bt { display: flex; align-items: baseline; }
+  .brand .bn { font-family: 'DM Sans', sans-serif; font-weight: 700; color: #fff; letter-spacing: -0.015em; }
+  .brand .bb { font-family: 'DM Sans', sans-serif; font-weight: 500; color: #4F8EF7; }
+  .brand .bb i { font-style: normal; color: #94A3B8; }
+  .cap { position: absolute; left: 0; right: 0; text-align: center; font-family: 'Outfit', sans-serif; font-weight: 600; color: #fff; letter-spacing: -0.025em; line-height: 1.05; white-space: nowrap; }
+  .sub { position: absolute; left: 0; right: 0; text-align: center; font-family: 'DM Sans', sans-serif; font-weight: 500; color: #CBD5E1; line-height: 1.3; }
+  .arch { position: absolute; left: 0; top: 0; }
+  /* the film's generic device, front-on: graphite rim, black glass, one side key */
+  .dev { position: absolute; box-sizing: border-box; background: linear-gradient(150deg, #7b7f89 0%, #2a2c33 22%, #1b1c21 60%, #4a4d55 100%);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 60px 120px rgba(0, 0, 0, 0.55), 0 0 90px rgba(79, 142, 247, 0.16); }
+  .dev .glass { width: 100%; height: 100%; box-sizing: border-box; background: #030304; }
+  .dev .screen { width: 100%; height: 100%; overflow: hidden; position: relative; background: #000; }
+  .dev .screen > .app { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .dev .key { position: absolute; background: linear-gradient(90deg, #2a2c33, #5a5d66); }
+  .vers { position: absolute; left: 0; right: 0; display: flex; justify-content: center; align-items: center; }
+  .vers b { font-family: 'Outfit', sans-serif; font-weight: 600; color: #fff; text-align: center; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(79, 142, 247, 0.16); box-shadow: inset 0 0 0 2px rgba(137, 191, 255, 0.55); }
+  .vers i { display: block; background: linear-gradient(90deg, rgba(137, 191, 255, 0.55), rgba(137, 191, 255, 0.2)); }
+  /* feature graphic */
+  #shot.fg .tag { position: absolute; font-family: 'Outfit', sans-serif; font-weight: 600; color: #fff; letter-spacing: -0.02em; line-height: 1.08; white-space: nowrap; }
+  #shot.fg .desc { position: absolute; font-family: 'DM Sans', sans-serif; font-weight: 500; color: #CBD5E1; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="shot"></div>
+<script src="icons.js"></script>
+<script type="module">
+import * as UI from './ui.js';
+const Q = new URLSearchParams(location.search);
+const W = Number(Q.get('w') || 1320), H = Number(Q.get('h') || 2868), id = Q.get('shot') || 'hero';
+const u = W / 1320, shot = document.getElementById('shot');
+shot.style.width = W + 'px'; shot.style.height = H + 'px';
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; shot.appendChild(e); return e; };
+const px = v => (v * u).toFixed(2) + 'px';
+const MARK = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 400 400" style="flex:none"><defs><linearGradient id="bi" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#2A5FD4"/><stop offset=".55" stop-color="#4F8EF7"/><stop offset="1" stop-color="#89BFFF"/></linearGradient></defs>
+  <path d="M 60 388 L 60 228 A 140 140 0 0 1 340 228 L 340 388" fill="none" stroke="url(#bi)" stroke-width="30" stroke-linecap="round"/>
+  <line x1="38" y1="388" x2="362" y2="388" stroke="#3B74E0" stroke-width="20" stroke-linecap="round" opacity=".85"/><circle cx="200" cy="88" r="13" fill="#fff"/></svg>`;
+function brand(top, size) {
+  const b = el('div', 'brand', `${MARK(size * 1.25)}<span class="bt" style="margin-left:${size * 0.34}px"><span class="bn" style="font-size:${size}px">Shadow</span><span class="bb" style="font-size:${size * 0.7}px;margin-left:${size * 0.3}px"><i>by</i> Octagon9</span></span>`);
+  b.style.top = top + 'px'; return b;
+}
+// the generic device, front-on. x/y/w in canvas px; returns the bottom edge
+function device(screen, x, y, w) {
+  const BODY = { w: 75, h: 155, r: 11.5, sw: 68.2, sh: 147.6, sr: 7.4 }, k = w / BODY.w, h = BODY.h * k;
+  const rim = 0.9 * k, bezelX = (BODY.w - BODY.sw) / 2 * k - rim, bezelY = (BODY.h - BODY.sh) / 2 * k - rim;
+  const d = el('div', 'dev'); Object.assign(d.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', borderRadius: BODY.r * k + 'px', padding: rim + 'px' });
+  const g = document.createElement('div'); g.className = 'glass'; Object.assign(g.style, { borderRadius: (BODY.r * k - rim) + 'px', padding: `${bezelY}px ${bezelX}px` }); d.appendChild(g);
+  const s = document.createElement('div'); s.className = 'screen'; s.style.borderRadius = BODY.sr * k + 'px'; g.appendChild(s);
+  s.appendChild(screen.root); screen.root.style.transform = `scale(${BODY.sw * k / 390})`;
+  const key = document.createElement('div'); key.className = 'key'; Object.assign(key.style, { right: -0.5 * k + 'px', top: (BODY.h / 2 - 28 - 8.5) * k + 'px', width: 0.9 * k + 'px', height: 17 * k + 'px', borderRadius: 0.5 * k + 'px' }); d.appendChild(key);
+  return y + h;
+}
+function archBehind(cx, top, R, stroke = 5) {       // the portal light behind the device
+  const a = el('div', 'arch', `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>
+    <linearGradient id="ag" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${H}" y2="${top}"><stop offset="0" stop-color="#2A5FD4"/><stop offset=".55" stop-color="#4F8EF7"/><stop offset="1" stop-color="#89BFFF"/></linearGradient>
+    <filter id="af" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${30 * u}"/></filter></defs>
+    <path d="M ${cx - R} ${H + 60} L ${cx - R} ${top + R} A ${R} ${R} 0 0 1 ${cx + R} ${top + R} L ${cx + R} ${H + 60}" fill="none" stroke="#4F8EF7" stroke-width="${26 * u}" opacity="0.3" filter="url(#af)"/>
+    <path d="M ${cx - R} ${H + 60} L ${cx - R} ${top + R} A ${R} ${R} 0 0 1 ${cx + R} ${top + R} L ${cx + R} ${H + 60}" fill="none" stroke="url(#ag)" stroke-width="${stroke * u}"/></svg>`);
+  return a;
+}
+
+const SHOTS = {
+  hero:     { cap: ['Your Odoo.', 'In every pocket.'], sub: 'The employee app for Odoo.', screen: () => UI.dashboardScreen(), brand: true },
+  versions: { cap: ['Works with', 'Odoo 15 to 19.'], sub: 'No module to install. Just your company code.', screen: () => UI.companySetupScreen(), versions: [15, 16, 17, 18, 19] },
+  apps:     { cap: ['Six everyday apps.', 'One place.'], sub: 'Time off · Expenses · Attendance<br>Timesheets · Helpdesk · Maintenance', screen: () => { const s = UI.hubScreen(); s.toast.remove(); return s; } },
+  request:  { cap: ['Request time off', 'in a few taps.'], sub: 'With your live leave balance from Odoo.', screen: () => { const s = UI.timeOffScreen(); s.toast.remove(); return s; } },
+  status:   { cap: ['Approved in Odoo.', 'Answered in the app.'], sub: 'A notification when your request is approved or refused.', screen: () => UI.inboxScreen() },
+};
+
+await Promise.all(['600 40px Outfit', '700 40px Outfit', '500 40px Outfit', '400 40px "DM Sans"', '500 40px "DM Sans"', '700 40px "DM Sans"'].map(f => document.fonts.load(f)));
+await document.fonts.ready;
+
+if (id === 'feature') {                                // Google Play feature graphic, 1024×500: text left, device right, centre kept calm for the play button
+  shot.classList.add('fg');
+  const f = W / 1024;
+  const b = el('div', 'brand', `${MARK(64 * f)}<span class="bt" style="margin-left:${20 * f}px"><span class="bn" style="font-size:${58 * f}px">Shadow</span><span class="bb" style="font-size:${30 * f}px;margin-left:${14 * f}px"><i>by</i> Octagon9</span></span>`);
+  Object.assign(b.style, { left: 64 * f + 'px', right: 'auto', top: 118 * f + 'px', justifyContent: 'flex-start' });
+  const t = el('div', 'tag', 'Your Odoo.<br>In every pocket.'); Object.assign(t.style, { left: 64 * f + 'px', top: 214 * f + 'px', fontSize: 56 * f + 'px' });
+  const d = el('div', 'desc', 'Employee self-service for Odoo 15 to 19'); Object.assign(d.style, { left: 66 * f + 'px', top: 362 * f + 'px', fontSize: 24 * f + 'px' });
+  archBehind(808 * f, 34 * f, 190 * f, 3 / u * f);
+  device(UI.dashboardScreen(), 688 * f, 74 * f, 240 * f);
+} else {
+  const S = SHOTS[id];
+  const tall = H / W > 2;                              // iPhone canvases show (almost) the whole device; 9:16 crops it lower
+  // one device position for the whole set, so the screenshots line up side by side in the store
+  const devTop = (tall ? 868 : 700) * u, dw = (tall ? 0.76 : 0.8) * W, dx = (W - dw) / 2;
+  const capSize = (tall ? 124 : 108) * u, maxW = W - 2 * 84 * u;
+  const probe = document.createElement('span'); probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:600 ${capSize}px Outfit;letter-spacing:-0.025em`; document.body.appendChild(probe);
+  const widest = Math.max(...S.cap.map(t => { probe.textContent = t; return probe.offsetWidth; })); probe.remove();
+  const fs = widest > maxW ? capSize * maxW / widest : capSize;
+  // header block: [brand] caption, sub-caption, [version chips] — centred in the space above the device
+  const parts = [];
+  if (S.brand) parts.push({ h: 76 * u, gap: (tall ? 58 : 40) * u, make: y => brand(y, 58 * u) });
+  parts.push({ h: fs * 1.05 * S.cap.length, gap: 30 * u, make: y => { const c = el('div', 'cap', S.cap.join('<br>')); c.style.top = y + 'px'; c.style.fontSize = fs + 'px'; } });
+  const subSize = (tall ? 50 : 44) * u, subProbe = el('div', 'sub', S.sub); subProbe.style.fontSize = subSize + 'px'; subProbe.style.padding = `0 ${90 * u}px`;
+  parts.push({ h: subProbe.offsetHeight, gap: (tall ? 54 : 40) * u, make: y => { subProbe.style.top = y + 'px'; } });
+  if (S.versions) parts.push({ h: 124 * u, gap: 0, make: y => {
+    const v = el('div', 'vers', S.versions.map(n => `<b style="width:${124 * u}px;height:${124 * u}px;font-size:${58 * u}px">${n}</b>`).join(`<i style="width:${54 * u}px;height:${3 * u}px"></i>`)); v.style.top = y + 'px'; } });
+  const blockH = parts.reduce((a, p, i) => a + p.h + (i < parts.length - 1 ? p.gap : 0), 0);
+  let y = Math.max(70 * u, (devTop - 40 * u - blockH) / 2 + 10 * u);
+  for (const p of parts) { p.make(y); y += p.h + p.gap; }
+  archBehind(W / 2, devTop - 0.07 * dw, dw * 0.62);
+  device(S.screen(), dx, devTop, dw);
+}
+// real device captures: build-store.mjs calls this with a data URL when ../store-assets/captures/<shot>.png exists
+window.__useCapture = async (dataUrl) => {
+  const scr = document.querySelector('.dev .screen'); if (!scr) return false;
+  const img = new Image(); img.src = dataUrl; await img.decode();
+  Object.assign(img.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' });
+  scr.replaceChildren(img); return true;
+};
+window.__ready = true;
+</script>
+</body>
+</html>

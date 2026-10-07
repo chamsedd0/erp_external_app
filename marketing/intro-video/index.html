@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shadow Portal — Intro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="intro.css">
+</head>
+<body>
+<div id="viewport">
+  <div id="stage">
+    <canvas id="bg" class="layer"></canvas>
+    <div id="world"></div>
+    <canvas id="fx" class="layer"></canvas>
+    <div id="grade"></div>
+    <div id="letterbox"></div>
+    <div id="dbg"></div>
+  </div>
+</div>
+<div id="ui">
+  <button id="play">Play</button>
+  <button id="mute">Sound: on</button>
+  <input id="scrub" type="range" min="0" max="19" step="0.0166667" value="0">
+  <span class="tc" id="tc">0.00 s</span>
+</div>
+<audio id="music" src="soundtrack.wav" preload="auto"></audio>
+<script src="icons.js"></script>
+<script src="intro.js"></script>
+</body>
+</html>

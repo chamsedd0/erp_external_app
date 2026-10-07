@@ -1,0 +1,43 @@
+{
+  "file": "out\\shadow-by-octagon9-explainer-9x16.mp4",
+  "video": {
+    "codec_name": "h264",
+    "profile": "High",
+    "codec_type": "video",
+    "width": 1080,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "color_range": "tv",
+    "color_space": "bt709",
+    "color_transfer": "bt709",
+    "color_primaries": "bt709",
+    "r_frame_rate": "60/1",
+    "avg_frame_rate": "60/1",
+    "duration": "37.000000",
+    "nb_read_frames": "2220"
+  },
+  "audio": {
+    "codec_name": "aac",
+    "profile": "LC",
+    "codec_type": "audio",
+    "sample_rate": "48000",
+    "channels": 2,
+    "r_frame_rate": "0/0",
+    "avg_frame_rate": "0/0",
+    "duration": "37.000000",
+    "nb_read_frames": "1735"
+  },
+  "format": {
+    "duration": "37.000000",
+    "size": "14828452",
+    "bit_rate": "3206151"
+  },
+  "checks": {
+    "frames_expected": 2220,
+    "frames_decoded": 2220,
+    "frames_ok": true,
+    "size_ok": true,
+    "bt709": true,
+    "range": "tv"
+  }
+}

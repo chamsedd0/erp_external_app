@@ -1,0 +1,16 @@
+{
+  "name": "shadow-portal-intro-video",
+  "private": true,
+  "type": "module",
+  "description": "Code-driven marketing intro for Shadow Portal (see README.md)",
+  "scripts": {
+    "preview": "node serve.mjs 5178",
+    "audio": "python soundtrack.py",
+    "render": "node render.mjs",
+    "render:vertical": "node render.mjs --format vertical"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.40.0",
+    "sharp": "^0.34.0"
+  }
+}

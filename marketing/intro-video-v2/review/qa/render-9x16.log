@@ -1,0 +1,48 @@
+render shadow-portal-launch-v2-9x16: frames 0–1199 (1200) @60 fps, 7238 samples (1–20/frame), shutter 120°, 6 workers
+  chunk 1/43 (w3) frames 67/1200 samples 1340/7238 236s ~1038s left
+  chunk 4/43 (w5) frames 68/1200 samples 1360/7238 243s ~1052s left
+  chunk 6/43 (w1) frames 69/1200 samples 1380/7238 248s ~1053s left
+  chunk 5/43 (w4) frames 70/1200 samples 1400/7238 250s ~1044s left
+  chunk 2/43 (w0) frames 71/1200 samples 1420/7238 251s ~1027s left
+  chunk 3/43 (w2) frames 72/1200 samples 1440/7238 252s ~1013s left
+  chunk 7/43 (w3) frames 143/1200 samples 2712/7238 490s ~818s left
+  chunk 9/43 (w1) frames 147/1200 samples 2776/7238 498s ~801s left
+  chunk 8/43 (w5) frames 150/1200 samples 2820/7238 513s ~803s left
+  chunk 10/43 (w4) frames 157/1200 samples 2868/7238 518s ~790s left
+  chunk 11/43 (w0) frames 174/1200 samples 2933/7238 536s ~787s left
+  chunk 12/43 (w2) frames 182/1200 samples 2980/7238 545s ~779s left
+  chunk 18/43 (w2) frames 267/1200 samples 3773/7238 643s ~590s left
+  chunk 14/43 (w1) frames 300/1200 samples 3956/7238 660s ~547s left
+  chunk 17/43 (w0) frames 329/1200 samples 4320/7238 686s ~463s left
+  chunk 13/43 (w3) frames 339/1200 samples 4351/7238 690s ~458s left
+  chunk 16/43 (w4) frames 349/1200 samples 4415/7238 693s ~443s left
+  chunk 15/43 (w5) frames 401/1200 samples 4507/7238 702s ~426s left
+  chunk 21/43 (w0) frames 439/1200 samples 4586/7238 710s ~411s left
+  chunk 22/43 (w3) frames 461/1200 samples 4647/7238 714s ~398s left
+  chunk 20/43 (w1) frames 520/1200 samples 4791/7238 727s ~371s left
+  chunk 25/43 (w0) frames 536/1200 samples 4847/7238 731s ~361s left
+  chunk 24/43 (w5) frames 590/1200 samples 5059/7238 750s ~323s left
+  chunk 19/43 (w2) frames 616/1200 samples 5158/7238 761s ~307s left
+  chunk 23/43 (w4) frames 623/1200 samples 5190/7238 763s ~301s left
+  chunk 29/43 (w5) frames 699/1200 samples 5371/7238 782s ~272s left
+  chunk 31/43 (w4) frames 746/1200 samples 5453/7238 791s ~259s left
+  chunk 28/43 (w0) frames 757/1200 samples 5472/7238 794s ~256s left
+  chunk 32/43 (w5) frames 833/1200 samples 5618/7238 808s ~233s left
+  chunk 33/43 (w4) frames 880/1200 samples 5701/7238 817s ~220s left
+  chunk 34/43 (w0) frames 893/1200 samples 5734/7238 821s ~215s left
+  chunk 26/43 (w3) frames 928/1200 samples 6015/7238 845s ~172s left
+  chunk 27/43 (w1) frames 939/1200 samples 6159/7238 856s ~150s left
+  chunk 30/43 (w2) frames 976/1200 samples 6488/7238 881s ~102s left
+  chunk 40/43 (w2) frames 1033/1200 samples 6744/7238 903s ~66s left
+  chunk 39/43 (w1) frames 1106/1200 samples 6973/7238 924s ~35s left
+  chunk 41/43 (w2) frames 1120/1200 samples 6994/7238 928s ~32s left
+  chunk 35/43 (w5) frames 1136/1200 samples 7055/7238 932s ~24s left
+  chunk 36/43 (w4) frames 1168/1200 samples 7139/7238 939s ~13s left
+  chunk 37/43 (w0) frames 1183/1200 samples 7173/7238 942s ~9s left
+  chunk 43/43 (w2) frames 1191/1200 samples 7188/7238 943s ~7s left
+  chunk 42/43 (w1) frames 1194/1200 samples 7190/7238 944s ~6s left
+  chunk 38/43 (w3) frames 1200/1200 samples 7238/7238 957s ~0s left
+  intermediate out\intermediate\shadow-portal-launch-v2-9x16-lossless-rgb.mkv 111 MB
+{"frames_expected":1200,"frames_decoded":1200,"frames_ok":true,"size_ok":true,"bt709":true,"range":"tv"} 8.6 MB out\shadow-portal-launch-v2-9x16.mp4
+done in 1036s
+FINISHED

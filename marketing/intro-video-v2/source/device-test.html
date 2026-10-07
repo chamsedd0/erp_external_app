@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>device test</title>
+<script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
+<style>html,body{margin:0;background:#080814}canvas{position:absolute;left:0;top:0}
+#bg{position:absolute;inset:0;background:radial-gradient(60% 70% at 66% 50%, #151a38 0%, #0b0c1e 45%, #080814 100%)}</style></head>
+<body><div id="bg"></div><canvas id="c"></canvas>
+<script type="module">
+import { createDevice } from './device.js';
+const q = new URLSearchParams(location.search);
+const W = Number(q.get('w') || 1920), H = Number(q.get('h') || 1080);
+const c = document.getElementById('c'); c.style.width = W + 'px'; c.style.height = H + 'px';
+document.getElementById('bg').style.cssText = `width:${W}px;height:${H}px`;
+const dev = await createDevice(c, { width: W, height: H, pixelRatio: 2, texture: '/assets/screens/dashboard@5x.png' });
+window.__show = (s) => { if (s.aim) dev.aimPortal(s.aim.state || s, ...s.aim.at); dev.render(s); };
+window.__ready = true;
+</script></body></html>

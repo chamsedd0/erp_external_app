@@ -1,0 +1,91 @@
+[
+  {
+    "id": "vo1",
+    "text": "Meet Shadow: your Odoo, in your employees' hands.",
+    "takes": [
+      {
+        "file": "vo1-t1.mp3",
+        "spoken_s": 2.73,
+        "lufs": -17.9
+      },
+      {
+        "file": "vo1-t2.mp3",
+        "spoken_s": 2.76,
+        "lufs": -18.6
+      }
+    ],
+    "used": "vo1-t2.mp3",
+    "speed": 1.0,
+    "start_s": 0.3,
+    "ends_s": 3.2,
+    "window_ends_s": 3.3,
+    "limit_s": 3.3,
+    "fits": "window"
+  },
+  {
+    "id": "vo2",
+    "text": "It works with the Odoo you already run: versions fifteen to nineteen, no module to install.",
+    "takes": [
+      {
+        "file": "vo2-t1.mp3",
+        "spoken_s": 5.69,
+        "lufs": -18.9
+      },
+      {
+        "file": "vo2-t2.mp3",
+        "spoken_s": 5.15,
+        "lufs": -18.5
+      }
+    ],
+    "used": "vo2-t2.mp3",
+    "speed": 1.0,
+    "start_s": 3.4,
+    "ends_s": 8.7,
+    "window_ends_s": 8.9,
+    "limit_s": 9.1,
+    "fits": "window"
+  },
+  {
+    "id": "vo3",
+    "text": "Six everyday apps, one place: time off, expenses, attendance, timesheets, helpdesk and maintenance.",
+    "missing": true
+  },
+  {
+    "id": "vo4",
+    "text": "Here's an example. An employee requests time off.",
+    "takes": [
+      {
+        "file": "vo4-t1.mp3",
+        "spoken_s": 3.225,
+        "lufs": -19.4
+      },
+      {
+        "file": "vo4-t2.mp3",
+        "spoken_s": 3.305,
+        "lufs": -20.0
+      }
+    ],
+    "used": "vo4-t2.mp3",
+    "speed": 1.0,
+    "start_s": 16.8,
+    "ends_s": 20.26,
+    "window_ends_s": 20.4,
+    "limit_s": 20.9,
+    "fits": "window"
+  },
+  {
+    "id": "vo5",
+    "text": "It lands in Odoo as a real record, and the manager approves it there.",
+    "missing": true
+  },
+  {
+    "id": "vo6",
+    "text": "The employee gets the answer, right on their phone.",
+    "missing": true
+  },
+  {
+    "id": "vo7",
+    "text": "Shadow, by Octagon9. Your Odoo, in every pocket.",
+    "missing": true
+  }
+]

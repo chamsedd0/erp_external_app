@@ -4,9 +4,30 @@
     {
       "name": "Backend (Express + nodemon)",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "cd backend && npm run dev"],
+      "runtimeArgs": [
+        "/c",
+        "cd backend && npm run dev"
+      ],
       "port": 3000,
       "autoPort": false
+    },
+    {
+      "name": "Intro video (preview)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "marketing/intro-video/serve.mjs",
+        "5178"
+      ],
+      "port": 5178
+    },
+    {
+      "name": "Explainer v3 (preview)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "marketing/explainer-v3/source/serve.mjs",
+        "5180"
+      ],
+      "port": 5180
     }
   ]
 }

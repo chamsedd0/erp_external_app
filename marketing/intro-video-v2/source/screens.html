@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>screen</title>
+<link rel="stylesheet" href="ui.css">
+<style>html,body{margin:0;background:#000}#host{position:absolute;left:0;top:0}</style></head>
+<body><div id="host"></div>
+<script src="icons.js"></script>
+<script type="module">
+import * as UI from './ui.js';
+const name = new URLSearchParams(location.search).get('screen') || 'dashboard';
+const map = { dashboard: UI.dashboardScreen, timeoff: UI.timeOffScreen, hub: UI.hubScreen, inbox: UI.inboxScreen };
+const s = map[name]();
+if (s.toast) s.toast.style.display = 'none';
+document.getElementById('host').appendChild(s.root);
+await document.fonts.ready;
+await Promise.all(['700 20px Outfit', '500 20px "DM Sans"', '400 20px "DM Sans"', '700 20px "DM Sans"'].map(f => document.fonts.load(f)));
+window.__ready = true;
+</script></body></html>

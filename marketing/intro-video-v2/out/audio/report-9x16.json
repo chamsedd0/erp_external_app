@@ -1,0 +1,79 @@
+{
+  "format": "9x16",
+  "sample_rate": 48000,
+  "samples": 960000,
+  "duration_s": 20.0,
+  "integrated_lufs": -14.11,
+  "true_peak_dbtp": -1.5,
+  "limiter_gain_reduction_db": {
+    "max": -2.0,
+    "p99": -0.56,
+    "share_of_time_over_1db": 0.0054
+  },
+  "stem_integrated_lufs_in_mix": {
+    "music": -14.0,
+    "interaction": -22.3,
+    "transition": -29.7,
+    "brand": -15.7
+  },
+  "mono": {
+    "lr_correlation": 0.77,
+    "mono_minus_stereo_lufs_db": -0.62
+  },
+  "phone_speaker_proxy_cue_to_bed_db": {
+    "touch": 2.4,
+    "confirm": 5.4,
+    "click": 3.1,
+    "approved": 6.7,
+    "status-two-note": 8.4,
+    "signature": 9.3
+  },
+  "cue_placement": {
+    "onset": {
+      "frame": 0,
+      "time_s": 0.0,
+      "onset_offset_ms": 0.48
+    },
+    "touch": {
+      "frame": 336,
+      "time_s": 5.6,
+      "onset_offset_ms": 0.06
+    },
+    "confirm": {
+      "frame": 360,
+      "time_s": 6.0,
+      "onset_offset_ms": 0.29
+    },
+    "record-match": {
+      "frame": 480,
+      "time_s": 8.0,
+      "onset_offset_ms": 0.1
+    },
+    "click": {
+      "frame": 612,
+      "time_s": 10.2,
+      "onset_offset_ms": 0.04
+    },
+    "approved": {
+      "frame": 624,
+      "time_s": 10.4,
+      "onset_offset_ms": 0.29
+    },
+    "status-two-note": {
+      "frame": 719,
+      "time_s": 11.9833,
+      "onset_offset_ms": 0.33
+    },
+    "signature": {
+      "frame": 972,
+      "time_s": 16.2,
+      "onset_offset_ms": 0.31
+    }
+  },
+  "beat_grid": {
+    "bpm": 113.869,
+    "beat0_frame": 150,
+    "beat_frames": 31.6154
+  },
+  "note": "Measurements only. Human listening (headphones, phone speaker, mono) is still required before approval."
+}

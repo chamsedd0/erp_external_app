@@ -1,0 +1,22 @@
+{
+  "name": "shadow-explainer-v3",
+  "private": true,
+  "type": "module",
+  "description": "Shadow by Octagon9 \u2014 vertical explainer and store assets; see README.md",
+  "scripts": {
+    "preview": "node source/serve.mjs 5180",
+    "stills": "node source/stills.mjs --fmt vertical",
+    "render": "node source/render.mjs",
+    "audio": "python source/soundtrack.py",
+    "animatic": "node source/render.mjs --animatic",
+    "store": "node source/build-store.mjs"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.40.0",
+    "sharp": "^0.34.0",
+    "opentype.js": "^1.3.4"
+  }
+}

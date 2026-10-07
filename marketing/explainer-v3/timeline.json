@@ -1,0 +1,355 @@
+{
+  "fps": 60,
+  "durationFrames": 2220,
+  "note": "Shadow by Octagon9 — vertical explainer (1080x1920). Frame intervals are start-inclusive, end-exclusive. Picture (source/film.js), sound (source/soundtrack.py) and the voice-over timings (VOICEOVER.md) all read this file. Order requested by the client: versions -> supported applications -> one example. The whole story lands before frame 1800 (30 s) because Google Play autoplays only the first 30 seconds.",
+  "brand": {
+    "name": "Shadow",
+    "byline": "by Octagon9",
+    "tagline": [
+      "Your Odoo.",
+      "In every pocket."
+    ]
+  },
+  "versions": [
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "shots": [
+    {
+      "id": "01",
+      "name": "open",
+      "start": 0,
+      "end": 156,
+      "stage": "ink"
+    },
+    {
+      "id": "02",
+      "name": "versions",
+      "start": 156,
+      "end": 540,
+      "stage": "ink"
+    },
+    {
+      "id": "03",
+      "name": "applications",
+      "start": 540,
+      "end": 996,
+      "stage": "pale"
+    },
+    {
+      "id": "04",
+      "name": "example-request",
+      "start": 996,
+      "end": 1260,
+      "stage": "pale"
+    },
+    {
+      "id": "05",
+      "name": "example-odoo",
+      "start": 1260,
+      "end": 1560,
+      "stage": "pale"
+    },
+    {
+      "id": "06",
+      "name": "example-status",
+      "start": 1560,
+      "end": 1830,
+      "stage": "pale"
+    },
+    {
+      "id": "07",
+      "name": "lockup",
+      "start": 1830,
+      "end": 2220,
+      "stage": "brand"
+    }
+  ],
+  "copy": [
+    {
+      "id": "promise",
+      "lines": [
+        "Your Odoo.",
+        "In their hands."
+      ],
+      "in": [
+        2,
+        24
+      ],
+      "out": 150,
+      "shot": "01"
+    },
+    {
+      "id": "versions",
+      "lines": [
+        "Works with the Odoo",
+        "you already run."
+      ],
+      "in": [
+        170,
+        173
+      ],
+      "out": 398,
+      "shot": "02"
+    },
+    {
+      "id": "install",
+      "lines": [
+        "Odoo 15 to 19.",
+        "No module to install."
+      ],
+      "in": [
+        414,
+        417
+      ],
+      "out": 522,
+      "shot": "02"
+    },
+    {
+      "id": "apps",
+      "lines": [
+        "Six everyday apps.",
+        "One place."
+      ],
+      "in": [
+        566,
+        569
+      ],
+      "out": 952,
+      "shot": "03"
+    },
+    {
+      "id": "request",
+      "lines": [
+        "An employee",
+        "requests time off."
+      ],
+      "in": [
+        1004,
+        1007
+      ],
+      "out": 1246,
+      "shot": "04"
+    },
+    {
+      "id": "odoo",
+      "lines": [
+        "It lands in Odoo."
+      ],
+      "in": [
+        1270
+      ],
+      "out": 1546,
+      "shot": "05"
+    },
+    {
+      "id": "status",
+      "lines": [
+        "The answer",
+        "comes back."
+      ],
+      "in": [
+        1570,
+        1573
+      ],
+      "out": 1816,
+      "shot": "06"
+    }
+  ],
+  "events": {
+    "displayWakeStart": 8,
+    "displayWakeEnd": 28,
+    "cameraPullStart": 72,
+    "archLightIn": 84,
+    "brandIdIn": 100,
+    "cameraLand": 144,
+    "node15": 318,
+    "node16": 334,
+    "node17": 350,
+    "node18": 366,
+    "node19": 382,
+    "brandIdOut": 536,
+    "enterScreenStart": 540,
+    "frontal": 554,
+    "screenSwap": 556,
+    "enterScreenEnd": 576,
+    "hubScrollStart": 636,
+    "hubScrollEnd": 912,
+    "hubFlickStart": 936,
+    "hubFlickEnd": 964,
+    "tapTimeOff": 980,
+    "tapTimeOffRelease": 988,
+    "formIn": 996,
+    "formScrollStart": 1104,
+    "formScrollEnd": 1124,
+    "submitPress": 1130,
+    "submitRelease": 1136,
+    "toastIn": 1157,
+    "recordIn": 1260,
+    "recordSettled": 1287,
+    "pointerIn": 1400,
+    "pointerOnApprove": 1424,
+    "approvePress": 1430,
+    "approveRelease": 1435,
+    "approvedState": 1442,
+    "inboxCut": 1560,
+    "notificationIn": 1585,
+    "notificationSettled": 1609,
+    "portalCloseStart": 1830,
+    "signature": 1854,
+    "portalInside": 1858,
+    "apexLight": 1870,
+    "portalClosed": 1878,
+    "wordmarkIn": 1884,
+    "bylineIn": 1892,
+    "taglineIn": 1902,
+    "lockupComplete": 1928
+  },
+  "music": {
+    "bpm": 113.684,
+    "beatFrames": 31.6667,
+    "beat0Frame": 144,
+    "note": "Beat 0 = the hero landing (frame 144); beat 54 = the brand signature (frame 1854), with its second and third notes on beats 54.5 (apex light, 1870) and 55 (the name, 1886). Version nodes tick on eighth notes (beats 5.5-7.5); the toast (1157) is beat 32, the approval (1442) beat 41, the status cue (1585) beat 45.5."
+  },
+  "sfx": [
+    {
+      "frame": 0,
+      "cue": "onset",
+      "stem": "transition"
+    },
+    {
+      "frame": 4,
+      "cue": "tonal-lift",
+      "stem": "music"
+    },
+    {
+      "frame": 144,
+      "cue": "hero-arrival",
+      "stem": "music"
+    },
+    {
+      "frame": 318,
+      "cue": "node-15",
+      "stem": "interaction"
+    },
+    {
+      "frame": 334,
+      "cue": "node-16",
+      "stem": "interaction"
+    },
+    {
+      "frame": 350,
+      "cue": "node-17",
+      "stem": "interaction"
+    },
+    {
+      "frame": 366,
+      "cue": "node-18",
+      "stem": "interaction"
+    },
+    {
+      "frame": 382,
+      "cue": "node-19",
+      "stem": "interaction"
+    },
+    {
+      "frame": 540,
+      "cue": "enter-screen",
+      "stem": "transition"
+    },
+    {
+      "frame": 980,
+      "cue": "tap-app",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1130,
+      "cue": "touch",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1157,
+      "cue": "confirm",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1260,
+      "cue": "record-match",
+      "stem": "transition"
+    },
+    {
+      "frame": 1430,
+      "cue": "click",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1442,
+      "cue": "approved",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1585,
+      "cue": "status-two-note",
+      "stem": "interaction"
+    },
+    {
+      "frame": 1854,
+      "cue": "signature",
+      "stem": "brand"
+    }
+  ],
+  "voiceover": [
+    {
+      "id": "vo1",
+      "start": 8,
+      "end": 198,
+      "limit": 198,
+      "text": "Meet Shadow: your Odoo, in your employees' hands."
+    },
+    {
+      "id": "vo2",
+      "start": 206,
+      "end": 534,
+      "limit": 548,
+      "text": "It works with the Odoo you already run: versions fifteen to nineteen, no module to install."
+    },
+    {
+      "id": "vo3",
+      "start": 566,
+      "end": 990,
+      "limit": 996,
+      "text": "Six everyday apps, one place: time off, expenses, attendance, timesheets, helpdesk and maintenance."
+    },
+    {
+      "id": "vo4",
+      "start": 1008,
+      "end": 1224,
+      "limit": 1254,
+      "text": "Here's an example. An employee requests time off."
+    },
+    {
+      "id": "vo5",
+      "start": 1278,
+      "end": 1540,
+      "limit": 1557,
+      "text": "It lands in Odoo as a real record, and the manager approves it there."
+    },
+    {
+      "id": "vo6",
+      "start": 1578,
+      "end": 1800,
+      "limit": 1827,
+      "text": "The employee gets the answer, right on their phone."
+    },
+    {
+      "id": "vo7",
+      "start": 1905,
+      "end": 2180,
+      "limit": 2196,
+      "text": "Shadow, by Octagon9. Your Odoo, in every pocket."
+    }
+  ]
+}

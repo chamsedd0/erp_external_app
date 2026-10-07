@@ -1,0 +1,70 @@
+{
+  "file": "out\\shadow-by-octagon9-explainer-9x16-with-voice.mp4",
+  "video": {
+    "codec_name": "h264",
+    "profile": "High",
+    "codec_type": "video",
+    "width": 1080,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "level": 42,
+    "color_range": "tv",
+    "color_space": "bt709",
+    "color_transfer": "bt709",
+    "color_primaries": "bt709",
+    "r_frame_rate": "60/1",
+    "duration": "37.000000",
+    "nb_read_frames": "2220"
+  },
+  "audio": {
+    "codec_name": "aac",
+    "profile": "LC",
+    "codec_type": "audio",
+    "sample_rate": "48000",
+    "channels": 2,
+    "r_frame_rate": "0/0",
+    "duration": "37.000000",
+    "nb_read_frames": "1735"
+  },
+  "format": {
+    "duration": "37.000000",
+    "size": "14826052",
+    "bit_rate": "3205632"
+  },
+  "checks": {
+    "frames": "2220 decoded / 2220 expected",
+    "frames_ok": true,
+    "duration_s": 37.0,
+    "duration_ok": true,
+    "size_ok": true,
+    "fps": "60/1",
+    "h264_yuv420p": true,
+    "bt709_tags": [
+      "bt709",
+      "bt709",
+      "bt709",
+      "tv"
+    ],
+    "faststart": true,
+    "audio": "aac 48000 Hz 2 ch"
+  },
+  "luma": {
+    "ink_corner_frame_0": {
+      "measured": 24.0,
+      "predicted_for_#080814": 23.6
+    },
+    "pale_studio_frame_1700": {
+      "measured": 228.8,
+      "predicted_for_#F6F8FB": 228.8
+    },
+    "share_below_16_pct": 0.0005,
+    "share_above_235_pct": 0.1822
+  },
+  "audio_decoded": {
+    "integrated": "-14.0 LUFS",
+    "true_peak": "-1.5 dBFS",
+    "offset_vs_wav_ms": 0.0,
+    "samples": 1776640,
+    "expected_samples": 1776000
+  }
+}

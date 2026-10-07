@@ -1,0 +1,212 @@
+[
+  {
+    "id": "vo1",
+    "text": "Meet Shadow: your Odoo, in your employees' hands.",
+    "takes": [
+      {
+        "file": "vo1-t1.mp3",
+        "spoken_s": 2.69,
+        "lufs": -20.9
+      },
+      {
+        "file": "vo1-t2.mp3",
+        "spoken_s": 2.915,
+        "lufs": -19.3
+      },
+      {
+        "file": "vo1-t3.mp3",
+        "spoken_s": 3.16,
+        "lufs": -18.9
+      },
+      {
+        "file": "vo1-t4.mp3",
+        "spoken_s": 3.015,
+        "lufs": -18.3
+      }
+    ],
+    "used": "vo1-t3.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.14,
+    "speed": 1.0,
+    "start_s": 0.13,
+    "ends_s": 3.29,
+    "window_ends_s": 3.3,
+    "limit_s": 3.3,
+    "fits": "window"
+  },
+  {
+    "id": "vo2",
+    "text": "It works with the Odoo you already run: versions fifteen to nineteen, no module to install.",
+    "takes": [
+      {
+        "file": "vo2-t1.mp3",
+        "spoken_s": 5.32,
+        "lufs": -18.3
+      },
+      {
+        "file": "vo2-t2.mp3",
+        "spoken_s": 5.385,
+        "lufs": -18.5
+      },
+      {
+        "file": "vo2-t3.mp3",
+        "spoken_s": 5.85,
+        "lufs": -18.8
+      },
+      {
+        "file": "vo2-t4.mp3",
+        "spoken_s": 6.13,
+        "lufs": -19.4
+      }
+    ],
+    "used": "vo2-t3.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.09,
+    "speed": 1.042,
+    "start_s": 3.43,
+    "ends_s": 9.12,
+    "window_ends_s": 8.9,
+    "limit_s": 9.13,
+    "fits": "limit"
+  },
+  {
+    "id": "vo3",
+    "text": "Six everyday apps, one place: time off, expenses, attendance, timesheets, helpdesk and maintenance.",
+    "takes": [
+      {
+        "file": "vo3-t1.mp3",
+        "spoken_s": 7.915,
+        "lufs": -23.1
+      },
+      {
+        "file": "vo3-t2.mp3",
+        "spoken_s": 6.655,
+        "lufs": -22.1
+      }
+    ],
+    "used": "vo3-t2.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.0,
+    "speed": 1.0,
+    "start_s": 9.43,
+    "ends_s": 16.21,
+    "window_ends_s": 16.5,
+    "limit_s": 16.6,
+    "fits": "window"
+  },
+  {
+    "id": "vo4",
+    "text": "Here's an example. An employee requests time off.",
+    "takes": [
+      {
+        "file": "vo4-t1.mp3",
+        "spoken_s": 3.34,
+        "lufs": -18.1
+      },
+      {
+        "file": "vo4-t2.mp3",
+        "spoken_s": 3.315,
+        "lufs": -20.0
+      }
+    ],
+    "used": "vo4-t2.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.0,
+    "speed": 1.0,
+    "start_s": 16.8,
+    "ends_s": 20.27,
+    "window_ends_s": 20.4,
+    "limit_s": 20.9,
+    "fits": "window"
+  },
+  {
+    "id": "vo5",
+    "text": "It lands in Odoo as a real record, and the manager approves it there.",
+    "takes": [
+      {
+        "file": "vo5-t1.mp3",
+        "spoken_s": 3.905,
+        "lufs": -17.6
+      },
+      {
+        "file": "vo5-t2.mp3",
+        "spoken_s": 3.795,
+        "lufs": -18.4
+      },
+      {
+        "file": "vo5-t3.mp3",
+        "spoken_s": 3.91,
+        "lufs": -18.1
+      },
+      {
+        "file": "vo5-t4.mp3",
+        "spoken_s": 3.905,
+        "lufs": -17.1
+      }
+    ],
+    "used": "vo5-t3.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.0,
+    "speed": 1.0,
+    "start_s": 21.3,
+    "ends_s": 25.36,
+    "window_ends_s": 25.67,
+    "limit_s": 25.95,
+    "fits": "window"
+  },
+  {
+    "id": "vo6",
+    "text": "The employee gets the answer, right on their phone.",
+    "takes": [
+      {
+        "file": "vo6-t1.mp3",
+        "spoken_s": 3.03,
+        "lufs": -17.3
+      },
+      {
+        "file": "vo6-t2.mp3",
+        "spoken_s": 2.855,
+        "lufs": -18.6
+      }
+    ],
+    "used": "vo6-t1.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.0,
+    "speed": 1.0,
+    "start_s": 26.3,
+    "ends_s": 29.48,
+    "window_ends_s": 30.0,
+    "limit_s": 30.45,
+    "fits": "window"
+  },
+  {
+    "id": "vo7",
+    "text": "Shadow, by Octagon9. Your Odoo, in every pocket.",
+    "takes": [
+      {
+        "file": "vo7-t1.mp3",
+        "spoken_s": 3.505,
+        "lufs": -22.0
+      },
+      {
+        "file": "vo7-t2.mp3",
+        "spoken_s": 3.71,
+        "lufs": -19.1
+      },
+      {
+        "file": "vo7-t3.mp3",
+        "spoken_s": 3.855,
+        "lufs": -18.3
+      }
+    ],
+    "used": "vo7-t3.mp3",
+    "picked_by": "picks.json",
+    "pauses_shortened_s": 0.0,
+    "speed": 1.0,
+    "start_s": 31.75,
+    "ends_s": 35.65,
+    "window_ends_s": 36.33,
+    "limit_s": 36.6,
+    "fits": "window"
+  }
+]

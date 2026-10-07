@@ -1,0 +1,214 @@
+{
+  "fps": 60,
+  "durationFrames": 1200,
+  "note": "Frame intervals are start-inclusive, end-exclusive. Picture (source/film.js) and sound (source/soundtrack.py) both read this file.",
+  "shots": [
+    {
+      "id": "01",
+      "name": "macro",
+      "start": 0,
+      "end": 108,
+      "stage": "ink"
+    },
+    {
+      "id": "02",
+      "name": "hero",
+      "start": 108,
+      "end": 240,
+      "stage": "ink"
+    },
+    {
+      "id": "03",
+      "name": "employee-request",
+      "start": 240,
+      "end": 480,
+      "stage": "pale"
+    },
+    {
+      "id": "04",
+      "name": "odoo-record",
+      "start": 480,
+      "end": 696,
+      "stage": "pale"
+    },
+    {
+      "id": "05",
+      "name": "employee-status",
+      "start": 696,
+      "end": 948,
+      "stage": "pale"
+    },
+    {
+      "id": "06",
+      "name": "lockup",
+      "start": 948,
+      "end": 1200,
+      "stage": "brand"
+    }
+  ],
+  "copy": [
+    {
+      "id": "promise1",
+      "text": "Your Odoo.",
+      "in": 2,
+      "out": 201,
+      "shot": "01"
+    },
+    {
+      "id": "promise2",
+      "text": "In their hands.",
+      "in": 30,
+      "out": 203,
+      "shot": "01"
+    },
+    {
+      "id": "brand",
+      "text": "Shadow Portal",
+      "in": 150,
+      "out": 244,
+      "shot": "02"
+    },
+    {
+      "id": "employee",
+      "text": "Employee requests.",
+      "in": 264,
+      "out": 466,
+      "shot": "03"
+    },
+    {
+      "id": "odoo",
+      "text": "Connected to Odoo.",
+      "in": 490,
+      "out": 684,
+      "shot": "04"
+    },
+    {
+      "id": "status",
+      "text": "Clear status. Less chasing.",
+      "in": 706,
+      "out": 936,
+      "shot": "05"
+    },
+    {
+      "id": "tagline",
+      "text": "Your Odoo. In every pocket.",
+      "in": 992,
+      "out": 1200,
+      "shot": "06"
+    },
+    {
+      "id": "cta",
+      "text": "Meet Shadow Portal.",
+      "in": 998,
+      "out": 1200,
+      "shot": "06"
+    }
+  ],
+  "events": {
+    "displayWakeStart": 10,
+    "displayWakeEnd": 30,
+    "cameraPullStart": 108,
+    "archLightIn": 120,
+    "cameraLand": 180,
+    "enterScreenStart": 240,
+    "frontal": 254,
+    "screenSwap": 256,
+    "enterScreenEnd": 276,
+    "formScrollStart": 311,
+    "formScrollEnd": 331,
+    "submitPress": 336,
+    "submitRelease": 342,
+    "toastIn": 360,
+    "toastReadable": 372,
+    "recordHandoffStart": 480,
+    "recordHandoffEnd": 507,
+    "pointerIn": 580,
+    "pointerOnApprove": 604,
+    "approvePress": 612,
+    "approveRelease": 617,
+    "approvedState": 624,
+    "inboxCut": 696,
+    "notificationIn": 719,
+    "notificationSettled": 743,
+    "portalCloseStart": 948,
+    "portalInside": 968,
+    "signature": 972,
+    "apexLight": 980,
+    "portalClosed": 984,
+    "wordmarkIn": 986,
+    "lockupComplete": 1020
+  },
+  "sfx": [
+    {
+      "frame": 0,
+      "cue": "onset",
+      "stem": "transition",
+      "note": "soft tactile onset"
+    },
+    {
+      "frame": 4,
+      "cue": "tonal-lift",
+      "stem": "music"
+    },
+    {
+      "frame": 150,
+      "cue": "hero-arrival",
+      "stem": "music",
+      "note": "gentle musical arrival"
+    },
+    {
+      "frame": 240,
+      "cue": "enter-screen",
+      "stem": "transition",
+      "note": "air, very quiet"
+    },
+    {
+      "frame": 336,
+      "cue": "touch",
+      "stem": "interaction",
+      "note": "one dry touch"
+    },
+    {
+      "frame": 360,
+      "cue": "confirm",
+      "stem": "interaction",
+      "note": "one soft confirmation"
+    },
+    {
+      "frame": 480,
+      "cue": "record-match",
+      "stem": "transition",
+      "note": "quiet"
+    },
+    {
+      "frame": 612,
+      "cue": "click",
+      "stem": "interaction",
+      "note": "manager presses Approve"
+    },
+    {
+      "frame": 624,
+      "cue": "approved",
+      "stem": "interaction",
+      "note": "restrained approval tone"
+    },
+    {
+      "frame": 719,
+      "cue": "status-two-note",
+      "stem": "interaction",
+      "note": "small positive two-note cue"
+    },
+    {
+      "frame": 972,
+      "cue": "signature",
+      "stem": "brand",
+      "note": "two/three-note brand signature, natural decay"
+    }
+  ],
+  "music": {
+    "bpm": 113.869,
+    "beatFrames": 31.6154,
+    "beat0Frame": 150,
+    "note": "Beat grid anchored so the hero arrival (150) and the brand signature (972) are both on beats (0 and 26). The Odoo approval (624) and the status cue (719) fall on beats 15 and 18."
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "sample_rate": 48000,
+  "samples": 1776000,
+  "duration_s": 37.0,
+  "film_mix": {
+    "integrated_lufs": -14.08,
+    "true_peak_dbtp": -1.5
+  },
+  "vo_bed_mix": {
+    "integrated_lufs": -21.22,
+    "true_peak_dbtp": -1.5,
+    "note": "same gain as the film mix; music ducked 12 dB under each voice-over window"
+  },
+  "with_vo_mix": {
+    "file": "out/voice/bella/voice-aligned.wav",
+    "integrated_lufs": -14.02,
+    "true_peak_dbtp": -1.5,
+    "voice_over_bed_db_per_line": [
+      9.5,
+      8.2,
+      10.3,
+      8.2,
+      8.4,
+      6.5,
+      6.5
+    ],
+    "note": "K-weighted level of the voice against the ducked bed inside each line; 6 dB or more reads clearly",
+    "voice_compressor_max_reduction_db": 1.9,
+    "voice_true_peak_dbtp": -0.6,
+    "limiter_gain_reduction_db": {
+      "max": -3.24,
+      "p99": -1.44
+    }
+  },
+  "limiter_gain_reduction_db": {
+    "max": -0.35,
+    "p99": -0.02,
+    "share_of_time_over_1db": 0.0
+  },
+  "stem_integrated_lufs_in_mix": {
+    "music": -13.9,
+    "interaction": -22.1,
+    "transition": -29.4,
+    "brand": -15.8
+  },
+  "mono": {
+    "lr_correlation": 0.782,
+    "mono_minus_stereo_lufs_db": -0.59
+  },
+  "phone_speaker_proxy_cue_to_bed_db": {
+    "node-15": -1.0,
+    "tap-app": 1.2,
+    "touch": 3.9,
+    "confirm": 5.1,
+    "click": 1.8,
+    "approved": 7.2,
+    "status-two-note": 4.5,
+    "signature": 6.1
+  },
+  "cue_placement": {
+    "onset": {
+      "frame": 0,
+      "time_s": 0.0,
+      "onset_offset_ms": 0.25
+    },
+    "node-15": {
+      "frame": 318,
+      "time_s": 5.3,
+      "onset_offset_ms": 0.29
+    },
+    "tap-app": {
+      "frame": 980,
+      "time_s": 16.3333,
+      "onset_offset_ms": 0.06
+    },
+    "touch": {
+      "frame": 1130,
+      "time_s": 18.8333,
+      "onset_offset_ms": 0.04
+    },
+    "confirm": {
+      "frame": 1157,
+      "time_s": 19.2833,
+      "onset_offset_ms": 0.29
+    },
+    "record-match": {
+      "frame": 1260,
+      "time_s": 21.0,
+      "onset_offset_ms": 0.1
+    },
+    "click": {
+      "frame": 1430,
+      "time_s": 23.8333,
+      "onset_offset_ms": 0.06
+    },
+    "approved": {
+      "frame": 1442,
+      "time_s": 24.0333,
+      "onset_offset_ms": 0.29
+    },
+    "status-two-note": {
+      "frame": 1585,
+      "time_s": 26.4167,
+      "onset_offset_ms": 0.31
+    },
+    "signature": {
+      "frame": 1854,
+      "time_s": 30.9,
+      "onset_offset_ms": 0.31
+    }
+  },
+  "beat_grid": {
+    "bpm": 113.684,
+    "beat0_frame": 144,
+    "beat_frames": 31.6667
+  },
+  "note": "Measurements only. Human listening (headphones, phone speaker, mono) is still required before approval."
+}

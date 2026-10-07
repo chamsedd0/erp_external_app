@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shadow Portal — launch film v2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="film.css">
+</head>
+<body>
+<!-- Preview: /source/index.html (16:9) · ?format=vertical (9:16) · &f=<frame> · &debug · &safe
+     Render: ?render — the page is then driven frame by frame through window.__seek(frame). -->
+<div id="viewport">
+  <div id="stage">
+    <div id="bg"></div>
+    <div id="scene"><div id="archlight"></div><canvas id="gl"></canvas></div>
+    <div id="flat"></div>
+    <div id="type"></div>
+    <div id="fx"></div>
+    <div id="end"></div>
+    <div id="dbg"></div>
+    <div id="safe"></div>
+  </div>
+</div>
+<div id="ui">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="1199" step="0.01" value="0">
+  <span class="tc" id="tc"></span>
+  <a href="?">16:9</a><a href="?format=vertical">9:16</a><a href="?safe" id="safelink">safe</a>
+</div>
+<script src="icons.js"></script>
+<script type="module" src="film.js"></script>
+</body>
+</html>
