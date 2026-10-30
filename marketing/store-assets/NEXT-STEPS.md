@@ -25,30 +25,26 @@ Both run in parallel and both can take days, so start them first.
 
 **For Europe:** Apple asks for trader status under the Digital Services Act before an app can be distributed in the EU. Octagon9 sells to businesses, so declare it as a trader; the address, phone and email you give are shown on the product page in the EU.
 
-## 2. Do the rename before the first build is uploaded
+## 2. Rename (done in the code on 30 Oct 2026, not yet deployed)
 
-The bundle ID and Android package name can never be changed after the first release, so this has to happen now.
+Decided by the developer: the package name and bundle ID stay `com.chams3445.shadowportal`, so nothing about signing or the Expo project changes. Firebase is set up: `production-version/google-services.json` (gitignored, but uploaded to EAS builds) and the FCM V1 key is assigned in Expo. **Still to do: upgrade Vercel to Pro and add the 15-minute cron for `/cron/check-updates` to `vercel.json`. No schedule exists today, so notifications don't arrive while the app is closed.** The IDs can't be changed after the first upload, and stores don't show them prominently, but they are visible in the Play URL.
 
-| Where | Now | Change to |
-|---|---|---|
-| `production-version/app.json` → `name` | Shadow Portal | Shadow |
-| `app.json` → iOS `bundleIdentifier`, Android `package` | `com.chams3445.shadowportal` | the company's reverse domain, for example `com.octagon9.shadow` |
-| `app.json` → camera and photo permission texts | "Allow Shadow Portal to…" | "Allow Shadow to…" |
-| `app.json` → `slug`, `scheme`, `owner` | `shadow-portal`, personal Expo account | decide whether to move to a company Expo organization |
-| `production-version/app/(app)/settings.tsx` (2 places) | "Shadow Portal" | "Shadow" |
-| `backend/src/routes/legal.ts` (privacy, terms, delete-account) | "Shadow Portal", contact `lhouijchams@gmail.com` | "Shadow", the legal entity name, a company-domain address |
-| `backend/src/routes/auth.ts`, `lib/invoiceTemplate.ts` | emails and quotes say Shadow Portal | Shadow |
-| Firebase Android app + `google-services.json` | package `com.chams3445.shadowportal` | recreate for the new package |
-| Legal page host | `erp-external-app.vercel.app` | the company domain (both stores publish this URL) |
+| Item | Value |
+|---|---|
+| App name | Shadow |
+| Legal entity (from the commercial registration) | OCTAGON NINE W.L.L, Bahrain |
+| Company domain | octagonnine.com |
+| Public contact email | lhouijchams@gmail.com |
+| Backend and legal pages | `https://api.octagonnine.com` (Vercel, connected 30 Oct 2026) |
 
-On the store name itself: "Shadow" alone is probably taken on the App Store, where names must be unique. Fallbacks are in `STORE-LISTING.md`.
+Changed: app name and permission texts (`app.json`), Settings, the legal pages, the account-deletion email, the quotation template. `slug`, `scheme` and the Expo `owner` are unchanged on purpose; they aren't shown to users and the slug is tied to the EAS project. The admin web app still says "Shadow Portal"; employees and stores never see it.
 
-## 3. Two small app fixes found while making the screenshots
+On the store name: "Shadow" alone is probably taken on the App Store, where names must be unique. Fallbacks are in `STORE-LISTING.md`.
 
-These are in the app today, so real screenshots would show them.
+## 3. Two small app fixes (done in the code on 30 Oct 2026)
 
-- **Company Setup and Sign In, light mode.** The button label is hard-coded dark (`#1a1a1a`) on the blue primary button, which is hard to read. It is correct in dark mode. Use the theme's `primaryForeground` instead. (`production-version/app/login.tsx`)
-- **New Request, Attendance card.** On a 390-pt phone the subtitle "Fix a missed check-in or check-out" runs underneath the arrow button. Give the text block right padding. (`production-version/app/(app)/new-request.tsx`)
+- **Company Setup and Sign In:** the button label now uses the theme's `primaryForeground`, so it is readable in light mode.
+- **New Request, Attendance card:** the subtitle no longer runs under the arrow button.
 
 ## 4. Review access
 

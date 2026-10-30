@@ -7,7 +7,8 @@ import { Router } from 'express';
 
 const router = Router();
 
-const LAST_UPDATED = '22 July 2026';
+const LAST_UPDATED = '30 October 2026';
+const PROVIDER = 'Octagon Nine W.L.L, Kingdom of Bahrain';
 
 function page(title: string, body: string): string {
     return `<!doctype html>
@@ -15,7 +16,7 @@ function page(title: string, body: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — Shadow Portal</title>
+<title>${title} — Shadow</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -40,9 +41,9 @@ const privacyBody = `
 <h1>Privacy Policy</h1>
 <p class="updated">Last updated: ${LAST_UPDATED}</p>
 
-<p>Shadow Portal is a mobile employee self-service portal that connects to your employer's
-ERP (Odoo) system. Your employer subscribes to Shadow Portal and remains the controller of
-your employment data; Shadow Portal processes data on your employer's behalf to provide the
+<p>Shadow is a mobile employee self-service app provided by ${PROVIDER}. It connects to your
+employer's ERP (Odoo) system. Your employer subscribes to Shadow and remains the controller of
+your employment data; Shadow processes data on your employer's behalf to provide the
 app's features (time off, expenses, helpdesk, maintenance, attendance, timesheets and
 notifications).</p>
 
@@ -50,17 +51,17 @@ notifications).</p>
 <table>
 <tr><th>Data</th><th>Purpose</th><th>Where it lives</th></tr>
 <tr><td>Employee ID, name, department, job title</td><td>Sign-in and displaying your profile</td><td>Your employer's Odoo; a copy in your session token</td></tr>
-<tr><td>Work email address</td><td>Account activation (one-time code) and sign-in</td><td>Shadow Portal servers (hashed index) and your employer's Odoo</td></tr>
-<tr><td>PIN</td><td>Sign-in</td><td>Stored only as a salted PBKDF2 hash on Shadow Portal servers — never in plain text</td></tr>
+<tr><td>Work email address</td><td>Account activation (one-time code) and sign-in</td><td>Shadow servers (hashed index) and your employer's Odoo</td></tr>
+<tr><td>PIN</td><td>Sign-in</td><td>Stored only as a salted PBKDF2 hash on Shadow servers — never in plain text</td></tr>
 <tr><td>Requests you submit (time off, expenses, tickets) and photo attachments</td><td>Delivering them to your employer's ERP</td><td>Your employer's Odoo</td></tr>
-<tr><td>Push notification token</td><td>Sending you status notifications</td><td>Shadow Portal servers (Expo push service)</td></tr>
-<tr><td>Notification history</td><td>Showing your in-app notification list</td><td>Shadow Portal servers</td></tr>
+<tr><td>Push notification token</td><td>Sending you status notifications</td><td>Shadow servers (Expo push service)</td></tr>
+<tr><td>Notification history</td><td>Showing your in-app notification list</td><td>Shadow servers</td></tr>
 </table>
 
 <h2>What we don't do</h2>
-<p>Shadow Portal contains no advertising, no analytics or tracking SDKs, and does not sell
-or share your data with third parties. Data is only exchanged between your device, Shadow
-Portal's servers, and your employer's own ERP system. All traffic is encrypted in transit
+<p>Shadow contains no advertising, no analytics or tracking SDKs, and does not sell
+or share your data with third parties. Data is only exchanged between your device, Shadow's
+servers, and your employer's own ERP system. All traffic is encrypted in transit
 (HTTPS).</p>
 
 <h2>Retention</h2>
@@ -70,10 +71,10 @@ employer's ERP (submitted requests, employment data) are retained under your emp
 policies.</p>
 
 <h2>Deleting your account</h2>
-<p>You can delete your Shadow Portal account at any time from
+<p>You can delete your Shadow account at any time from
 <strong>Settings &rarr; Delete Account</strong> in the app, or by following the steps at
 <a href="/legal/delete-account">/legal/delete-account</a>. Deletion removes everything Shadow
-Portal stores about you; your underlying employment record is managed by your employer.</p>
+stores about you; your underlying employment record is managed by your employer.</p>
 
 <h2>Contact</h2>
 <p>For privacy questions or requests, contact your employer's HR department (shown in the
@@ -85,7 +86,7 @@ const termsBody = `
 <p class="updated">Last updated: ${LAST_UPDATED}</p>
 
 <h2>1. The service</h2>
-<p>Shadow Portal is a mobile employee self-service portal provided to companies that
+<p>Shadow is a mobile employee self-service app provided by ${PROVIDER} to companies that
 subscribe to the service. Your right to use the app comes from your employer's
 subscription; access requires an invitation or activation issued through your employer.</p>
 
@@ -105,7 +106,7 @@ subject to your employer's workplace policies. See the
 
 <h2>5. Availability and liability</h2>
 <p>The service is provided "as is" without warranties of uninterrupted availability. To the
-maximum extent permitted by law, Shadow Portal is not liable for indirect or consequential
+maximum extent permitted by law, Octagon Nine W.L.L is not liable for indirect or consequential
 damages arising from use of the app. Nothing in these terms affects your statutory rights
 as an employee, which are governed by your employment relationship with your employer.</p>
 
@@ -121,29 +122,29 @@ const deleteAccountBody = `
 <h1>Delete Your Account</h1>
 <p class="updated">Last updated: ${LAST_UPDATED}</p>
 
-<p>You can delete your Shadow Portal account and its data at any time.</p>
+<p>You can delete your Shadow account and its data at any time.</p>
 
 <h2>From the app (immediate)</h2>
 <ol>
-<li>Open Shadow Portal and sign in.</li>
+<li>Open Shadow and sign in.</li>
 <li>Go to <strong>Settings</strong>.</li>
 <li>Tap <strong>Delete Account</strong> and confirm.</li>
 </ol>
-<p>This immediately and permanently deletes everything Shadow Portal stores about you:
+<p>This immediately and permanently deletes everything Shadow stores about you:
 your sign-in credential (PIN), work-email index, push notification token, device
 registration, cached request data, and notification history. You will need a new
 invitation from your employer to use the app again.</p>
 
 <h2>Without the app (email request)</h2>
 <p>If you can no longer access the app, email
-<a href="mailto:lhouijchams@gmail.com?subject=Shadow%20Portal%20account%20deletion%20request">lhouijchams@gmail.com</a>
+<a href="mailto:lhouijchams@gmail.com?subject=Shadow%20account%20deletion%20request">lhouijchams@gmail.com</a>
 from your work email address with the subject "Account deletion request", including your
 company name and employee ID. Deletion requests are processed within 30 days.</p>
 
 <h2>What is not deleted</h2>
 <p>Your employment record and any requests already delivered to your employer's ERP system
 belong to your employer and are governed by their retention policies — contact your HR
-department for those. Shadow Portal itself retains nothing about you after deletion.</p>
+department for those. Shadow itself retains nothing about you after deletion.</p>
 `;
 
 router.get('/privacy', (_req, res) => {

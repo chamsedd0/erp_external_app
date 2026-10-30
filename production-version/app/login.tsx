@@ -32,6 +32,7 @@ export default function Login() {
     const muted = useColor('textMuted');
     const cardColor = useColor('card');
     const primary = useColor('primary');
+    const primaryForeground = useColor('primaryForeground');
 
     // ── Company Setup Step ────────────────────────────────────────────────────
 
@@ -114,8 +115,8 @@ export default function Login() {
                             style={{ borderRadius: 100 }}
                         >
                             {companyLoading
-                                ? <ActivityIndicator size="small" color="#1a1a1a" />
-                                : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#1a1a1a' }}>
+                                ? <ActivityIndicator size="small" color={primaryForeground} />
+                                : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: primaryForeground }}>
                                     {t('auth.continue')}
                                 </Text>
                             }
@@ -369,7 +370,7 @@ export default function Login() {
                         disabled={loading}
                         style={{ marginTop: 12, borderRadius: 100 }}
                     >
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#1a1a1a' }}>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: primaryForeground }}>
                             {loading ? t('auth.pleaseWait') : mode === 'login' ? t('auth.signIn') : mode === 'email' ? t('auth.sendCode') : t('auth.activate')}
                         </Text>
                     </Button>

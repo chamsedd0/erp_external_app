@@ -95,7 +95,7 @@ export default function Settings() {
     const handleDeleteAccount = () => {
         Alert.alert(
             'Delete Account',
-            `This permanently deletes your Shadow Portal account and app data: your sign-in PIN, push notifications, and notification history. Your employment record is managed by your employer${hrEmail ? ` — contact HR at ${hrEmail} for HR data requests` : ''}. You will need a new invitation to use the app again.`,
+            `This permanently deletes your Shadow account and app data: your sign-in PIN, push notifications, and notification history. Your employment record is managed by your employer${hrEmail ? ` — contact HR at ${hrEmail} for HR data requests` : ''}. You will need a new invitation to use the app again.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -278,7 +278,7 @@ export default function Settings() {
                                 App Version
                             </Text>
                             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: muted, marginTop: 1 }}>
-                                Shadow Portal
+                                Shadow
                             </Text>
                         </View>
                         <View style={{ backgroundColor: muted + '18', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 }}>

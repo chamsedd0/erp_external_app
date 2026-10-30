@@ -454,7 +454,7 @@ authRouter.delete('/registration', async (req, res) => {
 
 /**
  * DELETE /auth/account
- * Permanently deletes everything Shadow Portal stores for the authenticated
+ * Permanently deletes everything Shadow stores for the authenticated
  * employee: portal credential (PIN hash + email index), push token, app
  * registration, request cache, and notification history. The hr.employee
  * record lives in the employer's Odoo and is not touched — HR is notified
@@ -484,8 +484,8 @@ authRouter.delete('/account', async (req, res) => {
                     body: JSON.stringify({
                         from: config.resendFromEmail,
                         to: tenantConfig.hr_email,
-                        subject: `Shadow Portal account deleted — employee #${employeeId}`,
-                        html: `<p>Employee #${employeeId}${auth.name ? ` (${auth.name})` : ''} deleted their Shadow Portal app account. All app data (sign-in credential, push token, cached requests, notification history) has been removed. Their HR record in Odoo is unaffected. They will need a new invitation to use the app again.</p>`,
+                        subject: `Shadow account deleted — employee #${employeeId}`,
+                        html: `<p>Employee #${employeeId}${auth.name ? ` (${auth.name})` : ''} deleted their Shadow app account. All app data (sign-in credential, push token, cached requests, notification history) has been removed. Their HR record in Odoo is unaffected. They will need a new invitation to use the app again.</p>`,
                     }),
                 });
             }

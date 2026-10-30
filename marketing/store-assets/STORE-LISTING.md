@@ -68,14 +68,15 @@ Helpdesk requires Odoo's Helpdesk app, and each request type needs the matching 
 Odoo is a registered trademark of Odoo S.A. Shadow is an independent product by Octagon9 and is not affiliated with or endorsed by Odoo S.A.
 ```
 
-## URLs to fill in (all three should be on Octagon9's own domain)
+## URLs to fill in
 
 | Field | Value |
 |---|---|
-| Privacy policy | `https://<company-domain>/legal/privacy` (currently `https://erp-external-app.vercel.app/legal/privacy`) |
-| Support URL | `https://<company-domain>/support` |
-| Marketing URL (optional) | `https://<company-domain>/shadow` |
-| Account deletion (Play) | `https://<company-domain>/legal/delete-account` |
+| Privacy policy | `https://api.octagonnine.com/legal/privacy` |
+| Support URL | `https://www.octagonnine.com` (Apple requires the page to show a way to contact you) |
+| Marketing URL (optional) | `https://www.octagonnine.com` |
+| Account deletion (Play) | `https://api.octagonnine.com/legal/delete-account` |
+| Contact email | `lhouijchams@gmail.com` (shown publicly on both stores) |
 
 ## App Review notes (Apple) and App access (Google)
 

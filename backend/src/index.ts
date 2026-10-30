@@ -51,7 +51,7 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-    res.send('Shadow Portal Middleware is Active');
+    res.send('Shadow Middleware is Active');
 });
 
 app.get('/health', (_req, res) => {
@@ -138,7 +138,7 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
 // ── Local dev server ──────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {
     app.listen(config.port, () => {
-        console.log(`🚀 Shadow Portal running on port ${config.port}`);
+        console.log(`🚀 Shadow running on port ${config.port}`);
     });
 }
 

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Shadow Portal",
+    "name": "Shadow",
     "slug": "shadow-portal",
     "scheme": "shadow-portal",
     "version": "1.0.0",
@@ -23,7 +23,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": true,
-      "package": "com.chams3445.shadowportal"
+      "package": "com.chams3445.shadowportal",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -57,9 +58,9 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Shadow Portal to access your camera for attaching photos to requests.",
+          "cameraPermission": "Allow Shadow to access your camera for attaching photos to requests.",
           "microphonePermission": false,
-          "photosPermission": "Allow Shadow Portal to access your photos for attaching to requests."
+          "photosPermission": "Allow Shadow to access your photos for attaching to requests."
         }
       ],
       "expo-font",

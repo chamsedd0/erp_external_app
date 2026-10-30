@@ -7,7 +7,7 @@ jest.mock('@react-native-async-storage/async-storage');
 
 import { apiClient } from '../../api/client';
 
-const API_URL = 'https://erp-external-app.vercel.app';
+const API_URL = 'https://api.octagonnine.com';
 
 function mockFetch(ok: boolean, body: any, status = 200) {
     (global.fetch as jest.Mock).mockResolvedValueOnce({

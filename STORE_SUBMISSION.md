@@ -83,7 +83,7 @@ eas build --profile production -p android
 
 1. Create the app record: bundle ID `com.chams3445.shadowportal`, name "Shadow Portal",
    category **Business**. Copy the Apple ID of the app into `eas.json` → `submit.production.ios.ascAppId`, and your Team ID into `appleTeamId`.
-2. **Privacy policy URL:** `https://erp-external-app.vercel.app/legal/privacy`
+2. **Privacy policy URL:** `https://api.octagonnine.com/legal/privacy`
 3. **Privacy nutrition labels** (App Privacy section) — declare exactly this, nothing more:
    - Contact Info → Name, Email Address — linked to identity, app functionality
    - Identifiers → User ID (employee ID) — linked to identity, app functionality
@@ -117,14 +117,14 @@ eas submit -p ios --latest
 1. Create the app (name "Shadow Portal", app type App, free).
 2. **Store listing:** short + full description (emphasize multi-company B2B nature), icon is
    pulled from the AAB, phone screenshots (same set as Apple), feature graphic 1024×500.
-3. **Privacy policy URL:** `https://erp-external-app.vercel.app/legal/privacy`
+3. **Privacy policy URL:** `https://api.octagonnine.com/legal/privacy`
 4. **Data safety form** — declare exactly:
    - Personal info → Name, Email address: collected, encrypted in transit, **not shared**, deletable
    - Photos and videos → Photos: collected (user-initiated attachments), not shared, deletable
    - App activity → Other user-generated content (requests): collected, not shared, deletable
    - Device or other IDs → Device or other IDs (Expo push token): collected, not shared, deletable
    - Data is processed to provide app functionality on behalf of the user's employer; no ads, no analytics, no data sold.
-   - Account deletion: **yes, in-app** + URL: `https://erp-external-app.vercel.app/legal/delete-account`
+   - Account deletion: **yes, in-app** + URL: `https://api.octagonnine.com/legal/delete-account`
 5. **App content declarations:** privacy policy set; not child-directed (target 18+/business);
    no ads; **App access → provide the demo credentials** (all of: company code, employee ID, PIN, with the sign-in steps from section 4.4).
 6. Release path: **Internal testing first** → install from Play, verify → review the

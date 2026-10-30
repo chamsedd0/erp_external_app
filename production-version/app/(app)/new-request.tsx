@@ -496,7 +496,7 @@ export default function NewRequest() {
                 </View>
                 <View>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 28, color: semanticWarning, marginBottom: 8 }}>{t('newRequest.attendance')}</Text>
-                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted }}>{t('newRequest.attendanceSub')}</Text>
+                    <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 16, color: muted, paddingRight: 56 }}>{t('newRequest.attendanceSub')}</Text>
                 </View>
                 <View style={{ position: 'absolute', right: 24, bottom: 24, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: semanticWarning + '28' }}>
                     <ArrowRight size={24} color={semanticWarning} />
