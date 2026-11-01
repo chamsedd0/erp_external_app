@@ -20,6 +20,9 @@ import rateLimit from 'express-rate-limit';
 
 const app = express();
 
+// One proxy hop (Vercel) in front of the app, so req.ip and the rate limiter see the real client
+app.set('trust proxy', 1);
+
 // Allow Authorization header in cross-origin requests (required for JWT)
 app.use(cors({ allowedHeaders: ['Content-Type', 'Authorization', 'X-Lang'] }));
 // Increase JSON payload limit to support base64 attachments (up to 3 × 5 MB ≈ 15 MB)

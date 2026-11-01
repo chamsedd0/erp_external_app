@@ -4,7 +4,7 @@ import { Text } from '../../components/ui/text';
 import { useColor } from '../../hooks/useColor';
 import { useSession } from '../../providers/auth-context';
 import { useRouter } from 'expo-router';
-import { LogOut, User, Settings, Shield, HelpCircle, ChevronRight } from 'lucide-react-native';
+import { LogOut, User, Settings, HelpCircle, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { t } from '../../lib/i18n';
 
@@ -18,7 +18,6 @@ export default function Profile() {
     const cardColor = useColor('card');
     const muted = useColor('textMuted');
     const semanticInfo = useColor('semanticInfo' as any);
-    const semanticWarning = useColor('semanticWarning' as any);
     const semanticSuccess = useColor('semanticSuccess' as any);
     const semanticError = useColor('semanticError' as any);
 
@@ -35,14 +34,6 @@ export default function Profile() {
             path: '/(app)/settings' as const,
             color: semanticInfo,
             enabled: true,
-        },
-        {
-            icon: Shield,
-            label: t('profile.security'),
-            sub: t('profile.securitySub'),
-            path: null,
-            color: semanticWarning,
-            enabled: false,
         },
         {
             icon: HelpCircle,

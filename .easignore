@@ -1,0 +1,38 @@
+# EAS Build uploads from the repo root. This file replaces .gitignore for that upload,
+# so anything secret or large has to be listed here. Only production-version/ is needed.
+
+# Not part of the mobile app
+marketing/
+admin_app/
+backend/
+graphify-out/
+.claude/
+*.py
+generate-*.js
+*.docx
+*.pdf
+
+# Secrets (production-version/google-services.json must stay uploadable)
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+*-firebase-adminsdk-*.json
+play-service-account.json
+
+# Dependencies and build output
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+production-version/android/
+production-version/ios/
+*.log
+npm-debug.*
+.DS_Store
