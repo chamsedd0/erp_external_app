@@ -12,6 +12,12 @@
             "dest": "src/index.ts"
         }
     ],
+    "crons": [
+        {
+            "path": "/cron/check-updates",
+            "schedule": "*/15 * * * *"
+        }
+    ],
     "env": {
         "PORT": "3000"
     }
