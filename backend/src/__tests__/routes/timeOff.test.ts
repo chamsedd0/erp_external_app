@@ -3,6 +3,7 @@ import app from '../../index';
 import { tenantStore } from '../../lib/tenantStore';
 import { getOdooClient } from '../../odoo/client';
 import { authHeader, SAMPLE_TENANT, makeMockOdooClient, mockSearchReadByModel } from './helpers';
+import { _leaveTypeModel } from '../../routes/time_off';
 
 jest.mock('../../lib/tenantStore');
 jest.mock('../../odoo/client');
@@ -101,6 +102,34 @@ describe('GET /time-off/types', () => {
         expect(res.status).toBe(200);
         // Only LEAVE_ prefixed entries should be returned
         expect(res.body.types.every((t: any) => !t.code?.startsWith('WORK'))).toBe(true);
+    });
+
+    it('reads selectable hr.work.entry.type records with balances on Odoo 20', async () => {
+        _leaveTypeModel.clear();
+        const workEntryReads: any[][] = [];
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => { throw new Error("Object hr.leave.type doesn't exist"); },
+            'hr.work.entry.type': (domain, fields) => {
+                workEntryReads.push([domain, fields]);
+                return [
+                    { id: 4, name: 'Generic Time Off', country_id: false, requires_allocation: true, virtual_remaining_leaves: 0, max_leaves: 0 },
+                    { id: 407, name: 'Generic Time Off', country_id: [1, 'Morocco'], requires_allocation: true, virtual_remaining_leaves: 18, max_leaves: 20 },
+                    { id: 7, name: 'Leave without pay', country_id: false, requires_allocation: false, virtual_remaining_leaves: 0, max_leaves: 0 },
+                ];
+            },
+        });
+
+        const res = await request(app)
+            .get('/time-off/types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(workEntryReads[0][0]).toEqual([['time_off_selectable', '=', true]]);
+        expect(workEntryReads[0][1]).not.toContain('remaining_leaves');
+        expect(res.body.types.map((t: any) => t.id)).toEqual([407, 7]);
+        expect(res.body.types[0].remaining_leaves).toBe(18);
+        expect(res.body.types[0].requestable).toBe(true);
+        _leaveTypeModel.clear();
     });
 
     it('adds requestability metadata when leave balance fields are available', async () => {

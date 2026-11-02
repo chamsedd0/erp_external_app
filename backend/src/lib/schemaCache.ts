@@ -53,7 +53,7 @@ const NATIVE_RELATION_MODELS: Record<string, Set<string>> = {
     'account.analytic.line': new Set(['project.project', 'project.task']),
     'hr.expense': new Set(['product.product', 'product.template', 'account.analytic.account']),
     'maintenance.request': new Set(['maintenance.equipment', 'maintenance.equipment.category', 'maintenance.team']),
-    'hr.leave': new Set(['hr.leave.type']),
+    'hr.leave': new Set(['hr.leave.type', 'hr.work.entry.type']),
     'helpdesk.ticket': new Set(['helpdesk.team', 'helpdesk.ticket.type', 'helpdesk.tag', 'res.users']),
 };
 

@@ -5,6 +5,7 @@ import { attachmentsSchema } from './attachments';
 import { assertEmployeeCanUseCompany, companyContext, relationId } from './odooCompatibility';
 import { getCustomFieldReport } from './schemaCache';
 import { portalAuthStore } from './portalAuthStore';
+import { getLeaveTypeField, getLeaveTypeModel, leaveTypeDomain } from '../routes/time_off';
 import type {
     CertificationEmployeeInput,
     CertificationError,
@@ -451,8 +452,13 @@ export async function runTenantCertification(
             },
             async () => {
                 if (!uid) throw new Error('Skipped because authentication failed');
-                const records: any = await client.searchRead(uid, picker.model, picker.domain, picker.fields, { silent: true, limit: 10 });
-                if (!Array.isArray(records) || records.length === 0) throw new Error(`${picker.model} returned no requestable choices`);
+                let { model, domain } = picker;
+                if (picker.id === 'leave_types') {
+                    model = await getLeaveTypeModel(tenantId, client, uid);
+                    if (model !== 'hr.leave.type') domain = leaveTypeDomain(model, null);
+                }
+                const records: any = await client.searchRead(uid, model, domain, picker.fields, { silent: true, limit: 10 });
+                if (!Array.isArray(records) || records.length === 0) throw new Error(`${model} returned no requestable choices`);
                 return { details: { count: records.length } };
             },
         );
@@ -549,13 +555,15 @@ export async function runTenantCertification(
             await scenario(
                 { id: 'write.time_off', label: 'Create labeled time-off request', group: 'write', severity: 'blocking', request_type: 'time_off', employee_id: primary.employee_id },
                 async () => {
-                    const leaveType = await readFirst(client, uid, 'hr.leave.type', [], ['id', 'name'], context);
+                    const leaveTypeModel = await getLeaveTypeModel(tenantId, client, uid);
+                    const leaveTypeDomainForModel = leaveTypeModel === 'hr.leave.type' ? [] : leaveTypeDomain(leaveTypeModel, null);
+                    const leaveType = await readFirst(client, uid, leaveTypeModel, leaveTypeDomainForModel, ['id', 'name'], context);
                     if (!leaveType?.id) throw new Error('No leave type available');
                     const start = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                     const id = await client.createRecord(uid, 'hr.leave', {
                         name: `${label} time_off ${runId}`,
                         employee_id: primary.employee_id,
-                        holiday_status_id: leaveType.id,
+                        [await getLeaveTypeField(tenantId, client, uid)]: leaveType.id,
                         request_date_from: start,
                         request_date_to: start,
                         date_from: `${start} 08:00:00`,

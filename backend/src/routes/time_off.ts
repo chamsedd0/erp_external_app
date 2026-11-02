@@ -81,6 +81,45 @@ export async function getLeaveTypeField(tenantId: string, client: OdooClientInst
     return 'work_entry_type_id';
 }
 
+// ── Leave-type model detection ────────────────────────────────────────────────
+// Odoo 20 folded hr.leave.type into hr.work.entry.type. The types employees can
+// request are flagged "Selectable in Time Off", and a localisation adds a
+// country-specific copy of each generic type under the same name.
+
+export const _leaveTypeModel = new Map<string, string>();
+
+export async function getLeaveTypeModel(tenantId: string, client: OdooClientInstance, uid: number): Promise<string> {
+    const cached = _leaveTypeModel.get(tenantId);
+    if (cached) return cached;
+
+    try {
+        await client.searchRead(uid, 'hr.leave.type', [['id', '=', 0]], ['id'], true);
+    } catch (e: any) {
+        const msg = String(e?.faultString || e?.message || '');
+        // Anything other than a missing model (timeouts, auth) is not cached
+        if (!msg.includes("doesn't exist")) return 'hr.leave.type';
+        console.log(`[${tenantId}] [time_off] hr.leave.type not found, using hr.work.entry.type (Odoo 20+)`);
+        _leaveTypeModel.set(tenantId, 'hr.work.entry.type');
+        return 'hr.work.entry.type';
+    }
+    _leaveTypeModel.set(tenantId, 'hr.leave.type');
+    return 'hr.leave.type';
+}
+
+export function leaveTypeDomain(model: string, employeeCompanyId: number | null): any[] {
+    return model === 'hr.leave.type' ? companyDomain(employeeCompanyId) : [['time_off_selectable', '=', true]];
+}
+
+// Keeps one type per name, preferring the country-specific copy
+export function dedupeLeaveTypes(types: any[]): any[] {
+    const byName = new Map<string, any>();
+    for (const type of types) {
+        const kept = byName.get(type.name);
+        if (!kept || (!kept.country_id && type.country_id)) byName.set(type.name, type);
+    }
+    return [...byName.values()];
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET / - Fetch employee's time-off requests
@@ -153,7 +192,13 @@ router.get('/types', async (req, res) => {
         // with an explicit domain (context alone does not filter search_read).
         const baseCtx = await buildReadContext(req, client, uid);
         const employeeCompanyId = (baseCtx.company_id as number | undefined) ?? null;
-        const leaveTypeDomain = companyDomain(employeeCompanyId);
+        const model = await getLeaveTypeModel(tenantId, client, uid);
+        const domain = leaveTypeDomain(model, employeeCompanyId);
+        const countryField = model === 'hr.leave.type' ? [] : ['country_id'];
+        // hr.work.entry.type has no remaining_leaves; asking for it fails the whole read
+        const balanceFields = ['requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative']
+            .filter((f) => model === 'hr.leave.type' || f !== 'remaining_leaves');
+        const shape = (types: any[]) => (model === 'hr.leave.type' ? types : dedupeLeaveTypes(types)).map(enrichLeaveType);
         // virtual_remaining_leaves / remaining_leaves are computed per the employee
         // in the Odoo context; without employee_id they reflect the integration user.
         const employeeId = getAuthenticatedEmployeeId(req, req.query.employee_id);
@@ -162,21 +207,21 @@ router.get('/types', async (req, res) => {
         try {
             const types: any = await client.searchRead(
                 uid,
-                'hr.leave.type',
-                leaveTypeDomain,
-                ['id', 'name', 'requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative'],
+                model,
+                domain,
+                ['id', 'name', ...balanceFields, ...countryField],
                 { silent: true, context: ctx }
             );
             if (Array.isArray(types) && types.length > 0) {
-                return res.json({ types: types.map(enrichLeaveType) });
+                return res.json({ types: shape(types) });
             }
         } catch {
             try {
                 const types: any = await client.searchRead(
-                    uid, 'hr.leave.type', leaveTypeDomain, ['id', 'name'], { silent: true, context: ctx }
+                    uid, model, domain, ['id', 'name', ...countryField], { silent: true, context: ctx }
                 );
                 if (Array.isArray(types) && types.length > 0) {
-                    return res.json({ types: types.map(enrichLeaveType) });
+                    return res.json({ types: shape(types) });
                 }
             } catch {
                 // Fall through to Odoo 19+ approach
