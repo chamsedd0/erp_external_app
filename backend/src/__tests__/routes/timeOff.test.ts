@@ -129,6 +129,27 @@ describe('GET /time-off/types', () => {
         expect(res.body.types.map((t: any) => t.id)).toEqual([407, 7]);
         expect(res.body.types[0].remaining_leaves).toBe(18);
         expect(res.body.types[0].requestable).toBe(true);
+        // No allocation means no balance to show
+        expect(res.body.types[1].remaining_leaves).toBeUndefined();
+        _leaveTypeModel.clear();
+    });
+
+    it('leaves out balances counted in hours on Odoo 20', async () => {
+        _leaveTypeModel.clear();
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => { throw new Error("Object hr.leave.type doesn't exist"); },
+            'hr.work.entry.type': () => [
+                { id: 5, name: 'Compensatory Time Off', country_id: false, unit_of_measure: 'hour', requires_allocation: true, virtual_remaining_leaves: 16, max_leaves: 16 },
+            ],
+        });
+
+        const res = await request(app)
+            .get('/time-off/types')
+            .set('Authorization', authHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body.types[0].remaining_leaves).toBeUndefined();
+        expect(res.body.types[0].requestable).toBe(true);
         _leaveTypeModel.clear();
     });
 
@@ -209,6 +230,40 @@ describe('POST /time-off', () => {
         expect(res.status).toBe(200);
         expect(res.body.id).toBe(101);
         expect(res.body.status).toBe('success');
+    });
+
+    it('sends an auto-approved Odoo 20 request back to approval', async () => {
+        _leaveTypeModel.clear();
+        mockSearchReadByModel(mockClient, {
+            'hr.leave.type': () => { throw new Error("Object hr.leave.type doesn't exist"); },
+            'hr.leave': (domain) => (domain[0]?.[0] === 'id' ? [{ id: 101, state: 'validate', validation_type: 'manager' }] : []),
+        });
+        mockClient.createRecord.mockResolvedValueOnce(101);
+
+        const res = await request(app)
+            .post('/time-off')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(200);
+        expect(mockClient.callMethod).toHaveBeenCalledWith(
+            expect.any(Number), 'hr.leave', 'action_back_to_approval', [101], {}, expect.anything()
+        );
+        _leaveTypeModel.clear();
+    });
+
+    it('leaves requests alone on Odoo versions that keep hr.leave.type', async () => {
+        mockClient.createRecord.mockResolvedValueOnce(101);
+
+        const res = await request(app)
+            .post('/time-off')
+            .set('Authorization', authHeader())
+            .send(VALID_BODY);
+
+        expect(res.status).toBe(200);
+        expect(mockClient.callMethod).not.toHaveBeenCalledWith(
+            expect.any(Number), 'hr.leave', 'action_back_to_approval', expect.anything(), expect.anything(), expect.anything()
+        );
     });
 
     it('returns 400 when employee_id is missing', async () => {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getOdooClient } from '../odoo/client';
 import { tenantStore } from '../lib/tenantStore';
 import { attachmentsSchema } from '../lib/attachments';
-import { getLeaveTypeField } from './time_off';
+import { getLeaveTypeField, keepLeavePending } from './time_off';
 import { getCustomFieldReport, getCustomFields, validatePayload, validateRequiredCustomFields } from '../lib/schemaCache';
 import { sendOdooError } from '../odoo/parseError';
 import { buildOdooContext, getAuthenticatedEmployeeId } from '../lib/authContext';
@@ -410,6 +410,7 @@ router.post('/justification', async (req, res) => {
                 throw err;
             }
         }
+        await keepLeavePending(tenantId, client, uid, newId, ctx);
 
         let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {

@@ -32,13 +32,18 @@ const createLeaveSchema = z.object({
 export const _leaveTypeField = new Map<string, string>();
 
 function enrichLeaveType(type: any) {
-    const remaining = typeof type.virtual_remaining_leaves === 'number'
-        ? type.virtual_remaining_leaves
-        : typeof type.remaining_leaves === 'number'
-            ? type.remaining_leaves
-            : undefined;
-    const allocated = typeof type.max_leaves === 'number' ? type.max_leaves : undefined;
     const requiresAllocation = type.requires_allocation !== undefined && type.requires_allocation !== false && type.requires_allocation !== 'no';
+    // The app labels balances in days. Odoo 20 hour-based types report hours, and a
+    // type without allocations has no balance at all, so neither gets one.
+    const hasDayBalance = type.unit_of_measure !== 'hour' && (type.requires_allocation === undefined || requiresAllocation);
+    const remaining = !hasDayBalance
+        ? undefined
+        : typeof type.virtual_remaining_leaves === 'number'
+            ? type.virtual_remaining_leaves
+            : typeof type.remaining_leaves === 'number'
+                ? type.remaining_leaves
+                : undefined;
+    const allocated = hasDayBalance && typeof type.max_leaves === 'number' ? type.max_leaves : undefined;
     const allowsNegative = type.allows_negative === true || (typeof type.max_allowed_negative === 'number' && type.max_allowed_negative > 0);
     const requestable = allowsNegative || !(requiresAllocation && remaining !== undefined && remaining <= 0);
 
@@ -108,6 +113,31 @@ export async function getLeaveTypeModel(tenantId: string, client: OdooClientInst
 
 export function leaveTypeDomain(model: string, employeeCompanyId: number | null): any[] {
     return model === 'hr.leave.type' ? companyDomain(employeeCompanyId) : [['time_off_selectable', '=', true]];
+}
+
+// Odoo 20 approves a request on creation when a Time Off Officer creates it for
+// someone else, which the integration user always does. Send such a request back
+// to approval so the employee's manager decides, as on Odoo 15–19.
+export async function keepLeavePending(
+    tenantId: string,
+    client: OdooClientInstance,
+    uid: number,
+    leaveId: number,
+    context?: Record<string, any>,
+): Promise<void> {
+    if (await getLeaveTypeModel(tenantId, client, uid) !== 'hr.work.entry.type') return;
+    try {
+        const leaves: any = await client.searchRead(
+            uid, 'hr.leave', [['id', '=', leaveId]], ['state', 'validation_type'], { silent: true, context }
+        );
+        const leave = Array.isArray(leaves) ? leaves[0] : undefined;
+        if (leave?.state === 'validate' && leave.validation_type !== 'no_validation') {
+            await client.callMethod(uid, 'hr.leave', 'action_back_to_approval', [leaveId], {}, context);
+        }
+    } catch (e: any) {
+        // The request exists either way; an approved one is better than a failed submit
+        console.warn(`[${tenantId}] [time_off] Could not send leave ${leaveId} back to approval: ${String(e?.faultString || e?.message || '').substring(0, 120)}`);
+    }
 }
 
 // Keeps one type per name, preferring the country-specific copy
@@ -194,7 +224,7 @@ router.get('/types', async (req, res) => {
         const employeeCompanyId = (baseCtx.company_id as number | undefined) ?? null;
         const model = await getLeaveTypeModel(tenantId, client, uid);
         const domain = leaveTypeDomain(model, employeeCompanyId);
-        const countryField = model === 'hr.leave.type' ? [] : ['country_id'];
+        const workEntryFields = model === 'hr.leave.type' ? [] : ['country_id', 'unit_of_measure'];
         // hr.work.entry.type has no remaining_leaves; asking for it fails the whole read
         const balanceFields = ['requires_allocation', 'virtual_remaining_leaves', 'remaining_leaves', 'max_leaves', 'allows_negative', 'max_allowed_negative']
             .filter((f) => model === 'hr.leave.type' || f !== 'remaining_leaves');
@@ -209,7 +239,7 @@ router.get('/types', async (req, res) => {
                 uid,
                 model,
                 domain,
-                ['id', 'name', ...balanceFields, ...countryField],
+                ['id', 'name', ...balanceFields, ...workEntryFields],
                 { silent: true, context: ctx }
             );
             if (Array.isArray(types) && types.length > 0) {
@@ -218,7 +248,7 @@ router.get('/types', async (req, res) => {
         } catch {
             try {
                 const types: any = await client.searchRead(
-                    uid, model, domain, ['id', 'name', ...countryField], { silent: true, context: ctx }
+                    uid, model, domain, ['id', 'name', ...workEntryFields], { silent: true, context: ctx }
                 );
                 if (Array.isArray(types) && types.length > 0) {
                     return res.json({ types: shape(types) });
@@ -357,6 +387,7 @@ router.post('/', async (req, res) => {
                 throw createErr;
             }
         }
+        await keepLeavePending(tenantId, client, uid, newLeaveId as number, ctx);
 
         let failedAttachments: string[] = [];
         if (body.attachments && body.attachments.length > 0) {
